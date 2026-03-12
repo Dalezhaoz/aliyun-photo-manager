@@ -1,0 +1,39 @@
+from pathlib import Path
+
+import PyInstaller.__main__
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+ENTRY_FILE = PROJECT_ROOT / "app_launcher.py"
+DIST_DIR = PROJECT_ROOT / "dist"
+BUILD_DIR = PROJECT_ROOT / "build"
+
+
+def main() -> None:
+    PyInstaller.__main__.run(
+        [
+            str(ENTRY_FILE),
+            "--name=aliyun_photo_manager",
+            "--windowed",
+            "--noconfirm",
+            f"--distpath={DIST_DIR}",
+            f"--workpath={BUILD_DIR}",
+            f"--specpath={PROJECT_ROOT}",
+            f"--paths={PROJECT_ROOT / 'src'}",
+            "--hidden-import=aliyun_photo_manager",
+            "--hidden-import=aliyun_photo_manager.gui",
+            "--hidden-import=aliyun_photo_manager.app",
+            "--hidden-import=aliyun_photo_manager.config",
+            "--hidden-import=aliyun_photo_manager.downloader",
+            "--hidden-import=aliyun_photo_manager.excel_classifier",
+            "--hidden-import=PIL",
+            "--hidden-import=PIL.Image",
+            "--hidden-import=openpyxl",
+            "--hidden-import=oss2",
+            "--clean",
+        ]
+    )
+
+
+if __name__ == "__main__":
+    main()
