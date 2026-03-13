@@ -107,7 +107,7 @@ def _prepare_source(source_path: Path) -> Path:
 
 def _apply_simple_styles(soup) -> None:
     for table in soup.find_all("table"):
-        table["style"] = "border-collapse:collapse;width:100%;border:1px solid #000;"
+        table["style"] = "border-collapse:collapse;width:680px;border:1px solid #000;"
         table["border"] = "1"
         table["cellspacing"] = "0"
         table["cellpadding"] = "0"
