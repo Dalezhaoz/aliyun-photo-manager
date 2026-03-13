@@ -38,6 +38,23 @@ from .downloader import (
     list_folder_prefixes,
 )
 from .excel_classifier import generate_template
+from .result_packer import PackSummary, pack_encrypted_folder, query_pack_history
+from .data_matcher import (
+    ColumnMapping,
+    DataMatchOptions,
+    DataMatchSummary,
+    list_headers as list_match_headers,
+    run_data_match,
+)
+from .exam_arranger import (
+    ExamArrangeOptions,
+    ExamArrangeSummary,
+    ExamRuleItem,
+    ExamTemplateExportSummary,
+    export_exam_templates,
+    list_headers as list_exam_headers,
+    run_exam_arrangement,
+)
 from .word_to_html import WordExportResult, export_word_to_html
 
 
@@ -90,6 +107,31 @@ class App:
         self.certificate_bucket_name_var = tk.StringVar()
         self.certificate_prefix_var = tk.StringVar()
         self.word_source_var = tk.StringVar()
+        self.pack_source_dir_var = tk.StringVar()
+        self.pack_output_dir_var = tk.StringVar(value=str(Path.cwd() / "packed_results"))
+        self.pack_use_custom_password_var = tk.BooleanVar(value=False)
+        self.pack_password_var = tk.StringVar()
+        self.pack_query_var = tk.StringVar()
+        self.match_target_var = tk.StringVar()
+        self.match_source_var = tk.StringVar()
+        self.match_target_key_var = tk.StringVar()
+        self.match_source_key_var = tk.StringVar()
+        self.match_output_var = tk.StringVar()
+        self.match_extra_target_var = tk.StringVar()
+        self.match_extra_source_var = tk.StringVar()
+        self.match_transfer_target_var = tk.StringVar()
+        self.match_transfer_source_var = tk.StringVar()
+        self.exam_candidate_var = tk.StringVar()
+        self.exam_group_var = tk.StringVar()
+        self.exam_plan_var = tk.StringVar()
+        self.exam_output_var = tk.StringVar()
+        self.exam_point_digits_var = tk.StringVar(value="2")
+        self.exam_room_digits_var = tk.StringVar(value="3")
+        self.exam_seat_digits_var = tk.StringVar(value="2")
+        self.exam_serial_digits_var = tk.StringVar(value="4")
+        self.exam_sort_mode_var = tk.StringVar(value="random")
+        self.exam_rule_type_var = tk.StringVar(value="自定义")
+        self.exam_rule_custom_var = tk.StringVar()
 
         self.status_var = tk.StringVar(value="就绪")
         self.progress_text_var = tk.StringVar(value="未开始")
@@ -106,8 +148,14 @@ class App:
         self.certificate_search_status_var = tk.StringVar(value="未搜索文件夹")
         self.certificate_selected_folder_info_var = tk.StringVar(value="当前未选择 bucket 文件夹")
         self.word_status_var = tk.StringVar(value="未开始导出")
-        self.word_result_var = tk.StringVar(value="Word 转 HTML 结果会显示在这里")
+        self.word_result_var = tk.StringVar(value="表样转换结果会显示在这里")
         self.word_preview_status_var = tk.StringVar(value="未生成预览")
+        self.pack_status_var = tk.StringVar(value="未开始打包")
+        self.pack_result_var = tk.StringVar(value="结果打包信息会显示在这里")
+        self.match_status_var = tk.StringVar(value="未开始匹配")
+        self.match_result_var = tk.StringVar(value="数据匹配结果会显示在这里")
+        self.exam_status_var = tk.StringVar(value="未开始编排")
+        self.exam_result_var = tk.StringVar(value="考场编排结果会显示在这里")
         self.folder_tree: Optional[ttk.Treeview] = None
         self.certificate_folder_tree: Optional[ttk.Treeview] = None
         self.folder_nodes: Dict[str, BrowserEntry] = {}
@@ -119,10 +167,24 @@ class App:
         self.last_summary: Optional[WorkflowSummary] = None
         self.last_certificate_summary: Optional[CertificateFilterSummary] = None
         self.last_word_export: Optional[WordExportResult] = None
+        self.last_pack_summary: Optional[PackSummary] = None
+        self.last_match_summary: Optional[DataMatchSummary] = None
+        self.last_exam_summary: Optional[ExamArrangeSummary] = None
+        self.last_exam_template_export: Optional[ExamTemplateExportSummary] = None
         self.word_code_text = None
         self.word_preview_widget = None
+        self.match_result_text = None
+        self.pack_query_result_text = None
+        self.exam_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []
+        self.match_target_headers: List[str] = []
+        self.match_source_headers: List[str] = []
+        self.match_extra_mappings: List[ColumnMapping] = []
+        self.match_transfer_mappings: List[ColumnMapping] = []
+        self.exam_rule_items: List[ExamRuleItem] = []
+        self.exam_group_headers: List[str] = []
+        self.exam_rule_base_types = ["自定义", "考点", "考场", "座号", "流水号"]
         self.certificate_bucket_values: List[str] = []
         self.certificate_folder_values: List[str] = [""]
         self.default_sash_pending = {"photo": True, "certificate": True}
@@ -143,6 +205,13 @@ class App:
             self.certificate_template_var.get().strip()
         ).exists():
             self.load_certificate_headers()
+        if (
+            self.match_target_var.get().strip()
+            and self.match_source_var.get().strip()
+            and Path(self.match_target_var.get().strip()).exists()
+            and Path(self.match_source_var.get().strip()).exists()
+        ):
+            self.load_match_headers()
         self.root.after(150, self.flush_logs)
 
     def build_ui(self) -> None:
@@ -760,7 +829,7 @@ class App:
         word_frame = ttk.Frame(notebook, padding=14)
         word_frame.columnconfigure(0, weight=1)
         word_frame.rowconfigure(2, weight=1)
-        notebook.add(word_frame, text="Word 转 HTML")
+        notebook.add(word_frame, text="表样转换")
 
         word_form = ttk.LabelFrame(word_frame, text="模板转换", padding=12)
         word_form.grid(row=0, column=0, sticky="ew")
@@ -769,7 +838,7 @@ class App:
         self.add_file_row(
             word_form,
             row=0,
-            label="Word 文件",
+            label="表样文件",
             variable=self.word_source_var,
             command=self.choose_word_source,
             button_text="选择文件",
@@ -857,6 +926,433 @@ class App:
         self.word_preview_container.columnconfigure(0, weight=1)
         self.word_preview_container.rowconfigure(0, weight=1)
 
+        match_frame = ttk.Frame(notebook, padding=14)
+        match_frame.columnconfigure(0, weight=1)
+        match_frame.rowconfigure(3, weight=1)
+        notebook.add(match_frame, text="数据匹配")
+
+        match_form = ttk.LabelFrame(match_frame, text="表格匹配补列", padding=12)
+        match_form.grid(row=0, column=0, sticky="ew")
+        match_form.columnconfigure(1, weight=1)
+        self.add_file_row(
+            match_form,
+            row=0,
+            label="目标表",
+            variable=self.match_target_var,
+            command=self.choose_match_target,
+            button_text="选择文件",
+        )
+        self.add_file_row(
+            match_form,
+            row=1,
+            label="来源表",
+            variable=self.match_source_var,
+            command=self.choose_match_source,
+            button_text="选择文件",
+        )
+        self.add_entry_row(match_form, 2, "输出文件", self.match_output_var)
+        ttk.Button(match_form, text="自动生成", command=self.fill_match_output_path).grid(
+            row=2, column=2, padx=(8, 0), pady=4
+        )
+        ttk.Label(match_form, text="目标表匹配列", width=16).grid(row=3, column=0, sticky="w", pady=4)
+        self.match_target_key_combo = ttk.Combobox(
+            match_form,
+            textvariable=self.match_target_key_var,
+            values=self.match_target_headers,
+            state="readonly",
+        )
+        self.match_target_key_combo.grid(row=3, column=1, sticky="ew", pady=4)
+        ttk.Label(match_form, text="来源表匹配列", width=16).grid(row=4, column=0, sticky="w", pady=4)
+        self.match_source_key_combo = ttk.Combobox(
+            match_form,
+            textvariable=self.match_source_key_var,
+            values=self.match_source_headers,
+            state="readonly",
+        )
+        self.match_source_key_combo.grid(row=4, column=1, sticky="ew", pady=4)
+        ttk.Button(match_form, text="加载表头", command=self.load_match_headers).grid(
+            row=4, column=2, padx=(8, 0), pady=4
+        )
+
+        match_lists = ttk.Frame(match_frame)
+        match_lists.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        match_lists.columnconfigure(0, weight=1)
+        match_lists.columnconfigure(1, weight=1)
+
+        extra_frame = ttk.LabelFrame(match_lists, text="附加匹配列映射", padding=12)
+        extra_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        extra_frame.columnconfigure(0, weight=1)
+        ttk.Label(extra_frame, text="目标表列").grid(row=0, column=0, sticky="w")
+        ttk.Label(extra_frame, text="来源表列").grid(row=0, column=1, sticky="w", padx=(8, 0))
+        self.match_extra_target_combo = ttk.Combobox(
+            extra_frame,
+            textvariable=self.match_extra_target_var,
+            values=self.match_target_headers,
+            state="readonly",
+        )
+        self.match_extra_target_combo.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        self.match_extra_source_combo = ttk.Combobox(
+            extra_frame,
+            textvariable=self.match_extra_source_var,
+            values=self.match_source_headers,
+            state="readonly",
+        )
+        self.match_extra_source_combo.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(4, 0))
+        ttk.Button(extra_frame, text="添加映射", command=self.add_extra_match_mapping).grid(
+            row=1, column=2, padx=(8, 0), pady=(4, 0)
+        )
+        self.match_extra_tree = ttk.Treeview(
+            extra_frame,
+            columns=("target", "source"),
+            show="headings",
+            height=5,
+        )
+        self.match_extra_tree.heading("target", text="目标表列")
+        self.match_extra_tree.heading("source", text="来源表列")
+        self.match_extra_tree.column("target", width=160, anchor="w")
+        self.match_extra_tree.column("source", width=160, anchor="w")
+        self.match_extra_tree.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        extra_frame.rowconfigure(2, weight=1)
+        ttk.Button(extra_frame, text="删除所选", command=self.remove_extra_match_mapping).grid(
+            row=2, column=2, padx=(8, 0), sticky="n"
+        )
+
+        transfer_frame = ttk.LabelFrame(match_lists, text="补充列映射", padding=12)
+        transfer_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        transfer_frame.columnconfigure(0, weight=1)
+        ttk.Label(transfer_frame, text="结果列名").grid(row=0, column=0, sticky="w")
+        ttk.Label(transfer_frame, text="来源表列").grid(row=0, column=1, sticky="w", padx=(8, 0))
+        self.match_transfer_target_entry = self.create_text_entry(
+            transfer_frame,
+            textvariable=self.match_transfer_target_var,
+        )
+        self.match_transfer_target_entry.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        self.match_transfer_source_combo = ttk.Combobox(
+            transfer_frame,
+            textvariable=self.match_transfer_source_var,
+            values=self.match_source_headers,
+            state="readonly",
+        )
+        self.match_transfer_source_combo.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(4, 0))
+        ttk.Button(transfer_frame, text="添加补充列", command=self.add_transfer_mapping).grid(
+            row=1, column=2, padx=(8, 0), pady=(4, 0)
+        )
+        self.match_transfer_tree = ttk.Treeview(
+            transfer_frame,
+            columns=("target", "source"),
+            show="headings",
+            height=5,
+        )
+        self.match_transfer_tree.heading("target", text="结果列名")
+        self.match_transfer_tree.heading("source", text="来源表列")
+        self.match_transfer_tree.column("target", width=160, anchor="w")
+        self.match_transfer_tree.column("source", width=160, anchor="w")
+        self.match_transfer_tree.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        transfer_frame.rowconfigure(2, weight=1)
+        ttk.Button(transfer_frame, text="删除所选", command=self.remove_transfer_mapping).grid(
+            row=2, column=2, padx=(8, 0), sticky="n"
+        )
+
+        match_action = ttk.Frame(match_frame)
+        match_action.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        self.match_run_button = ttk.Button(match_action, text="开始匹配", command=self.start_match_run)
+        self.match_run_button.pack(side="left")
+        self.match_open_button = ttk.Button(
+            match_action,
+            text="打开结果文件",
+            command=self.open_match_result_file,
+            state="disabled",
+        )
+        self.match_open_button.pack(side="left", padx=(10, 0))
+        ttk.Label(match_action, textvariable=self.match_status_var).pack(side="right")
+
+        match_result_frame = ttk.LabelFrame(match_frame, text="匹配结果", padding=12)
+        match_result_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        match_result_frame.columnconfigure(0, weight=1)
+        match_result_frame.rowconfigure(0, weight=1)
+        self.match_result_text = tk.Text(
+            match_result_frame,
+            wrap="word",
+            height=8,
+            relief="solid",
+            bd=1,
+            bg="#FCFCFC",
+            fg="#222222",
+            insertbackground="#1677FF",
+            padx=10,
+            pady=10,
+        )
+        self.match_result_text.grid(row=0, column=0, sticky="nsew")
+        self.match_result_text.configure(state="disabled")
+        match_result_scroll = ttk.Scrollbar(
+            match_result_frame,
+            orient="vertical",
+            command=self.match_result_text.yview,
+        )
+        match_result_scroll.grid(row=0, column=1, sticky="ns")
+        self.match_result_text.configure(yscrollcommand=match_result_scroll.set)
+
+        exam_frame = ttk.Frame(notebook, padding=14)
+        exam_frame.columnconfigure(0, weight=1)
+        exam_frame.rowconfigure(3, weight=1)
+        notebook.add(exam_frame, text="考场编排")
+
+        exam_files_frame = ttk.LabelFrame(exam_frame, text="输入文件", padding=12)
+        exam_files_frame.grid(row=0, column=0, sticky="ew")
+        exam_files_frame.columnconfigure(1, weight=1)
+        self.add_file_row(
+            exam_files_frame,
+            row=0,
+            label="考生明细表",
+            variable=self.exam_candidate_var,
+            command=self.choose_exam_candidate_file,
+            button_text="选择文件",
+        )
+        self.add_file_row(
+            exam_files_frame,
+            row=1,
+            label="岗位归组表",
+            variable=self.exam_group_var,
+            command=self.choose_exam_group_file,
+            button_text="选择文件",
+        )
+        self.add_file_row(
+            exam_files_frame,
+            row=2,
+            label="编排片段表",
+            variable=self.exam_plan_var,
+            command=self.choose_exam_plan_file,
+            button_text="选择文件",
+        )
+        self.add_entry_row(exam_files_frame, 3, "输出文件", self.exam_output_var)
+        ttk.Button(exam_files_frame, text="自动生成", command=self.fill_exam_output_path).grid(
+            row=3, column=2, padx=(8, 0), pady=4
+        )
+
+        exam_rule_frame = ttk.LabelFrame(exam_frame, text="考号规则", padding=12)
+        exam_rule_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        exam_rule_frame.columnconfigure(0, weight=1)
+        exam_digits_row = ttk.Frame(exam_rule_frame)
+        exam_digits_row.grid(row=0, column=0, sticky="ew")
+        for idx, (label, variable) in enumerate(
+            [
+                ("考点位数", self.exam_point_digits_var),
+                ("考场位数", self.exam_room_digits_var),
+                ("座号位数", self.exam_seat_digits_var),
+                ("流水号位数", self.exam_serial_digits_var),
+            ]
+        ):
+            ttk.Label(exam_digits_row, text=label).grid(row=0, column=idx * 2, sticky="w")
+            entry = self.create_text_entry(exam_digits_row, variable)
+            entry.configure(width=6)
+            entry.grid(row=0, column=idx * 2 + 1, sticky="w", padx=(6, 12))
+
+        exam_sort_row = ttk.Frame(exam_rule_frame)
+        exam_sort_row.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        ttk.Label(exam_sort_row, text="组内顺序").pack(side="left")
+        ttk.Radiobutton(
+            exam_sort_row,
+            text="按原顺序",
+            variable=self.exam_sort_mode_var,
+            value="original",
+        ).pack(side="left", padx=(10, 0))
+        ttk.Radiobutton(
+            exam_sort_row,
+            text="随机打乱",
+            variable=self.exam_sort_mode_var,
+            value="random",
+        ).pack(side="left", padx=(10, 0))
+
+        exam_rule_editor = ttk.Frame(exam_rule_frame)
+        exam_rule_editor.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        ttk.Label(exam_rule_editor, text="项目").grid(row=0, column=0, sticky="w")
+        self.exam_rule_type_combo = ttk.Combobox(
+            exam_rule_editor,
+            textvariable=self.exam_rule_type_var,
+            values=self.exam_rule_base_types,
+            state="readonly",
+        )
+        self.exam_rule_type_combo.grid(row=0, column=1, sticky="w", padx=(6, 12))
+        ttk.Label(exam_rule_editor, text="自定义内容").grid(row=0, column=2, sticky="w")
+        self.exam_rule_custom_entry = self.create_text_entry(exam_rule_editor, self.exam_rule_custom_var)
+        self.exam_rule_custom_entry.grid(row=0, column=3, sticky="ew", padx=(6, 12))
+        exam_rule_editor.columnconfigure(3, weight=1)
+        ttk.Button(exam_rule_editor, text="添加规则", command=self.add_exam_rule_item).grid(
+            row=0, column=4, sticky="e"
+        )
+
+        self.exam_rule_tree = ttk.Treeview(
+            exam_rule_frame,
+            columns=("index", "type", "custom"),
+            show="headings",
+            height=5,
+        )
+        self.exam_rule_tree.heading("index", text="顺序")
+        self.exam_rule_tree.heading("type", text="项目")
+        self.exam_rule_tree.heading("custom", text="自定义内容")
+        self.exam_rule_tree.column("index", width=60, anchor="center")
+        self.exam_rule_tree.column("type", width=120, anchor="w")
+        self.exam_rule_tree.column("custom", width=220, anchor="w")
+        self.exam_rule_tree.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
+        exam_rule_frame.rowconfigure(3, weight=1)
+        exam_rule_actions = ttk.Frame(exam_rule_frame)
+        exam_rule_actions.grid(row=4, column=0, sticky="w", pady=(8, 0))
+        ttk.Button(exam_rule_actions, text="上移", command=self.move_exam_rule_up).pack(side="left")
+        ttk.Button(exam_rule_actions, text="下移", command=self.move_exam_rule_down).pack(side="left", padx=(8, 0))
+        ttk.Button(exam_rule_actions, text="删除所选", command=self.remove_exam_rule_item).pack(side="left", padx=(8, 0))
+
+        exam_action = ttk.Frame(exam_frame)
+        exam_action.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        self.exam_template_button = ttk.Button(
+            exam_action,
+            text="导出标准模板",
+            command=self.export_exam_templates_from_ui,
+        )
+        self.exam_template_button.pack(side="left")
+        self.exam_run_button = ttk.Button(exam_action, text="开始编排", command=self.start_exam_arrange_run)
+        self.exam_run_button.pack(side="left", padx=(10, 0))
+        self.exam_open_button = ttk.Button(
+            exam_action,
+            text="打开结果文件",
+            command=self.open_exam_result_file,
+            state="disabled",
+        )
+        self.exam_open_button.pack(side="left", padx=(10, 0))
+        ttk.Label(exam_action, textvariable=self.exam_status_var).pack(side="right")
+
+        exam_result_frame = ttk.LabelFrame(exam_frame, text="编排结果", padding=12)
+        exam_result_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        exam_result_frame.columnconfigure(0, weight=1)
+        exam_result_frame.rowconfigure(0, weight=1)
+        self.exam_result_text = tk.Text(
+            exam_result_frame,
+            wrap="word",
+            height=8,
+            relief="solid",
+            bd=1,
+            bg="#FCFCFC",
+            fg="#222222",
+            insertbackground="#1677FF",
+            padx=10,
+            pady=10,
+        )
+        self.exam_result_text.grid(row=0, column=0, sticky="nsew")
+        self.exam_result_text.configure(state="disabled")
+        exam_result_scroll = ttk.Scrollbar(exam_result_frame, orient="vertical", command=self.exam_result_text.yview)
+        exam_result_scroll.grid(row=0, column=1, sticky="ns")
+        self.exam_result_text.configure(yscrollcommand=exam_result_scroll.set)
+
+        pack_frame = ttk.Frame(notebook, padding=14)
+        pack_frame.columnconfigure(0, weight=1)
+        pack_frame.rowconfigure(2, weight=1)
+        notebook.add(pack_frame, text="结果打包")
+
+        pack_form = ttk.LabelFrame(pack_frame, text="压缩加密", padding=12)
+        pack_form.grid(row=0, column=0, sticky="ew")
+        pack_form.columnconfigure(1, weight=1)
+
+        self.add_path_row(
+            pack_form,
+            row=0,
+            label="待打包文件夹",
+            variable=self.pack_source_dir_var,
+        )
+        self.add_path_row(
+            pack_form,
+            row=1,
+            label="输出目录",
+            variable=self.pack_output_dir_var,
+        )
+        self.add_tick_checkbutton(
+            pack_form,
+            text="手动设置密码",
+            variable=self.pack_use_custom_password_var,
+            command=self.update_pack_password_mode_ui,
+        ).grid(row=2, column=1, sticky="w", pady=(4, 0))
+        self.pack_password_entry = self.add_entry_row(
+            pack_form,
+            3,
+            "打包密码",
+            self.pack_password_var,
+        )
+
+        pack_action = ttk.Frame(pack_frame)
+        pack_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        self.pack_run_button = ttk.Button(
+            pack_action,
+            text="一键打包并加密",
+            command=self.start_pack_run,
+        )
+        self.pack_run_button.pack(side="left")
+        self.pack_copy_password_button = ttk.Button(
+            pack_action,
+            text="复制密码",
+            command=self.copy_pack_password,
+            state="disabled",
+        )
+        self.pack_copy_password_button.pack(side="left", padx=(10, 0))
+        self.pack_open_button = ttk.Button(
+            pack_action,
+            text="打开压缩包",
+            command=self.open_pack_file,
+            state="disabled",
+        )
+        self.pack_open_button.pack(side="left", padx=(10, 0))
+        ttk.Label(pack_action, textvariable=self.pack_status_var).pack(side="right")
+
+        pack_result_frame = ttk.LabelFrame(pack_frame, text="打包结果", padding=12)
+        pack_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        pack_result_frame.columnconfigure(0, weight=1)
+        ttk.Label(
+            pack_result_frame,
+            textvariable=self.pack_result_var,
+            justify="left",
+            wraplength=860,
+        ).grid(row=0, column=0, sticky="w")
+
+        pack_query_frame = ttk.LabelFrame(pack_frame, text="密码查询", padding=12)
+        pack_query_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        pack_query_frame.columnconfigure(0, weight=1)
+        pack_query_frame.rowconfigure(1, weight=1)
+        self.pack_query_entry = tk.Entry(
+            pack_query_frame,
+            textvariable=self.pack_query_var,
+            font=("Helvetica", 12),
+            relief="solid",
+            bd=1,
+            bg="#FCFCFC",
+            fg="#303030",
+            insertbackground="#2F6BFF",
+            highlightthickness=1,
+            highlightbackground="#C9D2E0",
+            highlightcolor="#2F6BFF",
+        )
+        self.pack_query_entry.grid(row=0, column=0, sticky="ew")
+        ttk.Button(pack_query_frame, text="查询密码", command=self.run_pack_history_query).grid(
+            row=0, column=1, padx=(10, 0)
+        )
+        self.pack_query_result_text = tk.Text(
+            pack_query_frame,
+            wrap="word",
+            height=6,
+            relief="solid",
+            bd=1,
+            bg="#FCFCFC",
+            fg="#222222",
+            insertbackground="#1677FF",
+            padx=10,
+            pady=10,
+        )
+        self.pack_query_result_text.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        self.pack_query_result_text.configure(state="disabled")
+        pack_query_scroll = ttk.Scrollbar(
+            pack_query_frame,
+            orient="vertical",
+            command=self.pack_query_result_text.yview,
+        )
+        pack_query_scroll.grid(row=1, column=2, sticky="ns", pady=(8, 0))
+        self.pack_query_result_text.configure(yscrollcommand=pack_query_scroll.set)
+
         help_frame = ttk.Frame(notebook, padding=14)
         notebook.add(help_frame, text="使用说明")
         help_frame.columnconfigure(0, weight=1)
@@ -911,6 +1407,12 @@ class App:
         self.update_photo_source_mode_ui()
         self.update_certificate_mode_ui()
         self.update_certificate_source_mode_ui()
+        self.update_pack_password_mode_ui()
+        self.set_match_result_text(self.match_result_var.get())
+        self.load_exam_group_headers()
+        self.refresh_exam_rule_tree()
+        self.set_exam_result_text(self.exam_result_var.get())
+        self.set_pack_query_result_text("可按文件夹名、压缩包名或密码查询最近打包记录。")
         self.root.after(120, lambda: self.reset_split_default("photo"))
 
     def set_help_content(self) -> None:
@@ -971,14 +1473,14 @@ class App:
 - 如果模板中有分类信息，可以按分类目录导出
 - 如果勾选“导出后文件夹重命名”，输出目录中的人员文件夹名称会按你选择的列来命名
 
-三、Word 转 HTML
+三、表样转换
 
 适用场景：
-- 把 Word 报名表模板转换成 HTML 代码
+- 把 Word / Excel 表样转换成 HTML 代码
 - 生成 Net 版或 Java 版占位符模板
 
 操作步骤：
-1. 选择 Word 文件（.doc 或 .docx）。
+1. 选择表样文件（.doc / .docx / .xlsx）。
 2. 点击“Net版导出”或“Java版导出”。
 3. 在“代码”页查看并复制 HTML。
 4. 如需查看页面效果，可以使用“浏览器预览”。
@@ -986,16 +1488,91 @@ class App:
 结果说明：
 - Net 版占位符示例：{{[#考生表视图.姓名#]}}
 - Java 版占位符示例：${{考生.姓名}}
+- Excel 默认读取第一个 sheet
 - Windows 下建议使用“浏览器预览”
 
-四、使用建议
+四、数据匹配
+
+适用场景：
+- 两个 Excel 表之间按考号、身份证号、姓名等字段补列
+- 代替手工写 VLOOKUP、XLOOKUP 或临时写 SQL
+- 姓名可能重名时，再叠加单位、岗位等附加列提高匹配准确性
+
+操作步骤：
+1. 选择目标表和来源表（支持 .xlsx / .xls）。
+2. 点击“加载表头”。
+3. 分别选择目标表匹配列和来源表匹配列。
+4. 如需提高准确性，在“附加匹配列映射”中设置“目标表列 -> 来源表列”，例如“单位 -> 报考单位”。
+5. 在“补充列映射”中设置结果列名和来源表列，例如“身份证号 <- 身份证号”。
+6. 确认输出文件路径后，点击“开始匹配”。
+
+结果说明：
+- 会生成新的 Excel 结果文件，不改原始目标表
+- 结果文件会新增补充列
+- 会额外生成一个“匹配结果清单”sheet，方便核对未匹配和重复键
+- 如果第一行只是“附件1”这类说明，程序会尽量自动跳过并识别真正表头
+
+五、考场编排
+
+适用场景：
+- 根据标准模板给考生批量补充考点、考场、座号、考号
+- 考号规则不固定时，在程序里配置拼接顺序
+- 混编考场时，通过编排片段表控制同一考场的不同座位区间
+- 岗位归组表后续新增字段时，也可以直接作为考号拼接片段使用
+
+操作步骤：
+1. 可以先点击“导出标准模板”，生成三张标准表后再补充数据。
+2. 准备三张标准表：
+   - 考生明细表：姓名、身份证号、招聘单位、岗位名称
+   - 岗位归组表：招聘单位、岗位名称、科目组、岗位编码、科目号
+   - 编排片段表：科目组、考点、考场号、起始座号、结束座号、人数、起始流水号、结束流水号、备注
+3. 在程序中选择这三张表。
+4. 设置考点、考场、座号、流水号的位数。
+5. 选择同组内顺序：
+   - 按原顺序
+   - 随机打乱
+6. 在“考号规则”里按顺序添加规则，例如：
+   - 自定义
+   - 考点
+   - 考场
+   - 座号
+7. 点击“开始编排”。
+
+结果说明：
+- 会生成新的 Excel 结果文件
+- 在原始基础上新增：科目组、岗位编码、科目号、考点、考场、座号、考号、编排备注
+- 如果岗位未找到归组，或科目组未找到编排片段，会在“编排备注”里标明原因
+- 同一科目组内默认随机打乱后再分配，也可以手动切换为按原顺序
+
+六、结果打包
+
+适用场景：
+- 把处理后的结果文件夹直接压缩成加密 zip
+- 发送给客户或第三方时提高安全性
+
+操作步骤：
+1. 选择“待打包文件夹”。
+2. 选择“输出目录”。
+3. 如需客户指定密码，可勾选“手动设置密码”并输入密码。
+4. 点击“一键打包并加密”。
+5. 程序会自动使用文件夹名生成压缩包名。
+6. 如果未手动输入密码，程序会自动生成密码，并在结果区显示。
+7. 如忘记密码，可在下方“密码查询”中按文件夹名或压缩包名查询。
+
+结果说明：
+- 压缩包名称默认和文件夹名称一致
+- 自动密码规则：当天日期 + 4位随机字符，例如 260313A7KQ
+- 打包记录会保存到本地 JSON 文件，方便后期查询密码
+- 可直接点击“复制密码”或“打开压缩包”
+
+七、使用建议
 
 - 第一次处理大批量文件时，建议先用少量数据测试。
 - 使用模板前，建议先确认匹配列和分类列填写正确。
 - 处理完成后，可以直接点击“打开结果清单”核对结果。
 - 切换阿里云 / 腾讯云时，程序会分别记住两套配置。
 
-五、运行日志
+六、运行日志
 
 运行日志用于查看下载、筛选、分类和导出的详细过程。
 如果需要回看处理步骤，可以打开“运行日志”页查看。
@@ -1035,10 +1612,11 @@ class App:
         label: str,
         variable: tk.StringVar,
         show: Optional[str] = None,
-    ) -> None:
+    ):
         ttk.Label(parent, text=label, width=16).grid(row=row, column=0, sticky="w", pady=4)
         entry = self.create_text_entry(parent, textvariable=variable, show=show or "")
         entry.grid(row=row, column=1, sticky="ew", pady=4)
+        return entry
 
     def add_tick_checkbutton(
         self,
@@ -1289,10 +1867,304 @@ class App:
             initialdir=str(Path(self.word_source_var.get()).parent)
             if self.word_source_var.get().strip()
             else str(Path.cwd()),
-            filetypes=[("Word 文件", "*.docx *.doc"), ("所有文件", "*.*")],
+            filetypes=[("表样文件", "*.docx *.doc *.xlsx"), ("所有文件", "*.*")],
         )
         if selected:
             self.word_source_var.set(selected)
+
+    def choose_match_target(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.match_target_var.get()).parent)
+            if self.match_target_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.match_target_var.set(selected)
+            self.fill_match_output_path()
+            self.load_match_headers()
+
+    def choose_match_source(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.match_source_var.get()).parent)
+            if self.match_source_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.match_source_var.set(selected)
+            self.load_match_headers()
+
+    def choose_exam_candidate_file(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.exam_candidate_var.get()).parent)
+            if self.exam_candidate_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.exam_candidate_var.set(selected)
+            self.fill_exam_output_path()
+
+    def choose_exam_group_file(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.exam_group_var.get()).parent)
+            if self.exam_group_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.exam_group_var.set(selected)
+            self.load_exam_group_headers()
+
+    def choose_exam_plan_file(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.exam_plan_var.get()).parent)
+            if self.exam_plan_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.exam_plan_var.set(selected)
+
+    def export_exam_templates_from_ui(self) -> None:
+        output_dir = filedialog.askdirectory(
+            initialdir=str(Path(self.exam_candidate_var.get()).parent)
+            if self.exam_candidate_var.get().strip()
+            else str(Path.cwd()),
+            title="选择模板导出目录",
+        )
+        if not output_dir:
+            return
+        try:
+            summary = export_exam_templates(Path(output_dir))
+        except Exception as exc:
+            messagebox.showerror("导出失败", str(exc))
+            self.exam_status_var.set("失败")
+            self.exam_result_var.set(f"模板导出失败：\n{exc}")
+            self.set_exam_result_text(self.exam_result_var.get())
+            return
+
+        self.last_exam_template_export = summary
+        self.exam_candidate_var.set(str(summary.candidate_template_path))
+        self.exam_group_var.set(str(summary.group_template_path))
+        self.exam_plan_var.set(str(summary.plan_template_path))
+        self.load_exam_group_headers()
+        self.fill_exam_output_path()
+        self.exam_status_var.set("模板已导出")
+        self.exam_result_var.set(
+            "\n".join(
+                [
+                    "标准模板已导出：",
+                    f"目录：{summary.output_dir}",
+                    f"考生明细模板：{summary.candidate_template_path.name}",
+                    f"岗位归组模板：{summary.group_template_path.name}",
+                    f"编排片段模板：{summary.plan_template_path.name}",
+                    "",
+                    "建议：先补充三张模板，再回来执行考场编排。",
+                ]
+            )
+        )
+        self.set_exam_result_text(self.exam_result_var.get())
+        self.write_log(f"考场编排标准模板已导出：{summary.output_dir}")
+
+    def load_exam_group_headers(self) -> None:
+        self.exam_group_headers = []
+        group_value = self.exam_group_var.get().strip()
+        if not group_value:
+            self.refresh_exam_rule_type_values()
+            return
+        group_path = Path(group_value)
+        if not group_path.exists():
+            self.refresh_exam_rule_type_values()
+            return
+        try:
+            headers = list_exam_headers(group_path, ["招聘单位", "岗位名称", "科目组"])
+        except Exception:
+            self.refresh_exam_rule_type_values()
+            return
+        self.exam_group_headers = [
+            header for header in headers if header not in {"招聘单位", "岗位名称", "科目组"}
+        ]
+        self.refresh_exam_rule_type_values()
+
+    def refresh_exam_rule_type_values(self) -> None:
+        values = self.exam_rule_base_types + self.exam_group_headers
+        if hasattr(self, "exam_rule_type_combo") and self.exam_rule_type_combo is not None:
+            self.exam_rule_type_combo.configure(values=values)
+        current_value = self.exam_rule_type_var.get().strip()
+        if current_value and current_value in values:
+            return
+        self.exam_rule_type_var.set(values[0] if values else "")
+
+    def fill_exam_output_path(self) -> None:
+        value = self.exam_candidate_var.get().strip()
+        if not value:
+            return
+        candidate_path = Path(value)
+        self.exam_output_var.set(str(candidate_path.with_name(f"{candidate_path.stem}_考场编排结果.xlsx")))
+
+    def fill_match_output_path(self) -> None:
+        target_value = self.match_target_var.get().strip()
+        if not target_value:
+            return
+        target_path = Path(target_value)
+        self.match_output_var.set(str(target_path.with_name(f"{target_path.stem}_数据匹配结果.xlsx")))
+
+    def load_match_headers(self) -> None:
+        target_value = self.match_target_var.get().strip()
+        source_value = self.match_source_var.get().strip()
+        self.match_target_headers = []
+        self.match_source_headers = []
+        self.match_extra_mappings = []
+        self.match_transfer_mappings = []
+        self.match_target_key_combo.configure(values=[])
+        self.match_source_key_combo.configure(values=[])
+        self.match_extra_target_combo.configure(values=[])
+        self.match_extra_source_combo.configure(values=[])
+        self.match_transfer_source_combo.configure(values=[])
+        for item_id in self.match_extra_tree.get_children():
+            self.match_extra_tree.delete(item_id)
+        for item_id in self.match_transfer_tree.get_children():
+            self.match_transfer_tree.delete(item_id)
+        if not target_value or not source_value:
+            return
+        target_path = Path(target_value)
+        source_path = Path(source_value)
+        if not target_path.exists() or not source_path.exists():
+            return
+        try:
+            self.match_target_headers = list_match_headers(target_path)
+            self.match_source_headers = list_match_headers(source_path)
+        except Exception as exc:
+            messagebox.showerror("加载失败", str(exc))
+            return
+        self.match_target_key_combo.configure(values=self.match_target_headers)
+        self.match_source_key_combo.configure(values=self.match_source_headers)
+        self.match_extra_target_combo.configure(values=self.match_target_headers)
+        self.match_extra_source_combo.configure(values=self.match_source_headers)
+        self.match_transfer_source_combo.configure(values=self.match_source_headers)
+        if not self.match_target_key_var.get().strip() and self.match_target_headers:
+            self.match_target_key_var.set(self.match_target_headers[0])
+        if not self.match_source_key_var.get().strip() and self.match_source_headers:
+            self.match_source_key_var.set(self.match_source_headers[0])
+        if self.match_source_headers and not self.match_transfer_source_var.get().strip():
+            self.match_transfer_source_var.set(self.match_source_headers[0])
+            self.match_transfer_target_var.set(self.match_source_headers[0])
+
+    def add_extra_match_mapping(self) -> None:
+        target_column = self.match_extra_target_var.get().strip()
+        source_column = self.match_extra_source_var.get().strip()
+        if not target_column or not source_column:
+            messagebox.showerror("参数错误", "请选择目标表列和来源表列。")
+            return
+        mapping = ColumnMapping(target_column=target_column, source_column=source_column)
+        if mapping in self.match_extra_mappings:
+            return
+        self.match_extra_mappings.append(mapping)
+        self.match_extra_tree.insert("", tk.END, values=(target_column, source_column))
+
+    def remove_extra_match_mapping(self) -> None:
+        selected = self.match_extra_tree.selection()
+        if not selected:
+            return
+        for item_id in selected:
+            values = self.match_extra_tree.item(item_id, "values")
+            self.match_extra_tree.delete(item_id)
+            self.match_extra_mappings = [
+                item
+                for item in self.match_extra_mappings
+                if (item.target_column, item.source_column) != tuple(values)
+            ]
+
+    def add_transfer_mapping(self) -> None:
+        target_column = self.match_transfer_target_var.get().strip()
+        source_column = self.match_transfer_source_var.get().strip()
+        if not source_column:
+            messagebox.showerror("参数错误", "请选择来源表补充列。")
+            return
+        if not target_column:
+            target_column = source_column
+            self.match_transfer_target_var.set(target_column)
+        mapping = ColumnMapping(target_column=target_column, source_column=source_column)
+        if mapping in self.match_transfer_mappings:
+            return
+        self.match_transfer_mappings.append(mapping)
+        self.match_transfer_tree.insert("", tk.END, values=(target_column, source_column))
+
+    def remove_transfer_mapping(self) -> None:
+        selected = self.match_transfer_tree.selection()
+        if not selected:
+            return
+        for item_id in selected:
+            values = self.match_transfer_tree.item(item_id, "values")
+            self.match_transfer_tree.delete(item_id)
+            self.match_transfer_mappings = [
+                item
+                for item in self.match_transfer_mappings
+                if (item.target_column, item.source_column) != tuple(values)
+            ]
+
+    def refresh_exam_rule_tree(self) -> None:
+        for item_id in self.exam_rule_tree.get_children():
+            self.exam_rule_tree.delete(item_id)
+        for index, item in enumerate(self.exam_rule_items, start=1):
+            self.exam_rule_tree.insert("", tk.END, values=(index, item.item_type, item.custom_text))
+
+    def add_exam_rule_item(self) -> None:
+        item_type = self.exam_rule_type_var.get().strip()
+        custom_text = self.exam_rule_custom_var.get().strip()
+        if not item_type:
+            messagebox.showerror("参数错误", "请选择规则项目。")
+            return
+        if item_type == "自定义" and not custom_text:
+            messagebox.showerror("参数错误", "自定义项目需要填写内容。")
+            return
+        self.exam_rule_items.append(ExamRuleItem(item_type=item_type, custom_text=custom_text))
+        self.refresh_exam_rule_tree()
+        if item_type == "自定义":
+            self.exam_rule_custom_var.set("")
+
+    def remove_exam_rule_item(self) -> None:
+        selected = self.exam_rule_tree.selection()
+        if not selected:
+            return
+        indexes = sorted(
+            [int(self.exam_rule_tree.item(item_id, "values")[0]) - 1 for item_id in selected],
+            reverse=True,
+        )
+        for index in indexes:
+            if 0 <= index < len(self.exam_rule_items):
+                self.exam_rule_items.pop(index)
+        self.refresh_exam_rule_tree()
+
+    def move_exam_rule_up(self) -> None:
+        selected = self.exam_rule_tree.selection()
+        if not selected:
+            return
+        index = int(self.exam_rule_tree.item(selected[0], "values")[0]) - 1
+        if index <= 0:
+            return
+        self.exam_rule_items[index - 1], self.exam_rule_items[index] = (
+            self.exam_rule_items[index],
+            self.exam_rule_items[index - 1],
+        )
+        self.refresh_exam_rule_tree()
+        self.exam_rule_tree.selection_set(self.exam_rule_tree.get_children()[index - 1])
+
+    def move_exam_rule_down(self) -> None:
+        selected = self.exam_rule_tree.selection()
+        if not selected:
+            return
+        index = int(self.exam_rule_tree.item(selected[0], "values")[0]) - 1
+        if index >= len(self.exam_rule_items) - 1:
+            return
+        self.exam_rule_items[index + 1], self.exam_rule_items[index] = (
+            self.exam_rule_items[index],
+            self.exam_rule_items[index + 1],
+        )
+        self.refresh_exam_rule_tree()
+        self.exam_rule_tree.selection_set(self.exam_rule_tree.get_children()[index + 1])
 
     def create_text_entry(self, parent, textvariable: tk.StringVar, show: str = ""):
         entry_widget = tk.Entry(
@@ -1474,10 +2346,25 @@ class App:
                     self.write_log(message.split("::", 1)[1])
                 elif isinstance(message, dict) and message.get("type") == "word_export":
                     self.update_word_export_ui(message.get("result"))
+                elif isinstance(message, dict) and message.get("type") == "pack_summary":
+                    self.update_pack_summary_ui(message.get("summary"))
+                elif isinstance(message, dict) and message.get("type") == "match_summary":
+                    self.update_match_summary_ui(message.get("summary"))
+                elif isinstance(message, dict) and message.get("type") == "exam_summary":
+                    self.update_exam_summary_ui(message.get("summary"))
                 elif message == "__WORD_EXPORT_DONE__":
                     self.word_net_button.configure(state="normal")
                     self.word_java_button.configure(state="normal")
                     self.word_status_var.set("完成")
+                elif message == "__MATCH_DONE__":
+                    self.match_run_button.configure(state="normal")
+                    self.match_status_var.set("完成")
+                elif message == "__EXAM_DONE__":
+                    self.exam_run_button.configure(state="normal")
+                    self.exam_status_var.set("完成")
+                elif message == "__PACK_DONE__":
+                    self.pack_run_button.configure(state="normal")
+                    self.pack_status_var.set("完成")
                 elif isinstance(message, str) and message.startswith("__WORD_EXPORT_FAILED__::"):
                     self.word_net_button.configure(state="normal")
                     self.word_java_button.configure(state="normal")
@@ -1490,6 +2377,26 @@ class App:
                     self.word_copy_button.configure(state="disabled")
                     self.word_open_browser_button.configure(state="disabled")
                     self.write_log(error_text)
+                elif isinstance(message, str) and message.startswith("__PACK_FAILED__::"):
+                    self.pack_run_button.configure(state="normal")
+                    self.pack_status_var.set("失败")
+                    self.pack_result_var.set(f"打包失败：\n{message.split('::', 1)[1]}")
+                    self.pack_copy_password_button.configure(state="disabled")
+                    self.pack_open_button.configure(state="disabled")
+                    self.write_log(message.split("::", 1)[1])
+                elif isinstance(message, str) and message.startswith("__MATCH_FAILED__::"):
+                    self.match_run_button.configure(state="normal")
+                    self.match_status_var.set("失败")
+                    self.match_result_var.set(f"匹配失败：\n{message.split('::', 1)[1]}")
+                    self.match_open_button.configure(state="disabled")
+                    self.write_log(message.split("::", 1)[1])
+                elif isinstance(message, str) and message.startswith("__EXAM_FAILED__::"):
+                    self.exam_run_button.configure(state="normal")
+                    self.exam_status_var.set("失败")
+                    self.exam_result_var.set(f"编排失败：\n{message.split('::', 1)[1]}")
+                    self.set_exam_result_text(self.exam_result_var.get())
+                    self.exam_open_button.configure(state="disabled")
+                    self.write_log(message.split("::", 1)[1])
                 else:
                     self.write_log(message)
         self.root.after(150, self.flush_logs)
@@ -1669,7 +2576,7 @@ class App:
     def update_word_export_ui(self, result: Optional[WordExportResult]) -> None:
         self.last_word_export = result
         if result is None:
-            self.word_result_var.set("Word 转 HTML 结果会显示在这里")
+            self.word_result_var.set("表样转换结果会显示在这里")
             self.word_preview_status_var.set("未生成预览")
             self.set_word_code("")
             self.render_word_preview("")
@@ -1685,6 +2592,122 @@ class App:
         self.render_word_preview(result.preview_html)
         self.word_copy_button.configure(state="normal")
         self.word_open_browser_button.configure(state="normal")
+
+    def update_pack_summary_ui(self, summary: Optional[PackSummary]) -> None:
+        self.last_pack_summary = summary
+        if summary is None:
+            self.pack_result_var.set("结果打包信息会显示在这里")
+            self.pack_copy_password_button.configure(state="disabled")
+            self.pack_open_button.configure(state="disabled")
+            return
+
+        self.pack_result_var.set(
+            "打包完成：\n"
+            f"源目录：{summary.source_dir}\n"
+            f"压缩包：{summary.output_path}\n"
+            f"文件数：{summary.file_count}\n"
+            f"时间：{summary.created_at}\n"
+            f"密码：{summary.password}"
+        )
+        self.pack_copy_password_button.configure(state="normal")
+        self.pack_open_button.configure(state="normal")
+
+    def update_match_summary_ui(self, summary: Optional[DataMatchSummary]) -> None:
+        self.last_match_summary = summary
+        if summary is None:
+            self.match_result_var.set("数据匹配结果会显示在这里")
+            self.match_open_button.configure(state="disabled")
+            self.set_match_result_text(self.match_result_var.get())
+            return
+        self.match_result_var.set(
+            "匹配完成：\n"
+            f"目标表：{summary.target_path}\n"
+            f"来源表：{summary.source_path}\n"
+            f"结果文件：{summary.output_path}\n"
+            f"目标表表头：第 {summary.target_header_row} 行\n"
+            f"来源表表头：第 {summary.source_header_row} 行\n"
+            f"总行数：{summary.total_rows}\n"
+            f"匹配成功：{summary.matched_rows}\n"
+            f"未匹配：{summary.unmatched_rows}\n"
+            f"来源重复键：{summary.duplicate_source_keys}\n"
+            f"重复未写入：{summary.ambiguous_rows}"
+        )
+        self.set_match_result_text(self.match_result_var.get())
+        self.match_open_button.configure(state="normal")
+
+    def set_match_result_text(self, content: str) -> None:
+        if self.match_result_text is None:
+            return
+        self.match_result_text.configure(state="normal")
+        self.match_result_text.delete("1.0", tk.END)
+        self.match_result_text.insert("1.0", content)
+        self.match_result_text.configure(state="disabled")
+
+    def set_pack_query_result_text(self, content: str) -> None:
+        if self.pack_query_result_text is None:
+            return
+        self.pack_query_result_text.configure(state="normal")
+        self.pack_query_result_text.delete("1.0", tk.END)
+        self.pack_query_result_text.insert("1.0", content)
+        self.pack_query_result_text.configure(state="disabled")
+
+    def update_exam_summary_ui(self, summary: Optional[ExamArrangeSummary]) -> None:
+        self.last_exam_summary = summary
+        if summary is None:
+            self.exam_result_var.set("考场编排结果会显示在这里")
+            self.set_exam_result_text(self.exam_result_var.get())
+            self.exam_open_button.configure(state="disabled")
+            return
+        self.exam_result_var.set(
+            "编排完成：\n"
+            f"考生表：{summary.candidate_path}\n"
+            f"岗位归组表：{summary.group_path}\n"
+            f"编排片段表：{summary.plan_path}\n"
+            f"结果文件：{summary.output_path}\n"
+            f"总人数：{summary.total_candidates}\n"
+            f"成功编排：{summary.arranged_candidates}\n"
+            f"未找到岗位归组：{summary.missing_groups}\n"
+            f"未找到编排片段：{summary.missing_plan_groups}\n"
+            f"重复岗位归组：{summary.duplicate_group_rows}\n"
+            f"剩余空座：{summary.unused_plan_slots}"
+        )
+        self.set_exam_result_text(self.exam_result_var.get())
+        self.exam_open_button.configure(state="normal")
+
+    def set_exam_result_text(self, content: str) -> None:
+        if self.exam_result_text is None:
+            return
+        self.exam_result_text.configure(state="normal")
+        self.exam_result_text.delete("1.0", tk.END)
+        self.exam_result_text.insert("1.0", content)
+        self.exam_result_text.configure(state="disabled")
+
+    def update_pack_password_mode_ui(self) -> None:
+        if self.pack_use_custom_password_var.get():
+            self.pack_password_entry.configure(state="normal")
+        else:
+            self.pack_password_var.set("")
+            self.pack_password_entry.configure(state="disabled")
+
+    def run_pack_history_query(self) -> None:
+        keyword = self.pack_query_var.get().strip()
+        records = query_pack_history(keyword)
+        if not records:
+            self.set_pack_query_result_text("未找到匹配的打包记录。")
+            self.pack_status_var.set("未找到记录")
+            return
+        latest = records[0]
+        self.set_pack_query_result_text(
+            (
+                f"最近匹配记录：\n"
+                f"文件夹：{latest.get('source_name', '')}\n"
+                f"压缩包：{latest.get('archive_name', '')}\n"
+                f"时间：{latest.get('created_at', '')}\n"
+                f"密码：{latest.get('password', '')}\n"
+                f"路径：{latest.get('output_path', '')}"
+            )
+        )
+        self.pack_status_var.set("已查询密码")
 
     def set_word_code(self, html_content: str) -> None:
         if self.word_code_text is None:
@@ -1766,6 +2789,29 @@ class App:
                 subprocess.Popen(["xdg-open", str(temp_file)])
         except Exception as exc:
             messagebox.showerror("打开失败", str(exc))
+
+    def copy_pack_password(self) -> None:
+        if self.last_pack_summary is None:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.last_pack_summary.password)
+        self.root.update()
+        self.pack_status_var.set("已复制密码")
+
+    def open_pack_file(self) -> None:
+        if self.last_pack_summary is None:
+            return
+        self.open_local_file(self.last_pack_summary.output_path, "未找到压缩包")
+
+    def open_match_result_file(self) -> None:
+        if self.last_match_summary is None:
+            return
+        self.open_local_file(self.last_match_summary.output_path, "未找到匹配结果文件")
+
+    def open_exam_result_file(self) -> None:
+        if self.last_exam_summary is None:
+            return
+        self.open_local_file(self.last_exam_summary.output_path, "未找到编排结果文件")
 
     def open_template_file(self) -> None:
         if self.last_summary is None:
@@ -2057,6 +3103,35 @@ class App:
         self.certificate_bucket_name_var.set(settings.get("certificate_bucket_name", ""))
         self.certificate_prefix_var.set(settings.get("certificate_prefix", ""))
         self.word_source_var.set(settings.get("word_source", ""))
+        self.pack_source_dir_var.set(settings.get("pack_source_dir", ""))
+        self.pack_output_dir_var.set(settings.get("pack_output_dir", self.pack_output_dir_var.get()))
+        self.pack_use_custom_password_var.set(
+            settings.get("pack_use_custom_password", self.pack_use_custom_password_var.get())
+        )
+        self.pack_query_var.set(settings.get("pack_query", ""))
+        self.match_target_var.set(settings.get("match_target", ""))
+        self.match_source_var.set(settings.get("match_source", ""))
+        self.match_target_key_var.set(settings.get("match_target_key", ""))
+        self.match_source_key_var.set(settings.get("match_source_key", ""))
+        self.match_output_var.set(settings.get("match_output", ""))
+        self.exam_candidate_var.set(settings.get("exam_candidate", ""))
+        self.exam_group_var.set(settings.get("exam_group", ""))
+        self.exam_plan_var.set(settings.get("exam_plan", ""))
+        self.exam_output_var.set(settings.get("exam_output", ""))
+        self.exam_point_digits_var.set(settings.get("exam_point_digits", self.exam_point_digits_var.get()))
+        self.exam_room_digits_var.set(settings.get("exam_room_digits", self.exam_room_digits_var.get()))
+        self.exam_seat_digits_var.set(settings.get("exam_seat_digits", self.exam_seat_digits_var.get()))
+        self.exam_serial_digits_var.set(settings.get("exam_serial_digits", self.exam_serial_digits_var.get()))
+        self.exam_sort_mode_var.set(settings.get("exam_sort_mode", self.exam_sort_mode_var.get()))
+        self.exam_rule_items = [
+            ExamRuleItem(
+                item_type=str(item.get("item_type", "")),
+                custom_text=str(item.get("custom_text", "")),
+            )
+            for item in settings.get("exam_rule_items", [])
+            if isinstance(item, dict) and str(item.get("item_type", "")).strip()
+        ]
+        self.load_exam_group_headers()
 
     def save_settings(self) -> None:
         settings = {
@@ -2092,6 +3167,28 @@ class App:
             "certificate_bucket_name": self.certificate_bucket_name_var.get().strip(),
             "certificate_prefix": self.certificate_prefix_var.get().strip(),
             "word_source": self.word_source_var.get().strip(),
+            "pack_source_dir": self.pack_source_dir_var.get().strip(),
+            "pack_output_dir": self.pack_output_dir_var.get().strip(),
+            "pack_use_custom_password": self.pack_use_custom_password_var.get(),
+            "pack_query": self.pack_query_var.get().strip(),
+            "match_target": self.match_target_var.get().strip(),
+            "match_source": self.match_source_var.get().strip(),
+            "match_target_key": self.match_target_key_var.get().strip(),
+            "match_source_key": self.match_source_key_var.get().strip(),
+            "match_output": self.match_output_var.get().strip(),
+            "exam_candidate": self.exam_candidate_var.get().strip(),
+            "exam_group": self.exam_group_var.get().strip(),
+            "exam_plan": self.exam_plan_var.get().strip(),
+            "exam_output": self.exam_output_var.get().strip(),
+            "exam_point_digits": self.exam_point_digits_var.get().strip(),
+            "exam_room_digits": self.exam_room_digits_var.get().strip(),
+            "exam_seat_digits": self.exam_seat_digits_var.get().strip(),
+            "exam_serial_digits": self.exam_serial_digits_var.get().strip(),
+            "exam_sort_mode": self.exam_sort_mode_var.get().strip(),
+            "exam_rule_items": [
+                {"item_type": item.item_type, "custom_text": item.custom_text}
+                for item in self.exam_rule_items
+            ],
         }
         self.SETTINGS_FILE.write_text(
             json.dumps(settings, ensure_ascii=False, indent=2),
@@ -3134,23 +4231,23 @@ class App:
 
         source_value = self.word_source_var.get().strip()
         if not source_value:
-            messagebox.showerror("参数错误", "请选择 Word 文件。")
+            messagebox.showerror("参数错误", "请选择表样文件。")
             return
         source_path = Path(source_value)
         if not source_path.exists():
-            messagebox.showerror("参数错误", f"Word 文件不存在：{source_path}")
+            messagebox.showerror("参数错误", f"表样文件不存在：{source_path}")
             self.word_status_var.set("失败")
-            self.word_result_var.set(f"导出失败：\nWord 文件不存在：{source_path}")
+            self.word_result_var.set(f"导出失败：\n表样文件不存在：{source_path}")
             self.word_preview_status_var.set("预览不可用")
             self.set_word_code("")
             self.render_word_preview("")
             self.word_copy_button.configure(state="disabled")
             self.word_open_browser_button.configure(state="disabled")
             return
-        if source_path.suffix.lower() not in {".doc", ".docx"}:
-            messagebox.showerror("参数错误", "仅支持 `.doc` 或 `.docx` 文件。")
+        if source_path.suffix.lower() not in {".doc", ".docx", ".xlsx"}:
+            messagebox.showerror("参数错误", "仅支持 `.doc`、`.docx` 或 `.xlsx` 文件。")
             self.word_status_var.set("失败")
-            self.word_result_var.set("导出失败：\n仅支持 `.doc` 或 `.docx` 文件。")
+            self.word_result_var.set("导出失败：\n仅支持 `.doc`、`.docx` 或 `.xlsx` 文件。")
             self.word_preview_status_var.set("预览不可用")
             self.set_word_code("")
             self.render_word_preview("")
@@ -3165,7 +4262,7 @@ class App:
         self.word_result_var.set("正在导出 HTML...")
         self.write_log("")
         self.write_log("=" * 60)
-        self.write_log(f"启动 Word 转 HTML 任务：{variant}")
+        self.write_log(f"启动表样转换任务：{variant}")
 
         def runner() -> None:
             try:
@@ -3179,6 +4276,188 @@ class App:
             else:
                 self.log_queue.put({"type": "word_export", "result": result})
                 self.log_queue.put("__WORD_EXPORT_DONE__")
+
+        self.worker = threading.Thread(target=runner, daemon=True)
+        self.worker.start()
+
+    def start_pack_run(self) -> None:
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("任务执行中", "当前任务还没结束。")
+            return
+
+        source_value = self.pack_source_dir_var.get().strip()
+        if not source_value:
+            messagebox.showerror("参数错误", "请选择待打包文件夹。")
+            return
+
+        source_dir = Path(source_value)
+        if not source_dir.exists() or not source_dir.is_dir():
+            messagebox.showerror("参数错误", f"待打包文件夹不存在：{source_dir}")
+            return
+
+        output_value = self.pack_output_dir_var.get().strip()
+        output_dir = Path(output_value) if output_value else source_dir.parent
+        self.pack_output_dir_var.set(str(output_dir))
+        custom_password = self.pack_password_var.get().strip()
+        if self.pack_use_custom_password_var.get() and not custom_password:
+            messagebox.showerror("参数错误", "已勾选手动设置密码，请输入打包密码。")
+            return
+        self.save_settings()
+
+        self.pack_run_button.configure(state="disabled")
+        self.pack_copy_password_button.configure(state="disabled")
+        self.pack_open_button.configure(state="disabled")
+        self.pack_status_var.set("打包中")
+        self.pack_result_var.set("正在压缩并加密，请稍候...")
+        self.write_log(f"启动结果打包任务：{source_dir}")
+
+        def runner() -> None:
+            try:
+                summary = pack_encrypted_folder(
+                    source_dir=source_dir,
+                    output_dir=output_dir,
+                    password=custom_password if self.pack_use_custom_password_var.get() else None,
+                    logger=self.make_logger(),
+                )
+            except Exception as exc:
+                self.log_queue.put(f"__PACK_FAILED__::{type(exc).__name__}: {exc}")
+            else:
+                self.log_queue.put({"type": "pack_summary", "summary": summary})
+                self.log_queue.put("__PACK_DONE__")
+
+        self.worker = threading.Thread(target=runner, daemon=True)
+        self.worker.start()
+
+    def start_match_run(self) -> None:
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("任务执行中", "当前任务还没结束。")
+            return
+
+        target_value = self.match_target_var.get().strip()
+        source_value = self.match_source_var.get().strip()
+        if not target_value or not source_value:
+            messagebox.showerror("参数错误", "请选择目标表和来源表。")
+            return
+        target_key = self.match_target_key_var.get().strip()
+        source_key = self.match_source_key_var.get().strip()
+        if not target_key or not source_key:
+            messagebox.showerror("参数错误", "请选择目标表匹配列和来源表匹配列。")
+            return
+        transfer_mappings = list(self.match_transfer_mappings)
+        if not transfer_mappings:
+            messagebox.showerror("参数错误", "请至少选择一个来源表补充列。")
+            return
+        extra_mappings = [
+            mapping
+            for mapping in self.match_extra_mappings
+            if not (
+                mapping.target_column == target_key
+                and mapping.source_column == source_key
+            )
+        ]
+        target_path = Path(target_value)
+        source_path = Path(source_value)
+        if target_path.suffix.lower() not in {".xlsx", ".xls"} or source_path.suffix.lower() not in {".xlsx", ".xls"}:
+            messagebox.showerror("参数错误", "数据匹配仅支持 `.xlsx` 或 `.xls` 文件。")
+            return
+        output_value = self.match_output_var.get().strip()
+        output_path = Path(output_value) if output_value else target_path.with_name(
+            f"{target_path.stem}_数据匹配结果.xlsx"
+        )
+        self.match_output_var.set(str(output_path))
+        self.save_settings()
+
+        self.match_run_button.configure(state="disabled")
+        self.match_open_button.configure(state="disabled")
+        self.match_status_var.set("匹配中")
+        self.match_result_var.set("正在执行数据匹配，请稍候...")
+        self.write_log(f"启动数据匹配任务：{target_path.name} <- {source_path.name}")
+
+        def runner() -> None:
+            try:
+                summary = run_data_match(
+                    DataMatchOptions(
+                        target_path=target_path,
+                        source_path=source_path,
+                        target_key_column=target_key,
+                        source_key_column=source_key,
+                        extra_match_mappings=extra_mappings,
+                        transfer_mappings=transfer_mappings,
+                        output_path=output_path,
+                    ),
+                    logger=self.make_logger(),
+                )
+            except Exception as exc:
+                self.log_queue.put(f"__MATCH_FAILED__::{type(exc).__name__}: {exc}")
+            else:
+                self.log_queue.put({"type": "match_summary", "summary": summary})
+                self.log_queue.put("__MATCH_DONE__")
+
+        self.worker = threading.Thread(target=runner, daemon=True)
+        self.worker.start()
+
+    def start_exam_arrange_run(self) -> None:
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("任务执行中", "当前任务还没结束。")
+            return
+
+        candidate_value = self.exam_candidate_var.get().strip()
+        group_value = self.exam_group_var.get().strip()
+        plan_value = self.exam_plan_var.get().strip()
+        if not candidate_value or not group_value or not plan_value:
+            messagebox.showerror("参数错误", "请先选择考生明细表、岗位归组表和编排片段表。")
+            return
+        if not self.exam_rule_items:
+            messagebox.showerror("参数错误", "请至少添加一条考号规则。")
+            return
+        try:
+            exam_point_digits = int(self.exam_point_digits_var.get().strip())
+            room_digits = int(self.exam_room_digits_var.get().strip())
+            seat_digits = int(self.exam_seat_digits_var.get().strip())
+            serial_digits = int(self.exam_serial_digits_var.get().strip())
+        except ValueError:
+            messagebox.showerror("参数错误", "考点、考场、座号、流水号位数必须是整数。")
+            return
+
+        candidate_path = Path(candidate_value)
+        group_path = Path(group_value)
+        plan_path = Path(plan_value)
+        output_value = self.exam_output_var.get().strip()
+        output_path = Path(output_value) if output_value else candidate_path.with_name(
+            f"{candidate_path.stem}_考场编排结果.xlsx"
+        )
+        self.exam_output_var.set(str(output_path))
+        self.save_settings()
+
+        self.exam_run_button.configure(state="disabled")
+        self.exam_open_button.configure(state="disabled")
+        self.exam_status_var.set("编排中")
+        self.exam_result_var.set("正在执行考场编排，请稍候...")
+        self.set_exam_result_text(self.exam_result_var.get())
+        self.write_log(f"启动考场编排任务：{candidate_path.name}")
+
+        def runner() -> None:
+            try:
+                summary = run_exam_arrangement(
+                    ExamArrangeOptions(
+                        candidate_path=candidate_path,
+                        group_path=group_path,
+                        plan_path=plan_path,
+                        output_path=output_path,
+                        exam_point_digits=exam_point_digits,
+                        room_digits=room_digits,
+                        seat_digits=seat_digits,
+                        serial_digits=serial_digits,
+                        sort_mode=self.exam_sort_mode_var.get().strip() or "original",
+                        rule_items=list(self.exam_rule_items),
+                    ),
+                    logger=self.make_logger(),
+                )
+            except Exception as exc:
+                self.log_queue.put(f"__EXAM_FAILED__::{type(exc).__name__}: {exc}")
+            else:
+                self.log_queue.put({"type": "exam_summary", "summary": summary})
+                self.log_queue.put("__EXAM_DONE__")
 
         self.worker = threading.Thread(target=runner, daemon=True)
         self.worker.start()

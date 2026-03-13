@@ -1,12 +1,15 @@
 # 报名系统工具箱
 
-当前版本：`v1.0.0`
+当前版本：`v1.1.0`
 
 这是一个桌面工具，主要用于：
 
 - 考生照片下载与分类
 - 证件资料下载与筛选
-- Word 模板转 HTML
+- 表样转换
+- 数据匹配
+- 考场编排
+- 结果打包
 
 支持两种云存储：
 
@@ -40,14 +43,39 @@
 - 支持仅预览，不实际执行
 - 支持生成“证件资料筛选结果清单.xlsx”
 
-### 3. Word 转 HTML
+### 3. 表样转换
 
-- 支持 `.doc` / `.docx`
+- 支持 `.doc` / `.docx` / `.xlsx`
 - 支持 Net 版导出
 - 支持 Java 版导出
 - 支持代码查看
 - 支持复制 HTML
 - 支持浏览器预览
+
+### 4. 数据匹配
+
+- 支持两个 Excel 表按主匹配列补列
+- 支持 `.xlsx` / `.xls`
+- 支持手动设置“目标表列 -> 来源表列”的附加匹配映射
+- 支持手动设置“结果列名 <- 来源表列”的补充映射
+- 支持生成带“匹配结果清单”sheet 的新结果文件
+
+### 5. 结果打包
+
+- 支持选择任意结果文件夹一键压缩
+- 支持 AES 加密 zip
+- 压缩包默认使用原文件夹名称
+- 支持自动生成密码或手动设置密码
+- 支持保存打包记录并查询密码
+
+### 6. 考场编排
+
+- 支持三张标准模板驱动考场编排
+- 支持一键导出三张标准模板，补充后直接导入使用
+- 支持补充考点、考场、座号、考号
+- 支持在程序中配置考号拼接规则，可选岗位编码、科目号等片段
+- 支持岗位归组表新增字段后，直接作为考号规则片段使用
+- 支持混编考场按座位区间分配
 
 ## 安装依赖
 
@@ -119,15 +147,15 @@ PYTHONPATH=src python3 -m aliyun_photo_manager.gui
 
 - `证件资料筛选结果清单.xlsx`
 
-### Word 转 HTML
+### 表样转换
 
 适用场景：
 
-- 把 Word 报名表模板转换成 HTML
+- 把 Word / Excel 报名表模板转换成 HTML
 
 基本流程：
 
-1. 选择 Word 文件
+1. 选择表样文件
 2. 点击“Net版导出”或“Java版导出”
 3. 在“代码”页复制 HTML
 4. 如需看效果，点击“浏览器预览”
@@ -136,6 +164,84 @@ PYTHONPATH=src python3 -m aliyun_photo_manager.gui
 
 - Net：`{[#考生表视图.姓名#]}`
 - Java：`${考生.姓名}`
+
+### 数据匹配
+
+适用场景：
+
+- 两个 Excel 表之间按考号、身份证号、姓名等字段补列
+- 代替手工写 VLOOKUP、XLOOKUP 或临时写 SQL
+- 姓名重名时，可以再叠加单位、岗位等附加列做更准确的关联
+
+基本流程：
+
+1. 选择目标表和来源表（支持 `.xlsx` / `.xls`）
+2. 点击“加载表头”
+3. 选择目标表匹配列和来源表匹配列
+4. 如需提高准确性，设置附加匹配映射，例如 `单位 -> 报考单位`
+5. 设置补充列映射，例如 `身份证号 <- 身份证号`
+6. 点击“开始匹配”
+
+结果说明：
+
+- 会生成一个新的结果 Excel
+- 原目标表不改动
+- 新文件中会增加补充列
+- 结果文件里会带一个“匹配结果清单”sheet
+- 如果第一行只是“附件1”之类说明，程序会尽量自动跳过并识别真正表头
+
+### 考场编排
+
+适用场景：
+
+- 根据标准模板给考生批量补充考点、考场、座号、考号
+- 考号规则不固定时，在程序中配置拼接顺序
+- 混编考场时，通过编排片段表控制同一考场的不同座位区间
+
+基本流程：
+
+1. 可以先点击“导出标准模板”，自动生成三张标准表。
+2. 准备三张标准表：
+   - 考生明细表：`姓名`、`身份证号`、`招聘单位`、`岗位名称`
+   - 岗位归组表：`招聘单位`、`岗位名称`、`科目组`、`岗位编码`、`科目号`
+   - 编排片段表：`科目组`、`考点`、`考场号`、`起始座号`、`结束座号`、`人数`、`起始流水号`、`结束流水号`、`备注`
+3. 选择三张表
+4. 设置考点、考场、座号、流水号位数
+5. 选择同组内顺序：按原顺序或随机打乱
+6. 按顺序添加考号规则
+7. 点击“开始编排”
+
+结果说明：
+
+- 会生成一个新的编排结果 Excel
+- 会新增 `科目组`、`岗位编码`、`科目号`、`考点`、`考场`、`座号`、`考号`
+- 如果有未归组或未编排成功的人员，会在 `编排备注` 中写明原因
+- 同一科目组内默认随机打乱后再分配，也可以手动切换为按原顺序
+
+### 结果打包
+
+适用场景：
+
+- 把照片结果、证件资料结果或其他交付目录打包发给客户
+
+基本流程：
+
+1. 选择待打包文件夹
+2. 选择输出目录
+3. 如需客户指定密码，可勾选“手动设置密码”并输入密码
+4. 点击“一键打包并加密”
+5. 复制程序生成或手动输入的密码
+6. 把 zip 和密码分别发给对方
+
+密码规则：
+
+- 自动密码：`当天日期 + 4位随机字符`
+- 示例：`260313A7KQ`
+
+查询说明：
+
+- 每次打包都会把压缩包路径、文件夹名称、密码、打包时间写入本地 `.pack_history.json`
+- 如果后面忘记密码，可以在“结果打包”页按文件夹名、压缩包名或密码查询
 
 ## 云配置说明
 
@@ -165,7 +271,13 @@ PYTHONPATH=src python3 -m aliyun_photo_manager.gui
 - [certificate_filter.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/certificate_filter.py)
   - 负责证件资料按模板筛选、按分类目录导出、导出结果清单
 - [word_to_html.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/word_to_html.py)
-  - 负责 Word 转 HTML、占位符生成、预览 HTML 构造
+  - 负责表样转换、占位符生成、预览 HTML 构造
+- [result_packer.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/result_packer.py)
+  - 负责目录压缩、AES 加密、自动生成压缩包名称和密码
+- [data_matcher.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/data_matcher.py)
+  - 负责 Excel 表之间的匹配补列和匹配结果清单导出
+- [exam_arranger.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/exam_arranger.py)
+  - 负责按标准模板进行考场编排和考号生成
 - [gui.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/gui.py)
   - 负责桌面界面、参数收集、按钮事件、日志显示、结果展示
 - [config.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/config.py)
