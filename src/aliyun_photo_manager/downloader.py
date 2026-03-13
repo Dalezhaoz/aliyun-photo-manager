@@ -349,6 +349,7 @@ def download_objects(
     progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     cancel_event: Optional[Event] = None,
     file_filter: Optional[Callable[[str], bool]] = None,
+    key_filter: Optional[Callable[[str], bool]] = None,
     stage: str = "download",
 ) -> DownloadResult:
     download_dir.mkdir(parents=True, exist_ok=True)
@@ -365,6 +366,8 @@ def download_objects(
     for key in _iter_object_keys(config, prefix):
         if cancel_event is not None and cancel_event.is_set():
             break
+        if key_filter is not None and not key_filter(key):
+            continue
         if file_filter is not None and not file_filter(key):
             continue
         object_keys.append(key)

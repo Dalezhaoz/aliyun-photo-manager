@@ -15,6 +15,7 @@ from .app import (
     RunOptions,
     WorkflowSummary,
     build_prefixed_directory,
+    resolve_photo_directories,
     run_photo_classification_only,
     run_photo_download_and_template,
 )
@@ -22,6 +23,7 @@ from .certificate_filter import (
     CertificateFilterOptions,
     CertificateFilterSummary,
     list_template_headers,
+    load_match_values,
     run_certificate_filter,
 )
 from .config import OssConfig, validate_oss_config, validate_oss_credentials
@@ -29,10 +31,12 @@ from .downloader import (
     BrowserEntry,
     count_photos_in_prefix,
     download_objects,
+    is_photo_key,
     list_buckets,
     list_browser_entries,
     list_folder_prefixes,
 )
+from .excel_classifier import generate_template
 from .word_to_html import WordExportResult, export_word_to_html
 
 
@@ -51,6 +55,9 @@ class App:
 
         self.prefix_var = tk.StringVar()
         self.photo_source_mode_var = tk.StringVar(value="oss")
+        self.photo_template_var = tk.StringVar()
+        self.photo_match_column_var = tk.StringVar()
+        self.photo_filter_by_template_var = tk.BooleanVar(value=False)
         self.search_keyword_var = tk.StringVar()
         self.bucket_values = []
         self.folder_values = [""]
@@ -114,6 +121,7 @@ class App:
         self.word_code_text = None
         self.word_preview_widget = None
         self.certificate_headers: List[str] = []
+        self.photo_headers: List[str] = []
         self.certificate_bucket_values: List[str] = []
         self.certificate_folder_values: List[str] = [""]
         self.default_sash_pending = {"photo": True, "certificate": True}
@@ -122,6 +130,10 @@ class App:
 
         self.load_saved_settings()
         self.build_ui()
+        if self.photo_template_var.get().strip() and Path(
+            self.photo_template_var.get().strip()
+        ).exists():
+            self.load_photo_headers()
         if self.certificate_template_var.get().strip() and Path(
             self.certificate_template_var.get().strip()
         ).exists():
@@ -227,8 +239,39 @@ class App:
             variable=self.sorted_dir_var,
         )
 
+        photo_template_frame = ttk.LabelFrame(left_frame, text="名单下载", padding=12)
+        photo_template_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        photo_template_frame.columnconfigure(1, weight=1)
+        self.add_file_row(
+            photo_template_frame,
+            row=0,
+            label="人员模板",
+            variable=self.photo_template_var,
+            command=self.choose_photo_template,
+            button_text="选择文件",
+        )
+        ttk.Label(photo_template_frame, text="匹配列", width=16).grid(row=1, column=0, sticky="w", pady=4)
+        photo_match_row = ttk.Frame(photo_template_frame)
+        photo_match_row.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
+        photo_match_row.columnconfigure(0, weight=1)
+        self.photo_match_combo = ttk.Combobox(
+            photo_match_row,
+            textvariable=self.photo_match_column_var,
+            values=self.photo_headers,
+            state="readonly",
+        )
+        self.photo_match_combo.grid(row=0, column=0, sticky="ew")
+        ttk.Button(photo_match_row, text="加载模板列", command=self.load_photo_headers).grid(
+            row=0, column=1, padx=(8, 0)
+        )
+        self.add_tick_checkbutton(
+            photo_template_frame,
+            text="只下载模板中的人员",
+            variable=self.photo_filter_by_template_var,
+        ).grid(row=2, column=1, sticky="w", pady=(6, 0))
+
         self.photo_oss_frame = ttk.LabelFrame(left_frame, text="OSS 配置", padding=12)
-        self.photo_oss_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        self.photo_oss_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
         self.photo_oss_frame.columnconfigure(1, weight=1)
 
         self.add_cloud_type_row(self.photo_oss_frame, 0)
@@ -245,7 +288,7 @@ class App:
         self.add_prefix_picker(self.photo_oss_frame, 5)
 
         options_frame = ttk.LabelFrame(left_frame, text="选项", padding=12)
-        options_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        options_frame.grid(row=4, column=0, sticky="ew", pady=(12, 0))
 
         option_specs = [
             ("仅预览，不实际执行", self.dry_run_var),
@@ -261,7 +304,7 @@ class App:
             )
 
         action_frame = ttk.Frame(left_frame)
-        action_frame.grid(row=4, column=0, sticky="ew", pady=(14, 0))
+        action_frame.grid(row=5, column=0, sticky="ew", pady=(14, 0))
 
         self.run_button = ttk.Button(
             action_frame,
@@ -288,7 +331,7 @@ class App:
         ttk.Label(action_frame, textvariable=self.status_var).pack(side="right")
 
         progress_frame = ttk.LabelFrame(left_frame, text="执行进度", padding=12)
-        progress_frame.grid(row=5, column=0, sticky="ew", pady=(12, 0))
+        progress_frame.grid(row=6, column=0, sticky="ew", pady=(12, 0))
         progress_frame.columnconfigure(0, weight=1)
 
         self.progress_bar = ttk.Progressbar(
@@ -303,7 +346,7 @@ class App:
         )
 
         summary_frame = ttk.LabelFrame(left_frame, text="任务结果", padding=12)
-        summary_frame.grid(row=6, column=0, sticky="ew", pady=(12, 0))
+        summary_frame.grid(row=7, column=0, sticky="ew", pady=(12, 0))
         summary_frame.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -922,6 +965,7 @@ class App:
 补充说明：
 - Net 版占位符格式示例：{[#考生表视图.姓名#]}
 - Java 版占位符格式示例：${考生.姓名}
+- Windows 下如果内置预览不稳定，直接使用“浏览器预览”即可。
 
 四、使用建议
 
@@ -1206,6 +1250,17 @@ class App:
         if selected:
             self.certificate_template_var.set(selected)
             self.load_certificate_headers()
+
+    def choose_photo_template(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.photo_template_var.get()).parent)
+            if self.photo_template_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.photo_template_var.set(selected)
+            self.load_photo_headers()
 
     def choose_word_source(self) -> None:
         selected = filedialog.askopenfilename(
@@ -1644,6 +1699,16 @@ class App:
                 text="导出后会在这里显示 HTML 预览。",
             ).grid(row=0, column=0, sticky="nw")
             return
+        if os.name == "nt":
+            ttk.Label(
+                self.word_preview_container,
+                text="Windows 下已关闭程序内置预览。请点击上方“浏览器预览”查看 HTML 效果。",
+                wraplength=760,
+                justify="left",
+            ).grid(row=0, column=0, sticky="nw")
+            self.word_preview_widget = None
+            self.word_preview_status_var.set(self.word_preview_status_var.get() + "（Windows 建议使用浏览器预览）")
+            return
         try:
             from tkinterweb import HtmlFrame
 
@@ -1876,6 +1941,11 @@ class App:
             return
 
         self.prefix_var.set(settings.get("prefix", ""))
+        self.photo_template_var.set(settings.get("photo_template", ""))
+        self.photo_match_column_var.set(settings.get("photo_match_column", ""))
+        self.photo_filter_by_template_var.set(
+            settings.get("photo_filter_by_template", self.photo_filter_by_template_var.get())
+        )
         self.download_dir_var.set(settings.get("download_dir", self.download_dir_var.get()))
         self.sorted_dir_var.set(settings.get("sorted_dir", self.sorted_dir_var.get()))
         self.cloud_type_var.set(settings.get("cloud_type", self.cloud_type_var.get()))
@@ -1930,6 +2000,9 @@ class App:
     def save_settings(self) -> None:
         settings = {
             "prefix": self.prefix_var.get().strip(),
+            "photo_template": self.photo_template_var.get().strip(),
+            "photo_match_column": self.photo_match_column_var.get().strip(),
+            "photo_filter_by_template": self.photo_filter_by_template_var.get(),
             "download_dir": self.download_dir_var.get().strip(),
             "sorted_dir": self.sorted_dir_var.get().strip(),
             "cloud_type": self.cloud_type_var.get().strip(),
@@ -2008,6 +2081,28 @@ class App:
         current_folder_name_value = self.certificate_folder_name_column_var.get().strip()
         if current_folder_name_value and current_folder_name_value not in headers:
             self.certificate_folder_name_column_var.set("")
+
+    def set_photo_headers(self, headers: List[str]) -> None:
+        self.photo_headers = headers
+        self.photo_match_combo["values"] = headers
+        current_value = self.photo_match_column_var.get().strip()
+        if current_value and current_value not in headers:
+            self.photo_match_column_var.set("")
+        if not self.photo_match_column_var.get().strip() and headers:
+            self.photo_match_column_var.set(headers[0])
+
+    def load_photo_headers(self) -> None:
+        template_path = self.photo_template_var.get().strip()
+        if not template_path:
+            messagebox.showinfo("缺少模板", "请先选择人员模板文件。")
+            return
+        try:
+            headers = list_template_headers(Path(template_path))
+        except Exception as exc:
+            messagebox.showerror("读取失败", str(exc))
+            return
+        self.set_photo_headers(headers)
+        self.write_log(f"已读取照片模板列：{', '.join(headers) if headers else '无'}")
 
     def load_certificate_headers(self) -> None:
         template_path = self.certificate_template_var.get().strip()
@@ -2675,6 +2770,20 @@ class App:
         try:
             options = self.build_options()
             oss_config = None if options.skip_download else self.build_config()
+            photo_match_values: List[str] = []
+            if self.photo_source_mode_var.get() == "oss" and self.photo_filter_by_template_var.get():
+                template_value = self.photo_template_var.get().strip()
+                match_column = self.photo_match_column_var.get().strip()
+                if not template_value:
+                    raise ValueError("已勾选按模板名单下载，请先选择人员模板。")
+                if not match_column:
+                    raise ValueError("已勾选按模板名单下载，请先选择匹配列。")
+                template_path = Path(template_value)
+                if not template_path.exists():
+                    raise ValueError("人员模板文件不存在，请重新选择。")
+                photo_match_values = load_match_values(template_path, match_column)
+                if not photo_match_values:
+                    raise ValueError("照片模板匹配列没有可用数据，无法按名单下载。")
             self.save_settings()
         except Exception as exc:
             messagebox.showerror("参数错误", str(exc))
@@ -2692,16 +2801,78 @@ class App:
         self.write_log("")
         self.write_log("=" * 60)
         self.write_log("启动照片下载/模板任务。")
+        if photo_match_values:
+            self.write_log(
+                f"本次仅下载模板中的照片，匹配列：{self.photo_match_column_var.get().strip()}，共 {len(photo_match_values)} 人。"
+            )
 
         def runner() -> None:
             try:
-                summary = run_photo_download_and_template(
-                    options=options,
-                    oss_config=oss_config,
-                    logger=self.make_logger(),
-                    progress_callback=self.make_progress_callback(),
-                    cancel_event=self.cancel_event,
-                )
+                if photo_match_values and oss_config is not None:
+                    download_dir, sorted_dir = resolve_photo_directories(options)
+                    allowed_stems = set(photo_match_values)
+
+                    def key_filter(object_key: str) -> bool:
+                        relative_path = object_key
+                        normalized_prefix = self.prefix_var.get().strip().strip("/")
+                        if normalized_prefix:
+                            prefix_with_slash = normalized_prefix + "/"
+                            if object_key.startswith(prefix_with_slash):
+                                relative_path = object_key[len(prefix_with_slash):]
+                        filename_stem = Path(relative_path.lstrip("/")).stem
+                        return filename_stem in allowed_stems
+
+                    self.write_log(f"实际下载目录：{download_dir}")
+                    download_result = download_objects(
+                        config=oss_config,
+                        prefix=options.prefix,
+                        download_dir=download_dir,
+                        dry_run=options.dry_run,
+                        skip_existing=options.skip_existing,
+                        logger=self.make_logger(),
+                        progress_callback=self.make_progress_callback(),
+                        cancel_event=self.cancel_event,
+                        key_filter=key_filter,
+                        file_filter=is_photo_key,
+                        stage="download",
+                    )
+                    if self.cancel_event.is_set():
+                        summary = WorkflowSummary(
+                            download_dir=download_dir,
+                            sorted_dir=sorted_dir,
+                            template_path=download_dir / "照片分类模板.xlsx",
+                            download_result=download_result,
+                            template_file_count=0,
+                            classified_count=0,
+                            template_created=False,
+                            cancelled=True,
+                            dry_run=options.dry_run,
+                        )
+                    else:
+                        template_result = generate_template(
+                            source_dir=download_dir,
+                            dry_run=options.dry_run,
+                            logger=self.make_logger(),
+                        )
+                        summary = WorkflowSummary(
+                            download_dir=download_dir,
+                            sorted_dir=sorted_dir,
+                            template_path=template_result.template_path,
+                            download_result=download_result,
+                            template_file_count=template_result.file_count,
+                            classified_count=0,
+                            template_created=template_result.created,
+                            cancelled=False,
+                            dry_run=options.dry_run,
+                        )
+                else:
+                    summary = run_photo_download_and_template(
+                        options=options,
+                        oss_config=oss_config,
+                        logger=self.make_logger(),
+                        progress_callback=self.make_progress_callback(),
+                        cancel_event=self.cancel_event,
+                    )
             except Exception as exc:
                 self.log_queue.put(f"__TASK_FAILED__::{type(exc).__name__}: {exc}")
             else:
@@ -2769,6 +2940,15 @@ class App:
         try:
             source_dir = self.resolve_certificate_source_dir(require_value=True)
             certificate_config = self.build_certificate_config()
+            template_path = Path(self.certificate_template_var.get().strip())
+            match_column = self.certificate_match_column_var.get().strip()
+            if not template_path.exists():
+                raise ValueError("请先选择有效的人员模板文件。")
+            if not match_column:
+                raise ValueError("请先选择匹配列。")
+            match_values = load_match_values(template_path, match_column)
+            if not match_values:
+                raise ValueError("模板匹配列没有可用数据，无法下载证件资料。")
             self.save_settings()
         except Exception as exc:
             messagebox.showerror("参数错误", str(exc))
@@ -2787,9 +2967,25 @@ class App:
         self.write_log("=" * 60)
         self.write_log("启动证件资料下载任务。")
         self.write_log(f"实际下载目录：{source_dir}")
+        self.write_log(f"本次仅下载模板中的人员目录，匹配列：{match_column}，共 {len(match_values)} 人。")
 
         def runner() -> None:
             try:
+                allowed_people = set(match_values)
+
+                def key_filter(object_key: str) -> bool:
+                    relative_path = object_key
+                    normalized_prefix = self.certificate_prefix_var.get().strip().strip("/")
+                    if normalized_prefix:
+                        prefix_with_slash = normalized_prefix + "/"
+                        if object_key.startswith(prefix_with_slash):
+                            relative_path = object_key[len(prefix_with_slash):]
+                    relative_path = relative_path.lstrip("/")
+                    if not relative_path:
+                        return False
+                    person_folder = Path(relative_path).parts[0] if Path(relative_path).parts else ""
+                    return person_folder in allowed_people
+
                 download_result = download_objects(
                     config=certificate_config,
                     prefix=self.certificate_prefix_var.get().strip(),
@@ -2799,13 +2995,14 @@ class App:
                     logger=self.make_logger(),
                     progress_callback=self.make_progress_callback(),
                     cancel_event=self.cancel_event,
+                    key_filter=key_filter,
                     stage="certificate_download",
                 )
                 summary = CertificateFilterSummary(
-                    template_path=Path(self.certificate_template_var.get().strip() or "."),
+                    template_path=template_path,
                     source_dir=source_dir,
                     output_dir=Path(self.certificate_output_dir_var.get().strip() or source_dir),
-                    match_column=self.certificate_match_column_var.get().strip(),
+                    match_column=match_column,
                     classify_output=self.certificate_classify_var.get(),
                     keyword=self.certificate_keyword_var.get().strip() if self.certificate_mode_var.get() == "keyword" else "",
                     total_rows=0,

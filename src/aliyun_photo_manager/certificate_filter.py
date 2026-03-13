@@ -90,6 +90,23 @@ def list_template_headers(template_path: Path) -> List[str]:
     return headers
 
 
+def load_match_values(template_path: Path, match_column: str) -> List[str]:
+    rows = _read_template_rows(template_path)
+    headers = list(rows[0].keys()) if rows else list_template_headers(template_path)
+    if match_column not in headers:
+        raise ValueError(f"模板中不存在匹配列：{match_column}")
+
+    values: List[str] = []
+    seen = set()
+    for row in rows:
+        value = row.get(match_column, "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+    return values
+
+
 def _read_template_rows(template_path: Path) -> List[Dict[str, str]]:
     _, load_workbook = _load_openpyxl()
     workbook = load_workbook(template_path, data_only=True)
