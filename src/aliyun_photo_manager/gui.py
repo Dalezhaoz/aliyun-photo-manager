@@ -209,7 +209,7 @@ class App:
         photo_source_frame.grid(row=0, column=0, sticky="ew")
         ttk.Radiobutton(
             photo_source_frame,
-            text="从 OSS 下载后处理",
+            text="从云存储下载后处理",
             variable=self.photo_source_mode_var,
             value="oss",
             command=self.update_photo_source_mode_ui,
@@ -494,18 +494,18 @@ class App:
         cert_source_frame.grid(row=0, column=0, sticky="ew")
         ttk.Radiobutton(
             cert_source_frame,
-            text="直接使用本地证件资料目录",
-            variable=self.certificate_source_mode_var,
-            value="local",
-            command=self.update_certificate_source_mode_ui,
-        ).pack(side="left")
-        ttk.Radiobutton(
-            cert_source_frame,
-            text="先从 OSS 下载证件资料",
+            text="从云存储下载后处理",
             variable=self.certificate_source_mode_var,
             value="oss",
             command=self.update_certificate_source_mode_ui,
         ).pack(side="left", padx=(10, 0))
+        ttk.Radiobutton(
+            cert_source_frame,
+            text="直接处理本地目录",
+            variable=self.certificate_source_mode_var,
+            value="local",
+            command=self.update_certificate_source_mode_ui,
+        ).pack(side="left")
 
         self.certificate_oss_frame = ttk.LabelFrame(cert_left_frame, text="证件资料 OSS 配置", padding=12)
         self.certificate_oss_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
