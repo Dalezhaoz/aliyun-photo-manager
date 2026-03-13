@@ -39,6 +39,7 @@ from .downloader import (
 )
 from .excel_classifier import generate_template
 from .result_packer import PackSummary, pack_encrypted_folder, query_pack_history
+from .sql_template_executor import SqlTemplateResult, render_sql_template
 from .data_matcher import (
     ColumnMapping,
     DataMatchOptions,
@@ -112,6 +113,13 @@ class App:
         self.pack_use_custom_password_var = tk.BooleanVar(value=False)
         self.pack_password_var = tk.StringVar()
         self.pack_query_var = tk.StringVar()
+        self.sql_template_path_var = tk.StringVar()
+        self.sql_exam_code_var = tk.StringVar()
+        self.sql_exam_date_var = tk.StringVar()
+        self.sql_signup_start_var = tk.StringVar()
+        self.sql_signup_end_var = tk.StringVar()
+        self.sql_audit_start_var = tk.StringVar()
+        self.sql_audit_end_var = tk.StringVar()
         self.match_target_var = tk.StringVar()
         self.match_source_var = tk.StringVar()
         self.match_target_key_var = tk.StringVar()
@@ -152,6 +160,8 @@ class App:
         self.word_preview_status_var = tk.StringVar(value="未生成预览")
         self.pack_status_var = tk.StringVar(value="未开始打包")
         self.pack_result_var = tk.StringVar(value="结果打包信息会显示在这里")
+        self.sql_status_var = tk.StringVar(value="未开始生成")
+        self.sql_result_var = tk.StringVar(value="SQL 生成结果会显示在这里")
         self.match_status_var = tk.StringVar(value="未开始匹配")
         self.match_result_var = tk.StringVar(value="数据匹配结果会显示在这里")
         self.exam_status_var = tk.StringVar(value="未开始编排")
@@ -168,6 +178,7 @@ class App:
         self.last_certificate_summary: Optional[CertificateFilterSummary] = None
         self.last_word_export: Optional[WordExportResult] = None
         self.last_pack_summary: Optional[PackSummary] = None
+        self.last_sql_result: Optional[SqlTemplateResult] = None
         self.last_match_summary: Optional[DataMatchSummary] = None
         self.last_exam_summary: Optional[ExamArrangeSummary] = None
         self.last_exam_template_export: Optional[ExamTemplateExportSummary] = None
@@ -175,6 +186,7 @@ class App:
         self.word_preview_widget = None
         self.match_result_text = None
         self.pack_query_result_text = None
+        self.sql_result_text = None
         self.exam_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []

@@ -17,6 +17,7 @@ dist/
 
 # Local settings and generated files
 .gui_settings.json
+.pack_history.json
 downloads/
 sorted/
 
