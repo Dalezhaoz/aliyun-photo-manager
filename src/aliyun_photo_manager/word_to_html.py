@@ -171,10 +171,6 @@ def _wrap_html(body_html: str) -> str:
   <meta charset="utf-8">
   <title>Word 转 HTML</title>
   <style>
-    @page {{
-      size: A4 portrait;
-      margin: 12mm;
-    }}
     html, body {{
       margin: 0;
       padding: 0;
@@ -185,10 +181,9 @@ def _wrap_html(body_html: str) -> str:
       color: #000;
     }}
     .page {{
-      width: 794px;
-      min-height: 1123px;
+      width: 680px;
       margin: 16px auto;
-      padding: 24px;
+      padding: 0;
       box-sizing: border-box;
     }}
     table {{
@@ -209,10 +204,8 @@ def _wrap_html(body_html: str) -> str:
     @media print {{
       .page {{
         width: auto;
-        min-height: auto;
         margin: 0;
         padding: 0;
-        box-shadow: none;
       }}
     }}
   </style>
