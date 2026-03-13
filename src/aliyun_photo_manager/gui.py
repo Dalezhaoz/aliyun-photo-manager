@@ -38,6 +38,7 @@ from .downloader import (
     list_folder_prefixes,
 )
 from .excel_classifier import generate_template
+from .result_packer import PackSummary, pack_encrypted_folder, query_pack_history
 from .word_to_html import WordExportResult, export_word_to_html
 
 
@@ -90,6 +91,11 @@ class App:
         self.certificate_bucket_name_var = tk.StringVar()
         self.certificate_prefix_var = tk.StringVar()
         self.word_source_var = tk.StringVar()
+        self.pack_source_dir_var = tk.StringVar()
+        self.pack_output_dir_var = tk.StringVar(value=str(Path.cwd() / "packed_results"))
+        self.pack_use_custom_password_var = tk.BooleanVar(value=False)
+        self.pack_password_var = tk.StringVar()
+        self.pack_query_var = tk.StringVar()
 
         self.status_var = tk.StringVar(value="就绪")
         self.progress_text_var = tk.StringVar(value="未开始")
@@ -108,6 +114,8 @@ class App:
         self.word_status_var = tk.StringVar(value="未开始导出")
         self.word_result_var = tk.StringVar(value="表样转换结果会显示在这里")
         self.word_preview_status_var = tk.StringVar(value="未生成预览")
+        self.pack_status_var = tk.StringVar(value="未开始打包")
+        self.pack_result_var = tk.StringVar(value="结果打包信息会显示在这里")
         self.folder_tree: Optional[ttk.Treeview] = None
         self.certificate_folder_tree: Optional[ttk.Treeview] = None
         self.folder_nodes: Dict[str, BrowserEntry] = {}
@@ -119,8 +127,10 @@ class App:
         self.last_summary: Optional[WorkflowSummary] = None
         self.last_certificate_summary: Optional[CertificateFilterSummary] = None
         self.last_word_export: Optional[WordExportResult] = None
+        self.last_pack_summary: Optional[PackSummary] = None
         self.word_code_text = None
         self.word_preview_widget = None
+        self.pack_query_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []
         self.certificate_bucket_values: List[str] = []
@@ -857,6 +867,110 @@ class App:
         self.word_preview_container.columnconfigure(0, weight=1)
         self.word_preview_container.rowconfigure(0, weight=1)
 
+        pack_frame = ttk.Frame(notebook, padding=14)
+        pack_frame.columnconfigure(0, weight=1)
+        pack_frame.rowconfigure(2, weight=1)
+        notebook.add(pack_frame, text="结果打包")
+
+        pack_form = ttk.LabelFrame(pack_frame, text="压缩加密", padding=12)
+        pack_form.grid(row=0, column=0, sticky="ew")
+        pack_form.columnconfigure(1, weight=1)
+
+        self.add_path_row(
+            pack_form,
+            row=0,
+            label="待打包文件夹",
+            variable=self.pack_source_dir_var,
+        )
+        self.add_path_row(
+            pack_form,
+            row=1,
+            label="输出目录",
+            variable=self.pack_output_dir_var,
+        )
+        self.add_tick_checkbutton(
+            pack_form,
+            row=2,
+            label="手动设置密码",
+            variable=self.pack_use_custom_password_var,
+            command=self.update_pack_password_mode_ui,
+        )
+        self.pack_password_entry = self.add_entry_row(
+            pack_form,
+            row=3,
+            label="打包密码",
+            variable=self.pack_password_var,
+        )
+
+        pack_action = ttk.Frame(pack_frame)
+        pack_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        self.pack_run_button = ttk.Button(
+            pack_action,
+            text="一键打包并加密",
+            command=self.start_pack_run,
+        )
+        self.pack_run_button.pack(side="left")
+        self.pack_copy_password_button = ttk.Button(
+            pack_action,
+            text="复制密码",
+            command=self.copy_pack_password,
+            state="disabled",
+        )
+        self.pack_copy_password_button.pack(side="left", padx=(10, 0))
+        self.pack_open_button = ttk.Button(
+            pack_action,
+            text="打开压缩包",
+            command=self.open_pack_file,
+            state="disabled",
+        )
+        self.pack_open_button.pack(side="left", padx=(10, 0))
+        ttk.Label(pack_action, textvariable=self.pack_status_var).pack(side="right")
+
+        pack_result_frame = ttk.LabelFrame(pack_frame, text="打包结果", padding=12)
+        pack_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        pack_result_frame.columnconfigure(0, weight=1)
+        ttk.Label(
+            pack_result_frame,
+            textvariable=self.pack_result_var,
+            justify="left",
+            wraplength=860,
+        ).grid(row=0, column=0, sticky="w")
+
+        pack_query_frame = ttk.LabelFrame(pack_frame, text="密码查询", padding=12)
+        pack_query_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        pack_query_frame.columnconfigure(0, weight=1)
+        pack_query_frame.rowconfigure(1, weight=1)
+        self.pack_query_entry = self.create_text_entry(
+            pack_query_frame,
+            textvariable=self.pack_query_var,
+        )
+        self.pack_query_entry.grid(row=0, column=0, sticky="ew")
+        ttk.Button(
+            pack_query_frame,
+            text="查询密码",
+            command=self.run_pack_history_query,
+        ).grid(row=0, column=1, padx=(8, 0))
+        self.pack_query_result_text = tk.Text(
+            pack_query_frame,
+            wrap="word",
+            height=6,
+            relief="solid",
+            bd=1,
+            bg="#FCFCFC",
+            fg="#222222",
+            padx=10,
+            pady=10,
+        )
+        self.pack_query_result_text.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        self.pack_query_result_text.configure(state="disabled")
+        pack_query_scroll = ttk.Scrollbar(
+            pack_query_frame,
+            orient="vertical",
+            command=self.pack_query_result_text.yview,
+        )
+        pack_query_scroll.grid(row=1, column=2, sticky="ns", pady=(8, 0))
+        self.pack_query_result_text.configure(yscrollcommand=pack_query_scroll.set)
+
         help_frame = ttk.Frame(notebook, padding=14)
         notebook.add(help_frame, text="使用说明")
         help_frame.columnconfigure(0, weight=1)
@@ -908,6 +1022,8 @@ class App:
         self.write_log("可以在右侧浏览 bucket 文件夹，双击进入子目录。")
         self.write_log("也可以在右侧按文件夹名称筛选当前层级目录。")
         self.render_word_preview("")
+        self.update_pack_password_mode_ui()
+        self.set_pack_query_result_text("可按文件夹名、压缩包名或密码查询最近打包记录。")
         self.update_photo_source_mode_ui()
         self.update_certificate_mode_ui()
         self.update_certificate_source_mode_ui()
@@ -988,14 +1104,32 @@ class App:
 - Java 版占位符示例：${{考生.姓名}}
 - Windows 下建议使用“浏览器预览”
 
-四、使用建议
+四、结果打包
+
+适用场景：
+- 把照片结果、证件资料结果或其他交付目录打包发给客户
+
+操作步骤：
+1. 选择待打包文件夹。
+2. 选择输出目录。
+3. 如需客户指定密码，可勾选“手动设置密码”并输入密码。
+4. 点击“一键打包并加密”。
+5. 使用“复制密码”或“打开压缩包”完成交付。
+6. 如需回查历史密码，可在下方输入文件夹名、压缩包名或密码查询。
+
+结果说明：
+- 压缩包默认使用原文件夹名称
+- 自动密码格式：当天日期 + 4位随机字符，例如 `260313A7KQ`
+- 每次打包都会把压缩包路径、密码和时间写入本地 `.pack_history.json`
+
+五、使用建议
 
 - 第一次处理大批量文件时，建议先用少量数据测试。
 - 使用模板前，建议先确认匹配列和分类列填写正确。
 - 处理完成后，可以直接点击“打开结果清单”核对结果。
 - 切换阿里云 / 腾讯云时，程序会分别记住两套配置。
 
-五、运行日志
+六、运行日志
 
 运行日志用于查看下载、筛选、分类和导出的详细过程。
 如果需要回看处理步骤，可以打开“运行日志”页查看。
@@ -1035,10 +1169,11 @@ class App:
         label: str,
         variable: tk.StringVar,
         show: Optional[str] = None,
-    ) -> None:
+    ):
         ttk.Label(parent, text=label, width=16).grid(row=row, column=0, sticky="w", pady=4)
         entry = self.create_text_entry(parent, textvariable=variable, show=show or "")
         entry.grid(row=row, column=1, sticky="ew", pady=4)
+        return entry
 
     def add_tick_checkbutton(
         self,
@@ -1474,10 +1609,22 @@ class App:
                     self.write_log(message.split("::", 1)[1])
                 elif isinstance(message, dict) and message.get("type") == "word_export":
                     self.update_word_export_ui(message.get("result"))
+                elif isinstance(message, dict) and message.get("type") == "pack_summary":
+                    self.update_pack_summary_ui(message.get("summary"))
                 elif message == "__WORD_EXPORT_DONE__":
                     self.word_net_button.configure(state="normal")
                     self.word_java_button.configure(state="normal")
                     self.word_status_var.set("完成")
+                elif message == "__PACK_DONE__":
+                    self.pack_run_button.configure(state="normal")
+                    self.pack_status_var.set("完成")
+                elif isinstance(message, str) and message.startswith("__PACK_FAILED__::"):
+                    self.pack_run_button.configure(state="normal")
+                    self.pack_status_var.set("失败")
+                    self.pack_result_var.set(f"打包失败：\n{message.split('::', 1)[1]}")
+                    self.pack_copy_password_button.configure(state="disabled")
+                    self.pack_open_button.configure(state="disabled")
+                    self.write_log(message.split("::", 1)[1])
                 elif isinstance(message, str) and message.startswith("__WORD_EXPORT_FAILED__::"):
                     self.word_net_button.configure(state="normal")
                     self.word_java_button.configure(state="normal")
@@ -1752,6 +1899,60 @@ class App:
         self.root.update()
         self.word_status_var.set("已复制 HTML")
 
+    def update_pack_summary_ui(self, summary: Optional[PackSummary]) -> None:
+        self.last_pack_summary = summary
+        if summary is None:
+            self.pack_result_var.set("结果打包信息会显示在这里")
+            self.pack_copy_password_button.configure(state="disabled")
+            self.pack_open_button.configure(state="disabled")
+            return
+
+        self.pack_result_var.set(
+            "打包完成：\n"
+            f"源目录：{summary.source_dir}\n"
+            f"压缩包：{summary.output_path}\n"
+            f"文件数：{summary.file_count}\n"
+            f"时间：{summary.created_at}\n"
+            f"密码：{summary.password}"
+        )
+        self.pack_copy_password_button.configure(state="normal")
+        self.pack_open_button.configure(state="normal")
+
+    def set_pack_query_result_text(self, content: str) -> None:
+        if self.pack_query_result_text is None:
+            return
+        self.pack_query_result_text.configure(state="normal")
+        self.pack_query_result_text.delete("1.0", tk.END)
+        self.pack_query_result_text.insert("1.0", content)
+        self.pack_query_result_text.configure(state="disabled")
+
+    def update_pack_password_mode_ui(self) -> None:
+        if self.pack_use_custom_password_var.get():
+            self.pack_password_entry.configure(state="normal")
+        else:
+            self.pack_password_var.set("")
+            self.pack_password_entry.configure(state="disabled")
+
+    def run_pack_history_query(self) -> None:
+        keyword = self.pack_query_var.get().strip()
+        records = query_pack_history(keyword)
+        if not records:
+            self.set_pack_query_result_text("未找到匹配的打包记录。")
+            self.pack_status_var.set("未找到记录")
+            return
+        latest = records[0]
+        self.set_pack_query_result_text(
+            (
+                f"最近匹配记录：\n"
+                f"文件夹：{latest.get('source_name', '')}\n"
+                f"压缩包：{latest.get('archive_name', '')}\n"
+                f"时间：{latest.get('created_at', '')}\n"
+                f"密码：{latest.get('password', '')}\n"
+                f"路径：{latest.get('output_path', '')}"
+            )
+        )
+        self.pack_status_var.set("已查询密码")
+
     def open_word_preview_in_browser(self) -> None:
         if self.last_word_export is None:
             return
@@ -1782,6 +1983,19 @@ class App:
         if self.last_certificate_summary is None or self.last_certificate_summary.report_path is None:
             return
         self.open_local_file(self.last_certificate_summary.report_path, "未找到结果清单")
+
+    def copy_pack_password(self) -> None:
+        if self.last_pack_summary is None:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.last_pack_summary.password)
+        self.root.update()
+        self.pack_status_var.set("已复制密码")
+
+    def open_pack_file(self) -> None:
+        if self.last_pack_summary is None:
+            return
+        self.open_local_file(self.last_pack_summary.output_path, "未找到压缩包")
 
     def open_local_file(self, file_path: Path, not_found_title: str) -> None:
         if not file_path.exists():
@@ -2057,6 +2271,12 @@ class App:
         self.certificate_bucket_name_var.set(settings.get("certificate_bucket_name", ""))
         self.certificate_prefix_var.set(settings.get("certificate_prefix", ""))
         self.word_source_var.set(settings.get("word_source", ""))
+        self.pack_source_dir_var.set(settings.get("pack_source_dir", ""))
+        self.pack_output_dir_var.set(settings.get("pack_output_dir", self.pack_output_dir_var.get()))
+        self.pack_use_custom_password_var.set(
+            settings.get("pack_use_custom_password", self.pack_use_custom_password_var.get())
+        )
+        self.pack_query_var.set(settings.get("pack_query", ""))
 
     def save_settings(self) -> None:
         settings = {
@@ -2092,6 +2312,10 @@ class App:
             "certificate_bucket_name": self.certificate_bucket_name_var.get().strip(),
             "certificate_prefix": self.certificate_prefix_var.get().strip(),
             "word_source": self.word_source_var.get().strip(),
+            "pack_source_dir": self.pack_source_dir_var.get().strip(),
+            "pack_output_dir": self.pack_output_dir_var.get().strip(),
+            "pack_use_custom_password": self.pack_use_custom_password_var.get(),
+            "pack_query": self.pack_query_var.get().strip(),
         }
         self.SETTINGS_FILE.write_text(
             json.dumps(settings, ensure_ascii=False, indent=2),
@@ -3179,6 +3403,54 @@ class App:
             else:
                 self.log_queue.put({"type": "word_export", "result": result})
                 self.log_queue.put("__WORD_EXPORT_DONE__")
+
+        self.worker = threading.Thread(target=runner, daemon=True)
+        self.worker.start()
+
+    def start_pack_run(self) -> None:
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("任务执行中", "当前任务还没结束。")
+            return
+
+        source_value = self.pack_source_dir_var.get().strip()
+        if not source_value:
+            messagebox.showerror("参数错误", "请选择待打包文件夹。")
+            return
+
+        source_dir = Path(source_value)
+        if not source_dir.exists() or not source_dir.is_dir():
+            messagebox.showerror("参数错误", f"待打包文件夹不存在：{source_dir}")
+            return
+
+        output_value = self.pack_output_dir_var.get().strip()
+        output_dir = Path(output_value) if output_value else source_dir.parent
+        self.pack_output_dir_var.set(str(output_dir))
+        custom_password = self.pack_password_var.get().strip()
+        if self.pack_use_custom_password_var.get() and not custom_password:
+            messagebox.showerror("参数错误", "已勾选手动设置密码，请输入打包密码。")
+            return
+        self.save_settings()
+
+        self.pack_run_button.configure(state="disabled")
+        self.pack_copy_password_button.configure(state="disabled")
+        self.pack_open_button.configure(state="disabled")
+        self.pack_status_var.set("打包中")
+        self.pack_result_var.set("正在压缩并加密，请稍候...")
+        self.write_log(f"启动结果打包任务：{source_dir}")
+
+        def runner() -> None:
+            try:
+                summary = pack_encrypted_folder(
+                    source_dir=source_dir,
+                    output_dir=output_dir,
+                    password=custom_password if self.pack_use_custom_password_var.get() else None,
+                    logger=self.make_logger(),
+                )
+            except Exception as exc:
+                self.log_queue.put(f"__PACK_FAILED__::{type(exc).__name__}: {exc}")
+            else:
+                self.log_queue.put({"type": "pack_summary", "summary": summary})
+                self.log_queue.put("__PACK_DONE__")
 
         self.worker = threading.Thread(target=runner, daemon=True)
         self.worker.start()
