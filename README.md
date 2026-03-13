@@ -1,6 +1,6 @@
 # 报名系统工具箱
 
-当前版本：`v1.0.0`
+当前版本：`v1.1.0`
 
 这是一个桌面工具，主要用于：
 
@@ -40,9 +40,9 @@
 - 支持仅预览，不实际执行
 - 支持生成“证件资料筛选结果清单.xlsx”
 
-### 3. Word 转 HTML
+### 3. 表样转换
 
-- 支持 `.doc` / `.docx`
+- 支持 `.doc` / `.docx` / `.xlsx`
 - 支持 Net 版导出
 - 支持 Java 版导出
 - 支持代码查看
@@ -119,15 +119,15 @@ PYTHONPATH=src python3 -m aliyun_photo_manager.gui
 
 - `证件资料筛选结果清单.xlsx`
 
-### Word 转 HTML
+### 表样转换
 
 适用场景：
 
-- 把 Word 报名表模板转换成 HTML
+- 把 Word / Excel 表样模板转换成 HTML
 
 基本流程：
 
-1. 选择 Word 文件
+1. 选择表样文件
 2. 点击“Net版导出”或“Java版导出”
 3. 在“代码”页复制 HTML
 4. 如需看效果，点击“浏览器预览”
@@ -165,7 +165,7 @@ PYTHONPATH=src python3 -m aliyun_photo_manager.gui
 - [certificate_filter.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/certificate_filter.py)
   - 负责证件资料按模板筛选、按分类目录导出、导出结果清单
 - [word_to_html.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/word_to_html.py)
-  - 负责 Word 转 HTML、占位符生成、预览 HTML 构造
+  - 负责表样转换、占位符生成、预览 HTML 构造
 - [gui.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/gui.py)
   - 负责桌面界面、参数收集、按钮事件、日志显示、结果展示
 - [config.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/config.py)

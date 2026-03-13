@@ -106,7 +106,7 @@ class App:
         self.certificate_search_status_var = tk.StringVar(value="未搜索文件夹")
         self.certificate_selected_folder_info_var = tk.StringVar(value="当前未选择 bucket 文件夹")
         self.word_status_var = tk.StringVar(value="未开始导出")
-        self.word_result_var = tk.StringVar(value="Word 转 HTML 结果会显示在这里")
+        self.word_result_var = tk.StringVar(value="表样转换结果会显示在这里")
         self.word_preview_status_var = tk.StringVar(value="未生成预览")
         self.folder_tree: Optional[ttk.Treeview] = None
         self.certificate_folder_tree: Optional[ttk.Treeview] = None
@@ -760,7 +760,7 @@ class App:
         word_frame = ttk.Frame(notebook, padding=14)
         word_frame.columnconfigure(0, weight=1)
         word_frame.rowconfigure(2, weight=1)
-        notebook.add(word_frame, text="Word 转 HTML")
+        notebook.add(word_frame, text="表样转换")
 
         word_form = ttk.LabelFrame(word_frame, text="模板转换", padding=12)
         word_form.grid(row=0, column=0, sticky="ew")
@@ -769,7 +769,7 @@ class App:
         self.add_file_row(
             word_form,
             row=0,
-            label="Word 文件",
+            label="表样文件",
             variable=self.word_source_var,
             command=self.choose_word_source,
             button_text="选择文件",
@@ -971,14 +971,14 @@ class App:
 - 如果模板中有分类信息，可以按分类目录导出
 - 如果勾选“导出后文件夹重命名”，输出目录中的人员文件夹名称会按你选择的列来命名
 
-三、Word 转 HTML
+三、表样转换
 
 适用场景：
-- 把 Word 报名表模板转换成 HTML 代码
+- 把 Word / Excel 表样模板转换成 HTML 代码
 - 生成 Net 版或 Java 版占位符模板
 
 操作步骤：
-1. 选择 Word 文件（.doc 或 .docx）。
+1. 选择表样文件（.doc、.docx 或 .xlsx）。
 2. 点击“Net版导出”或“Java版导出”。
 3. 在“代码”页查看并复制 HTML。
 4. 如需查看页面效果，可以使用“浏览器预览”。
@@ -1289,7 +1289,7 @@ class App:
             initialdir=str(Path(self.word_source_var.get()).parent)
             if self.word_source_var.get().strip()
             else str(Path.cwd()),
-            filetypes=[("Word 文件", "*.docx *.doc"), ("所有文件", "*.*")],
+            filetypes=[("表样文件", "*.docx *.doc *.xlsx"), ("所有文件", "*.*")],
         )
         if selected:
             self.word_source_var.set(selected)
@@ -1669,7 +1669,7 @@ class App:
     def update_word_export_ui(self, result: Optional[WordExportResult]) -> None:
         self.last_word_export = result
         if result is None:
-            self.word_result_var.set("Word 转 HTML 结果会显示在这里")
+            self.word_result_var.set("表样转换结果会显示在这里")
             self.word_preview_status_var.set("未生成预览")
             self.set_word_code("")
             self.render_word_preview("")
@@ -3134,23 +3134,23 @@ class App:
 
         source_value = self.word_source_var.get().strip()
         if not source_value:
-            messagebox.showerror("参数错误", "请选择 Word 文件。")
+            messagebox.showerror("参数错误", "请选择表样文件。")
             return
         source_path = Path(source_value)
         if not source_path.exists():
-            messagebox.showerror("参数错误", f"Word 文件不存在：{source_path}")
+            messagebox.showerror("参数错误", f"表样文件不存在：{source_path}")
             self.word_status_var.set("失败")
-            self.word_result_var.set(f"导出失败：\nWord 文件不存在：{source_path}")
+            self.word_result_var.set(f"导出失败：\n表样文件不存在：{source_path}")
             self.word_preview_status_var.set("预览不可用")
             self.set_word_code("")
             self.render_word_preview("")
             self.word_copy_button.configure(state="disabled")
             self.word_open_browser_button.configure(state="disabled")
             return
-        if source_path.suffix.lower() not in {".doc", ".docx"}:
-            messagebox.showerror("参数错误", "仅支持 `.doc` 或 `.docx` 文件。")
+        if source_path.suffix.lower() not in {".doc", ".docx", ".xlsx"}:
+            messagebox.showerror("参数错误", "仅支持 `.doc`、`.docx` 或 `.xlsx` 文件。")
             self.word_status_var.set("失败")
-            self.word_result_var.set("导出失败：\n仅支持 `.doc` 或 `.docx` 文件。")
+            self.word_result_var.set("导出失败：\n仅支持 `.doc`、`.docx` 或 `.xlsx` 文件。")
             self.word_preview_status_var.set("预览不可用")
             self.set_word_code("")
             self.render_word_preview("")
@@ -3165,7 +3165,7 @@ class App:
         self.word_result_var.set("正在导出 HTML...")
         self.write_log("")
         self.write_log("=" * 60)
-        self.write_log(f"启动 Word 转 HTML 任务：{variant}")
+        self.write_log(f"启动表样转换任务：{variant}")
 
         def runner() -> None:
             try:

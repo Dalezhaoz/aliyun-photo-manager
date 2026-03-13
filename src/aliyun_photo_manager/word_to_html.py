@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Dict, Optional, Tuple
 
 
 LogFn = Optional[Callable[[str], None]]
@@ -40,6 +40,16 @@ def _load_bs4():
             "缺少依赖 beautifulsoup4，请先执行 `pip install -r requirements.txt`。"
         ) from exc
     return BeautifulSoup
+
+
+def _load_openpyxl():
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise ImportError(
+            "缺少依赖 openpyxl，请先执行 `pip install -r requirements.txt`。"
+        ) from exc
+    return load_workbook
 
 
 def _normalize_label(text: str) -> str:
@@ -103,7 +113,75 @@ def _prepare_source(source_path: Path) -> Path:
         return source_path
     if suffix == ".doc":
         return _convert_doc_to_docx(source_path)
-    raise ValueError("仅支持 `.docx` 或 `.doc` 文件。")
+    if suffix == ".xlsx":
+        return source_path
+    raise ValueError("仅支持 `.docx`、`.doc` 或 `.xlsx` 文件。")
+
+
+def _build_xlsx_html(source_path: Path, variant: str) -> str:
+    load_workbook = _load_openpyxl()
+    workbook = load_workbook(source_path, data_only=True)
+    worksheet = workbook.worksheets[0]
+
+    merged_map: Dict[Tuple[int, int], Tuple[int, int]] = {}
+    merged_children = set()
+    for merged_range in worksheet.merged_cells.ranges:
+        min_col, min_row, max_col, max_row = merged_range.bounds
+        merged_map[(min_row, min_col)] = (max_row - min_row + 1, max_col - min_col + 1)
+        for row in range(min_row, max_row + 1):
+            for col in range(min_col, max_col + 1):
+                if row == min_row and col == min_col:
+                    continue
+                merged_children.add((row, col))
+
+    grid: Dict[Tuple[int, int], str] = {}
+    max_row = worksheet.max_row
+    max_col = worksheet.max_column
+    for row in range(1, max_row + 1):
+        for col in range(1, max_col + 1):
+            if (row, col) in merged_children:
+                continue
+            value = worksheet.cell(row=row, column=col).value
+            grid[(row, col)] = "" if value is None else str(value).strip()
+
+    row_labels: Dict[Tuple[int, int], str] = {}
+    lines = ['<table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:680px;border:1px solid #000;">']
+    for row in range(1, max_row + 1):
+        lines.append("<tr>")
+        current_row_labels = []
+        for col in range(1, max_col + 1):
+            if (row, col) in merged_children:
+                continue
+            text = grid.get((row, col), "")
+            normalized = _normalize_label(text)
+            left_label = current_row_labels[-1] if current_row_labels else ""
+            upper_label = row_labels.get((row - 1, col), "")
+
+            output_text = text
+            if normalized and "照片" in normalized:
+                output_text = _build_placeholder("照片", variant)
+                current_row_labels.append("照片")
+            elif _is_blank_cell(text):
+                label = left_label or upper_label
+                output_text = _build_placeholder(label, variant) if label else ""
+                current_row_labels.append(label)
+            else:
+                current_row_labels.append(normalized)
+
+            row_span, col_span = merged_map.get((row, col), (1, 1))
+            attrs = []
+            if row_span > 1:
+                attrs.append(f'rowspan="{row_span}"')
+            if col_span > 1:
+                attrs.append(f'colspan="{col_span}"')
+            attr_text = (" " + " ".join(attrs)) if attrs else ""
+            lines.append(
+                f'<td{attr_text} style="border:1px solid #000;padding:8px;vertical-align:middle;word-break:break-word;text-align:center;">{output_text}</td>'
+            )
+            row_labels[(row, col)] = current_row_labels[-1]
+        lines.append("</tr>")
+    lines.append("</table>")
+    return "\n".join(lines)
 
 
 def _apply_simple_styles(soup) -> None:
@@ -230,20 +308,23 @@ def export_word_to_html(
     if variant not in {"net", "java"}:
         raise ValueError("variant 只支持 `net` 或 `java`。")
     if not source_path.exists():
-        raise FileNotFoundError(f"未找到 Word 文件：{source_path}")
+        raise FileNotFoundError(f"未找到表样文件：{source_path}")
 
     prepared_source = _prepare_source(source_path)
-    mammoth = _load_mammoth()
-    BeautifulSoup = _load_bs4()
+    _log(logger, f"开始转换表样：{source_path.name}")
 
-    _log(logger, f"开始转换 Word：{source_path.name}")
-    with prepared_source.open("rb") as file_obj:
-        result = mammoth.convert_to_html(file_obj)
-    soup = BeautifulSoup(result.value, "html.parser")
-    _apply_simple_styles(soup)
-    _fill_table_placeholders(soup, variant)
+    if prepared_source.suffix.lower() == ".xlsx":
+        body_html = _build_xlsx_html(prepared_source, variant)
+    else:
+        mammoth = _load_mammoth()
+        BeautifulSoup = _load_bs4()
+        with prepared_source.open("rb") as file_obj:
+            result = mammoth.convert_to_html(file_obj)
+        soup = BeautifulSoup(result.value, "html.parser")
+        _apply_simple_styles(soup)
+        _fill_table_placeholders(soup, variant)
+        body_html = soup.prettify()
 
-    body_html = soup.prettify()
     output_html = _wrap_html(body_html)
     _log(logger, f"已生成 HTML 代码：{source_path.stem}_{variant}.html")
     return WordExportResult(
