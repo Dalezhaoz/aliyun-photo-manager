@@ -891,7 +891,7 @@ class App:
         self.add_tick_checkbutton(
             pack_form,
             row=2,
-            label="手动设置密码",
+            text="手动设置密码",
             variable=self.pack_use_custom_password_var,
             command=self.update_pack_password_mode_ui,
         )
