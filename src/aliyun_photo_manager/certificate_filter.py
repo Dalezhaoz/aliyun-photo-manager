@@ -99,6 +99,7 @@ def load_match_values(template_path: Path, match_column: str) -> List[str]:
     values: List[str] = []
     seen = set()
     for row in rows:
+        # 模板下载和筛选都依赖这份名单，先在这里去重，避免重复处理同一个人。
         value = row.get(match_column, "").strip()
         if not value or value in seen:
             continue
@@ -145,6 +146,7 @@ def _copy_person_folder(
     normalized_keyword = keyword.strip().lower()
 
     for source_file in _iter_files(source_dir):
+        # 关键词模式本质上还是复制整个人员目录，只是只保留命中的文件。
         if normalized_keyword and normalized_keyword not in source_file.name.lower():
             continue
         relative_path = source_file.relative_to(source_dir)
@@ -297,6 +299,7 @@ def run_certificate_filter(
 
         output_folder_name = match_value
         if options.rename_folder:
+            # 匹配列负责“找到源目录”，名称列只负责“导出后目录叫什么”。
             output_folder_name = row.get(options.folder_name_column, "").strip() or match_value
 
         destination_dir = options.output_dir

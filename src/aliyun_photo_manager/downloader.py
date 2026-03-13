@@ -47,6 +47,7 @@ def normalize_prefix(prefix: str) -> str:
 
 def build_local_relative_path(object_key: str, prefix: str) -> Path:
     normalized_prefix = normalize_prefix(prefix)
+    # 本地目录尽量保留“前缀之后”的相对结构，方便和云端路径互相对应。
     if normalized_prefix and object_key.startswith(normalized_prefix):
         relative_key = object_key[len(normalized_prefix):]
     else:
@@ -75,6 +76,7 @@ def _extract_cos_region(endpoint: str) -> str:
     cleaned = endpoint.strip()
     if not cleaned:
         raise ValueError("腾讯云 COS 需要填写 Region 或 Endpoint。")
+    # GUI 里既允许直接填 Region，也允许填完整 Endpoint，这里统一折成 Region。
     if cleaned.startswith("http://"):
         cleaned = cleaned[len("http://") :]
     elif cleaned.startswith("https://"):
@@ -209,6 +211,7 @@ def list_browser_entries(config: OssConfig, prefix: str = "") -> List[BrowserEnt
             if obj.key == normalized_prefix:
                 continue
             relative = build_local_relative_path(obj.key, normalized_prefix)
+            # 浏览面板只显示当前层级，深层文件要进入子目录后再看。
             if len(relative.parts) != 1:
                 continue
             entries.append(
@@ -313,6 +316,7 @@ def download_photos(
     progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     cancel_event: Optional[Event] = None,
 ) -> DownloadResult:
+    # 照片下载只是通用下载器的一个特化入口：额外按图片后缀过滤。
     return download_objects(
         config=config,
         prefix=prefix,
@@ -366,6 +370,7 @@ def download_objects(
     for key in _iter_object_keys(config, prefix):
         if cancel_event is not None and cancel_event.is_set():
             break
+        # 证件资料“按名单下载”和照片“按文件名前缀下载”都复用这层过滤。
         if key_filter is not None and not key_filter(key):
             continue
         if file_filter is not None and not file_filter(key):

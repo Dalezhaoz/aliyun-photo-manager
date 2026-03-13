@@ -62,6 +62,7 @@ def _build_placeholder(label: str, variant: str) -> str:
     normalized = _normalize_label(label)
     if not normalized:
         return ""
+    # “照片”是固定图片占位符，不走“左标题右空白”那套推断。
     if "照片" in normalized:
         return "{[#考生表视图.照片#]}" if variant == "net" else "${考生.照片}"
     if variant == "net":
@@ -107,6 +108,7 @@ def _prepare_source(source_path: Path) -> Path:
 
 def _apply_simple_styles(soup) -> None:
     for table in soup.find_all("table"):
+        # 富文本编辑器里更依赖内联样式，所以表格宽度和边框直接写死在标签上。
         table["style"] = "border-collapse:collapse;width:680px;border:1px solid #000;"
         table["border"] = "1"
         table["cellspacing"] = "0"
@@ -151,6 +153,7 @@ def _fill_table_placeholders(soup, variant: str) -> None:
                     continue
 
                 if _is_blank_cell(text):
+                    # 这类报名表通常是“左侧标题、右侧空白值”，优先取左边，再回退到上方标题。
                     label = left_label or upper_label
                     if label:
                         cell.clear()

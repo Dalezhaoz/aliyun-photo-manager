@@ -152,6 +152,33 @@ PYTHONPATH=src python3 -m aliyun_photo_manager.gui
 - bucket
 - 前缀
 
+## 开发说明
+
+如果后面需要继续维护或加功能，可以先看下面这几个核心模块：
+
+- [app.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/app.py)
+  - 负责照片下载、生成模板、按模板分类这几段主流程
+- [downloader.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/downloader.py)
+  - 负责阿里云 OSS / 腾讯云 COS 的 bucket、目录浏览、对象下载
+- [excel_classifier.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/excel_classifier.py)
+  - 负责照片分类模板生成、模板校验、按模板复制分类、导出结果清单
+- [certificate_filter.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/certificate_filter.py)
+  - 负责证件资料按模板筛选、按分类目录导出、导出结果清单
+- [word_to_html.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/word_to_html.py)
+  - 负责 Word 转 HTML、占位符生成、预览 HTML 构造
+- [gui.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/gui.py)
+  - 负责桌面界面、参数收集、按钮事件、日志显示、结果展示
+- [config.py](/Users/dalezhao/python_learning/aliyun_photo_manager/src/aliyun_photo_manager/config.py)
+  - 负责云配置校验和环境变量读取
+
+建议修改顺序：
+
+1. 先确认需求属于哪个业务页
+2. 再看对应流程模块
+3. 最后再改 GUI 按钮和交互
+
+这样不容易把界面逻辑和业务逻辑混在一起。
+
 ## 打包
 
 ### macOS

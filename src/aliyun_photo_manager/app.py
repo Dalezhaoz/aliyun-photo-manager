@@ -49,12 +49,14 @@ def ensure_child_directory(base_dir: Path, child_name: str) -> Path:
 def build_prefixed_directory(base_dir: Path, prefix: str, child_name: str) -> Path:
     normalized = base_dir.expanduser().resolve()
     cleaned_prefix = prefix.strip().strip("/")
+    # 云端前缀会映射到本地目录结构里，避免不同批次文件都堆在根目录。
     if cleaned_prefix:
         return normalized.joinpath(*cleaned_prefix.split("/"), child_name)
     return ensure_child_directory(normalized, child_name)
 
 
 def resolve_photo_directories(options: RunOptions) -> tuple[Path, Path]:
+    # 本地模式直接使用用户选择的目录；云端模式会在目录下自动补业务子目录。
     if options.skip_download:
         return (
             options.download_dir.expanduser().resolve(),
@@ -119,6 +121,7 @@ def run_photo_download_and_template(
     if not download_dir.exists() and not options.dry_run:
         raise FileNotFoundError(f"下载目录不存在：{download_dir}")
 
+    # 模板始终基于“当前层级”的照片生成，给后续人工补分类信息使用。
     log("开始生成 Excel 分类模板。")
     template_result = generate_template(
         source_dir=download_dir,
@@ -180,6 +183,7 @@ def run_photo_classification_only(
             dry_run=options.dry_run,
         )
 
+    # 分类阶段严格依赖模板，不再重新扫描云端或本地目录结构。
     classification_result: ClassificationResult = apply_classification_from_template(
         source_dir=download_dir,
         target_dir=sorted_dir,

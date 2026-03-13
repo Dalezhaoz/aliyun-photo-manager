@@ -1937,6 +1937,7 @@ class App:
         self.certificate_prefix_combo["values"] = values
 
     def default_cloud_profile(self, cloud_type: str) -> Dict[str, str]:
+        # 两家云厂商的配置分开记忆，切换时不用来回重新输入。
         if cloud_type == "tencent":
             endpoint = "ap-beijing"
         else:
@@ -2113,6 +2114,7 @@ class App:
         self.cloud_profiles[previous_type] = self.snapshot_current_cloud_profile()
         self.apply_cloud_profile(self.cloud_type_var.get().strip())
 
+        # 切换云类型后，旧 bucket/前缀结果不能继续沿用，避免串用阿里云和腾讯云的数据。
         self.sync_bucket_values([])
         self.set_folder_values([])
         self.set_certificate_folder_values([])

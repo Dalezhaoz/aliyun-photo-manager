@@ -68,9 +68,7 @@ def split_filename_parts(filename: str) -> List[str]:
 
 
 def normalize_existing_values(row: tuple) -> List[str]:
-    # 兼容旧模板：
-    # 旧结构: 文件名称, 分类一, 分类二, 分类三, 修改名称
-    # 新结构: 文件名称, 文件名前缀, 文件格式, 分类一, 分类二, 分类三, 修改名称
+    # 兼容旧模板列结构，避免历史模板在升级后直接错位。
     values = ["" if value is None else str(value) for value in row[1:]]
     if len(values) >= 6:
         return values[:6]
@@ -110,6 +108,7 @@ def generate_template(
     for file_path in current_files:
         prefix, suffix = split_filename_parts(file_path.name)
         values = existing_rows.get(file_path.name, ["", "", "", "", "", ""])
+        # 前两列由程序重新拆分生成，后面的分类信息尽量沿用旧模板里已经填好的值。
         row_values = [file_path.name, prefix, suffix, *values[2:]]
         if values[0]:
             row_values[1] = values[0]
@@ -172,6 +171,7 @@ def validate_template_ready(template_path: Path) -> None:
     sheet_values = workbook_values.worksheets[0]
 
     check_columns = [4, 5, 6, 7]
+    # 只检查用户会写公式的业务列，避免把未计算的公式文本直接拿去做分类。
     for row_index, (formula_row, value_row) in enumerate(
         zip(
             sheet_formula.iter_rows(min_row=2),
@@ -288,6 +288,7 @@ def apply_classification_from_template(
             if category:
                 destination_dir = destination_dir / category
 
+        # 根目录允许保留“未分类”文件；已分类文件只会进入具体分类目录。
         destination_path = _ensure_unique_path(destination_dir / destination_name)
         _log(logger, f"[COPY] {source_file} -> {destination_path}")
         if not dry_run:
