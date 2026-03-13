@@ -98,6 +98,35 @@ source .venv/bin/activate
 PYTHONPATH=src python3 -m aliyun_photo_manager.gui
 ```
 
+## 自定义软件图标
+
+如果你想给软件换图标：
+
+1. 把图标源图片保存为：
+
+```text
+assets/app_icon.png
+```
+
+2. 生成打包需要的图标文件：
+
+```bash
+cd /Users/dalezhao/python_learning/aliyun_photo_manager
+source .venv/bin/activate
+python3 generate_app_icons.py
+```
+
+生成后会得到：
+
+```text
+assets/app_icon.icns
+assets/app_icon.ico
+```
+
+之后重新打包：
+- macOS 会自动使用 `assets/app_icon.icns`
+- Windows 会自动使用 `assets/app_icon.ico`
+
 ## 打包成 macOS 应用
 
 先安装依赖：

@@ -17,6 +17,8 @@ class CertificateFilterOptions:
     source_dir: Path
     output_dir: Path
     match_column: str
+    rename_folder: bool = False
+    folder_name_column: str = ""
     classify_output: bool = False
     keyword: str = ""
     dry_run: bool = False
@@ -28,6 +30,8 @@ class CertificateFilterSummary:
     source_dir: Path
     output_dir: Path
     match_column: str
+    rename_folder: bool
+    folder_name_column: str
     classify_output: bool
     keyword: str
     total_rows: int
@@ -188,6 +192,8 @@ def run_certificate_filter(
     headers = list(rows[0].keys()) if rows else list_template_headers(options.template_path)
     if options.match_column not in headers:
         raise ValueError(f"模板中不存在匹配列：{options.match_column}")
+    if options.rename_folder and options.folder_name_column not in headers:
+        raise ValueError(f"模板中不存在导出后文件夹名称列：{options.folder_name_column}")
 
     total_rows = len(rows)
     matched_people = 0
@@ -270,13 +276,17 @@ def run_certificate_filter(
                 progress_callback("certificate", index, total_rows, match_value)
             continue
 
+        output_folder_name = match_value
+        if options.rename_folder:
+            output_folder_name = row.get(options.folder_name_column, "").strip() or match_value
+
         destination_dir = options.output_dir
         if options.classify_output:
             for field in ("分类一", "分类二", "分类三"):
                 value = row.get(field, "").strip()
                 if value:
                     destination_dir = destination_dir / value
-        destination_dir = destination_dir / match_value
+        destination_dir = destination_dir / output_folder_name
         relative_destination_dir = str(destination_dir.relative_to(options.output_dir))
 
         current_file_count = _copy_person_folder(
@@ -337,6 +347,8 @@ def run_certificate_filter(
         source_dir=options.source_dir,
         output_dir=options.output_dir,
         match_column=options.match_column,
+        rename_folder=options.rename_folder,
+        folder_name_column=options.folder_name_column,
         classify_output=options.classify_output,
         keyword=options.keyword.strip(),
         total_rows=total_rows,

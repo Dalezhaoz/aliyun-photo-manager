@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 from .app import (
     RunOptions,
     WorkflowSummary,
+    build_prefixed_directory,
     run_photo_classification_only,
     run_photo_download_and_template,
 )
@@ -72,8 +73,11 @@ class App:
         self.certificate_source_dir_var = tk.StringVar()
         self.certificate_output_dir_var = tk.StringVar()
         self.certificate_match_column_var = tk.StringVar()
+        self.certificate_rename_folder_var = tk.BooleanVar(value=False)
+        self.certificate_folder_name_column_var = tk.StringVar()
         self.certificate_keyword_var = tk.StringVar(value="学历证书")
         self.certificate_classify_var = tk.BooleanVar(value=True)
+        self.certificate_dry_run_var = tk.BooleanVar(value=False)
         self.certificate_mode_var = tk.StringVar(value="folder")
         self.certificate_bucket_name_var = tk.StringVar()
         self.certificate_prefix_var = tk.StringVar()
@@ -248,7 +252,7 @@ class App:
             ("下载时跳过已存在文件", self.skip_existing_var),
         ]
         for row, (label, variable) in enumerate(option_specs):
-            ttk.Checkbutton(options_frame, text=label, variable=variable).grid(
+            self.add_tick_checkbutton(options_frame, text=label, variable=variable).grid(
                 row=row // 2,
                 column=row % 2,
                 sticky="w",
@@ -510,9 +514,26 @@ class App:
             row=0, column=1, padx=(8, 0)
         )
 
-        ttk.Label(cert_form, text="筛选模式", width=16).grid(row=4, column=0, sticky="w", pady=4)
+        rename_row = ttk.Frame(cert_form)
+        rename_row.grid(row=4, column=1, columnspan=2, sticky="ew", pady=4)
+        rename_row.columnconfigure(1, weight=1)
+        self.add_tick_checkbutton(
+            rename_row,
+            text="导出后文件夹重命名",
+            variable=self.certificate_rename_folder_var,
+            command=self.update_certificate_mode_ui,
+        ).grid(row=0, column=0, sticky="w")
+        self.certificate_folder_name_combo = ttk.Combobox(
+            rename_row,
+            textvariable=self.certificate_folder_name_column_var,
+            values=self.certificate_headers,
+            state="readonly",
+        )
+        self.certificate_folder_name_combo.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+
+        ttk.Label(cert_form, text="筛选模式", width=16).grid(row=5, column=0, sticky="w", pady=4)
         mode_row = ttk.Frame(cert_form)
-        mode_row.grid(row=4, column=1, columnspan=2, sticky="w", pady=4)
+        mode_row.grid(row=5, column=1, columnspan=2, sticky="w", pady=4)
         ttk.Radiobutton(
             mode_row,
             text="复制整个人员文件夹",
@@ -528,18 +549,24 @@ class App:
             command=self.update_certificate_mode_ui,
         ).pack(side="left", padx=(10, 0))
 
-        ttk.Label(cert_form, text="文件关键词", width=16).grid(row=5, column=0, sticky="w", pady=4)
+        ttk.Label(cert_form, text="文件关键词", width=16).grid(row=6, column=0, sticky="w", pady=4)
         self.certificate_keyword_entry = self.create_text_entry(
             cert_form,
             textvariable=self.certificate_keyword_var,
         )
-        self.certificate_keyword_entry.grid(row=5, column=1, sticky="ew", pady=4)
+        self.certificate_keyword_entry.grid(row=6, column=1, sticky="ew", pady=4)
 
-        ttk.Checkbutton(
+        self.add_tick_checkbutton(
             cert_form,
             text="按分类一/分类二/分类三建立目录",
             variable=self.certificate_classify_var,
-        ).grid(row=6, column=1, sticky="w", pady=(6, 0))
+        ).grid(row=7, column=1, sticky="w", pady=(6, 0))
+
+        self.add_tick_checkbutton(
+            cert_form,
+            text="仅预览，不实际执行",
+            variable=self.certificate_dry_run_var,
+        ).grid(row=8, column=1, sticky="w", pady=(6, 0))
 
         cert_action = ttk.Frame(cert_left_frame)
         cert_action.grid(row=3, column=0, sticky="ew", pady=(12, 0))
@@ -874,8 +901,9 @@ class App:
    - 复制整个人员文件夹
    - 只复制关键词文件
 6. 如果选择关键词模式，再填写关键词，例如“学历证书”。
-7. 如有需要，可以勾选“按分类一 / 分类二 / 分类三建立目录”。
-8. 点击“开始筛选”。
+7. 如有需要，可以勾选“按分类一 / 分类二 / 分类三建立目录”或“仅预览，不实际执行”。
+8. 如果证件资料在云端，可以先点击“下载证件资料”。
+9. 点击“开始筛选”。
 
 补充说明：
 - 模板默认读取第一个 sheet。
@@ -945,6 +973,45 @@ class App:
         ttk.Label(parent, text=label, width=16).grid(row=row, column=0, sticky="w", pady=4)
         entry = self.create_text_entry(parent, textvariable=variable, show=show or "")
         entry.grid(row=row, column=1, sticky="ew", pady=4)
+
+    def add_tick_checkbutton(
+        self,
+        parent,
+        text: str,
+        variable: tk.BooleanVar,
+        command=None,
+        row: int = 0,
+        column: int = 0,
+        padx=(0, 18),
+        pady=4,
+        sticky: str = "w",
+    ):
+        background = "#f5f5f5"
+        try:
+            background = parent.cget("background")
+        except tk.TclError:
+            try:
+                style = ttk.Style()
+                background = style.lookup("TFrame", "background") or background
+            except tk.TclError:
+                pass
+        widget = tk.Checkbutton(
+            parent,
+            text=text,
+            variable=variable,
+            onvalue=True,
+            offvalue=False,
+            command=command,
+            anchor="w",
+            highlightthickness=0,
+            relief="flat",
+            borderwidth=0,
+            background=background,
+            activebackground=background,
+            selectcolor="#ffffff",
+        )
+        widget.grid(row=row, column=column, sticky=sticky, padx=padx, pady=pady)
+        return widget
 
     def add_cloud_type_row(self, parent: ttk.Frame, row: int) -> None:
         ttk.Label(parent, text="云类型", width=16).grid(row=row, column=0, sticky="w", pady=4)
@@ -1520,6 +1587,10 @@ class App:
             lines.append("输出结构已按 分类一/分类二/分类三 建目录。")
         else:
             lines.append("输出结构未按分类字段建目录。")
+        if summary.rename_folder and summary.folder_name_column:
+            lines.append(f"导出后文件夹名称列：{summary.folder_name_column}")
+        else:
+            lines.append("导出后文件夹名称保持匹配列。")
         if summary.keyword:
             lines.append(f"筛选模式：只复制文件名包含“{summary.keyword}”的文件。")
         else:
@@ -1831,11 +1902,20 @@ class App:
             settings.get("certificate_output_dir", self.certificate_output_dir_var.get())
         )
         self.certificate_match_column_var.set(settings.get("certificate_match_column", ""))
+        self.certificate_rename_folder_var.set(
+            settings.get("certificate_rename_folder", self.certificate_rename_folder_var.get())
+        )
+        self.certificate_folder_name_column_var.set(
+            settings.get("certificate_folder_name_column", "")
+        )
         self.certificate_keyword_var.set(
             settings.get("certificate_keyword", self.certificate_keyword_var.get())
         )
         self.certificate_classify_var.set(
             settings.get("certificate_classify", self.certificate_classify_var.get())
+        )
+        self.certificate_dry_run_var.set(
+            settings.get("certificate_dry_run", self.certificate_dry_run_var.get())
         )
         self.certificate_mode_var.set(
             settings.get("certificate_mode", self.certificate_mode_var.get())
@@ -1868,8 +1948,11 @@ class App:
             "certificate_source_dir": self.certificate_source_dir_var.get().strip(),
             "certificate_output_dir": self.certificate_output_dir_var.get().strip(),
             "certificate_match_column": self.certificate_match_column_var.get().strip(),
+            "certificate_rename_folder": self.certificate_rename_folder_var.get(),
+            "certificate_folder_name_column": self.certificate_folder_name_column_var.get().strip(),
             "certificate_keyword": self.certificate_keyword_var.get().strip(),
             "certificate_classify": self.certificate_classify_var.get(),
+            "certificate_dry_run": self.certificate_dry_run_var.get(),
             "certificate_mode": self.certificate_mode_var.get().strip(),
             "certificate_source_mode": self.certificate_source_mode_var.get().strip(),
             "certificate_bucket_name": self.certificate_bucket_name_var.get().strip(),
@@ -1887,6 +1970,10 @@ class App:
             self.certificate_keyword_entry.configure(state="normal")
         else:
             self.certificate_keyword_entry.configure(state="disabled")
+        if self.certificate_rename_folder_var.get():
+            self.certificate_folder_name_combo.configure(state="readonly")
+        else:
+            self.certificate_folder_name_combo.configure(state="disabled")
 
     def on_cloud_type_changed(self) -> None:
         current_endpoint = self.endpoint_var.get().strip()
@@ -1912,11 +1999,15 @@ class App:
     def set_certificate_headers(self, headers: List[str]) -> None:
         self.certificate_headers = headers
         self.certificate_match_combo["values"] = headers
+        self.certificate_folder_name_combo["values"] = headers
         current_value = self.certificate_match_column_var.get().strip()
         if current_value and current_value not in headers:
             self.certificate_match_column_var.set("")
         if not self.certificate_match_column_var.get().strip() and headers:
             self.certificate_match_column_var.set(headers[0])
+        current_folder_name_value = self.certificate_folder_name_column_var.get().strip()
+        if current_folder_name_value and current_folder_name_value not in headers:
+            self.certificate_folder_name_column_var.set("")
 
     def load_certificate_headers(self) -> None:
         template_path = self.certificate_template_var.get().strip()
@@ -2528,34 +2619,53 @@ class App:
 
     def build_certificate_options(self) -> CertificateFilterOptions:
         template_value = self.certificate_template_var.get().strip()
-        source_value = self.certificate_source_dir_var.get().strip()
-        output_value = self.certificate_output_dir_var.get().strip()
         match_column = self.certificate_match_column_var.get().strip()
 
         if not template_value:
             raise ValueError("请选择人员模板文件。")
-        if not source_value:
-            raise ValueError("请选择证件资料目录。")
-        if not output_value:
-            raise ValueError("请选择输出目录。")
         if not match_column:
             raise ValueError("请选择用于匹配人员文件夹的模板列。")
+
+        source_dir = self.resolve_certificate_source_dir(require_value=True)
+        output_dir = self.resolve_certificate_output_dir()
 
         keyword = ""
         if self.certificate_mode_var.get() == "keyword":
             keyword = self.certificate_keyword_var.get().strip()
             if not keyword:
                 raise ValueError("关键词模式下请输入文件关键词。")
+        if self.certificate_rename_folder_var.get() and not self.certificate_folder_name_column_var.get().strip():
+            raise ValueError("请选择导出后文件夹名称列。")
 
         return CertificateFilterOptions(
             template_path=Path(template_value),
-            source_dir=Path(source_value),
-            output_dir=Path(output_value),
+            source_dir=source_dir,
+            output_dir=output_dir,
             match_column=match_column,
+            rename_folder=self.certificate_rename_folder_var.get(),
+            folder_name_column=self.certificate_folder_name_column_var.get().strip(),
             classify_output=self.certificate_classify_var.get(),
             keyword=keyword,
-            dry_run=self.dry_run_var.get(),
+            dry_run=self.certificate_dry_run_var.get(),
         )
+
+    def resolve_certificate_source_dir(self, require_value: bool = True) -> Path:
+        source_value = self.certificate_source_dir_var.get().strip()
+        if not source_value:
+            if require_value:
+                raise ValueError("请选择证件资料目录。")
+            return Path(".").resolve()
+
+        base_dir = Path(source_value)
+        if self.certificate_source_mode_var.get() == "oss":
+            return build_prefixed_directory(base_dir, self.certificate_prefix_var.get().strip(), "证件资料")
+        return base_dir.expanduser().resolve()
+
+    def resolve_certificate_output_dir(self) -> Path:
+        output_value = self.certificate_output_dir_var.get().strip()
+        if not output_value:
+            raise ValueError("请选择输出目录。")
+        return Path(output_value).expanduser().resolve()
 
     def start_photo_download_run(self) -> None:
         if self.worker is not None and self.worker.is_alive():
@@ -2657,7 +2767,7 @@ class App:
             return
 
         try:
-            options = self.build_certificate_options()
+            source_dir = self.resolve_certificate_source_dir(require_value=True)
             certificate_config = self.build_certificate_config()
             self.save_settings()
         except Exception as exc:
@@ -2676,14 +2786,15 @@ class App:
         self.write_log("")
         self.write_log("=" * 60)
         self.write_log("启动证件资料下载任务。")
+        self.write_log(f"实际下载目录：{source_dir}")
 
         def runner() -> None:
             try:
                 download_result = download_objects(
                     config=certificate_config,
                     prefix=self.certificate_prefix_var.get().strip(),
-                    download_dir=options.source_dir,
-                    dry_run=options.dry_run,
+                    download_dir=source_dir,
+                    dry_run=self.certificate_dry_run_var.get(),
                     skip_existing=self.skip_existing_var.get(),
                     logger=self.make_logger(),
                     progress_callback=self.make_progress_callback(),
@@ -2691,12 +2802,12 @@ class App:
                     stage="certificate_download",
                 )
                 summary = CertificateFilterSummary(
-                    template_path=options.template_path,
-                    source_dir=options.source_dir,
-                    output_dir=options.output_dir,
-                    match_column=options.match_column,
-                    classify_output=options.classify_output,
-                    keyword=options.keyword.strip(),
+                    template_path=Path(self.certificate_template_var.get().strip() or "."),
+                    source_dir=source_dir,
+                    output_dir=Path(self.certificate_output_dir_var.get().strip() or source_dir),
+                    match_column=self.certificate_match_column_var.get().strip(),
+                    classify_output=self.certificate_classify_var.get(),
+                    keyword=self.certificate_keyword_var.get().strip() if self.certificate_mode_var.get() == "keyword" else "",
                     total_rows=0,
                     matched_people=0,
                     missing_people=0,
@@ -2704,7 +2815,7 @@ class App:
                     copied_people=0,
                     download_result=download_result,
                     cancelled=self.cancel_event.is_set(),
-                    dry_run=options.dry_run,
+                    dry_run=self.certificate_dry_run_var.get(),
                 )
             except Exception as exc:
                 self.log_queue.put(f"__CERTIFICATE_TASK_FAILED__::{type(exc).__name__}: {exc}")
