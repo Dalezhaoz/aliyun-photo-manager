@@ -127,6 +127,10 @@ class App:
         self.default_sash_pending = {"photo": True, "certificate": True}
         self.bucket_load_token = 0
         self.certificate_bucket_load_token = 0
+        self.cloud_profiles: Dict[str, Dict[str, str]] = {
+            "aliyun": self.default_cloud_profile("aliyun"),
+            "tencent": self.default_cloud_profile("tencent"),
+        }
 
         self.load_saved_settings()
         self.build_ui()
@@ -1292,27 +1296,9 @@ class App:
             insertborderwidth=0,
             cursor="xterm",
             takefocus=True,
+            exportselection=False,
         )
-        self.enable_entry_cursor(entry_widget)
         return entry_widget
-
-    def enable_entry_cursor(self, entry_widget) -> None:
-        def focus_entry(event) -> None:
-            try:
-                def apply_focus() -> None:
-                    try:
-                        entry_widget.focus_force()
-                        cursor_index = entry_widget.index(f"@{event.x}")
-                        entry_widget.icursor(cursor_index)
-                        entry_widget.select_clear()
-                    except tk.TclError:
-                        pass
-
-                self.root.after_idle(apply_focus)
-            except tk.TclError:
-                pass
-
-        entry_widget.bind("<ButtonRelease-1>", focus_entry, add="+")
 
     def bind_mousewheel_to_canvas(self, canvas: tk.Canvas, target) -> None:
         def on_mousewheel(event) -> None:
@@ -1932,6 +1918,42 @@ class App:
         self.certificate_folder_values = values
         self.certificate_prefix_combo["values"] = values
 
+    def default_cloud_profile(self, cloud_type: str) -> Dict[str, str]:
+        if cloud_type == "tencent":
+            endpoint = "ap-beijing"
+        else:
+            endpoint = "https://oss-cn-hangzhou.aliyuncs.com"
+        return {
+            "access_key_id": "",
+            "access_key_secret": "",
+            "endpoint": endpoint,
+            "bucket_name": "",
+            "certificate_bucket_name": "",
+            "prefix": "",
+            "certificate_prefix": "",
+        }
+
+    def snapshot_current_cloud_profile(self) -> Dict[str, str]:
+        return {
+            "access_key_id": self.access_key_id_var.get().strip(),
+            "access_key_secret": self.access_key_secret_var.get().strip(),
+            "endpoint": self.endpoint_var.get().strip(),
+            "bucket_name": self.bucket_name_var.get().strip(),
+            "certificate_bucket_name": self.certificate_bucket_name_var.get().strip(),
+            "prefix": self.prefix_var.get().strip(),
+            "certificate_prefix": self.certificate_prefix_var.get().strip(),
+        }
+
+    def apply_cloud_profile(self, cloud_type: str) -> None:
+        profile = self.cloud_profiles.get(cloud_type) or self.default_cloud_profile(cloud_type)
+        self.access_key_id_var.set(profile.get("access_key_id", ""))
+        self.access_key_secret_var.set(profile.get("access_key_secret", ""))
+        self.endpoint_var.set(profile.get("endpoint", self.default_cloud_profile(cloud_type)["endpoint"]))
+        self.bucket_name_var.set(profile.get("bucket_name", ""))
+        self.certificate_bucket_name_var.set(profile.get("certificate_bucket_name", ""))
+        self.prefix_var.set(profile.get("prefix", ""))
+        self.certificate_prefix_var.set(profile.get("certificate_prefix", ""))
+
     def load_saved_settings(self) -> None:
         if not self.SETTINGS_FILE.exists():
             return
@@ -1949,10 +1971,30 @@ class App:
         self.download_dir_var.set(settings.get("download_dir", self.download_dir_var.get()))
         self.sorted_dir_var.set(settings.get("sorted_dir", self.sorted_dir_var.get()))
         self.cloud_type_var.set(settings.get("cloud_type", self.cloud_type_var.get()))
-        self.access_key_id_var.set(settings.get("access_key_id", ""))
-        self.access_key_secret_var.set(settings.get("access_key_secret", ""))
-        self.endpoint_var.set(settings.get("endpoint", self.endpoint_var.get()))
-        self.bucket_name_var.set(settings.get("bucket_name", ""))
+        saved_profiles = settings.get("cloud_profiles")
+        if isinstance(saved_profiles, dict):
+            for cloud_type in ("aliyun", "tencent"):
+                profile = saved_profiles.get(cloud_type)
+                if isinstance(profile, dict):
+                    merged = self.default_cloud_profile(cloud_type)
+                    merged.update({key: str(value) for key, value in profile.items() if value is not None})
+                    self.cloud_profiles[cloud_type] = merged
+        else:
+            legacy_cloud_type = self.cloud_type_var.get().strip() or "aliyun"
+            legacy_profile = self.default_cloud_profile(legacy_cloud_type)
+            legacy_profile.update(
+                {
+                    "access_key_id": settings.get("access_key_id", ""),
+                    "access_key_secret": settings.get("access_key_secret", ""),
+                    "endpoint": settings.get("endpoint", legacy_profile["endpoint"]),
+                    "bucket_name": settings.get("bucket_name", ""),
+                    "certificate_bucket_name": settings.get("certificate_bucket_name", ""),
+                    "prefix": settings.get("prefix", ""),
+                    "certificate_prefix": settings.get("certificate_prefix", ""),
+                }
+            )
+            self.cloud_profiles[legacy_cloud_type] = legacy_profile
+        self.apply_cloud_profile(self.cloud_type_var.get().strip() or "aliyun")
         self.photo_source_mode_var.set(settings.get("photo_source_mode", self.photo_source_mode_var.get()))
         self.skip_download_var.set(settings.get("skip_download", self.skip_download_var.get()))
         self.flat_var.set(settings.get("flat", self.flat_var.get()))
@@ -2006,10 +2048,10 @@ class App:
             "download_dir": self.download_dir_var.get().strip(),
             "sorted_dir": self.sorted_dir_var.get().strip(),
             "cloud_type": self.cloud_type_var.get().strip(),
-            "access_key_id": self.access_key_id_var.get().strip(),
-            "access_key_secret": self.access_key_secret_var.get().strip(),
-            "endpoint": self.endpoint_var.get().strip(),
-            "bucket_name": self.bucket_name_var.get().strip(),
+            "cloud_profiles": {
+                **self.cloud_profiles,
+                self.cloud_type_var.get().strip() or "aliyun": self.snapshot_current_cloud_profile(),
+            },
             "photo_source_mode": self.photo_source_mode_var.get().strip(),
             "skip_download": self.skip_download_var.get(),
             "flat": self.flat_var.get(),
@@ -2049,18 +2091,10 @@ class App:
             self.certificate_folder_name_combo.configure(state="disabled")
 
     def on_cloud_type_changed(self) -> None:
-        current_endpoint = self.endpoint_var.get().strip()
-        if self.cloud_type_var.get() == "aliyun":
-            if not current_endpoint or "myqcloud.com" in current_endpoint or current_endpoint.startswith("ap-"):
-                self.endpoint_var.set("https://oss-cn-hangzhou.aliyuncs.com")
-        else:
-            if not current_endpoint or "aliyuncs.com" in current_endpoint:
-                self.endpoint_var.set("ap-beijing")
+        previous_type = "tencent" if self.cloud_type_var.get() == "aliyun" else "aliyun"
+        self.cloud_profiles[previous_type] = self.snapshot_current_cloud_profile()
+        self.apply_cloud_profile(self.cloud_type_var.get().strip())
 
-        self.bucket_name_var.set("")
-        self.certificate_bucket_name_var.set("")
-        self.prefix_var.set("")
-        self.certificate_prefix_var.set("")
         self.sync_bucket_values([])
         self.set_folder_values([])
         self.set_certificate_folder_values([])
@@ -3003,6 +3037,8 @@ class App:
                     source_dir=source_dir,
                     output_dir=Path(self.certificate_output_dir_var.get().strip() or source_dir),
                     match_column=match_column,
+                    rename_folder=self.certificate_rename_folder_var.get(),
+                    folder_name_column=self.certificate_folder_name_column_var.get().strip(),
                     classify_output=self.certificate_classify_var.get(),
                     keyword=self.certificate_keyword_var.get().strip() if self.certificate_mode_var.get() == "keyword" else "",
                     total_rows=0,

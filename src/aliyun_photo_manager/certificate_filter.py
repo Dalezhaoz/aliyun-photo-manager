@@ -235,6 +235,8 @@ def run_certificate_filter(
                 source_dir=options.source_dir,
                 output_dir=options.output_dir,
                 match_column=options.match_column,
+                rename_folder=options.rename_folder,
+                folder_name_column=options.folder_name_column,
                 classify_output=options.classify_output,
                 keyword=options.keyword.strip(),
                 total_rows=total_rows,
