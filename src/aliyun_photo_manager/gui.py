@@ -31,7 +31,6 @@ from .downloader import (
     list_buckets,
     list_browser_entries,
     list_folder_prefixes,
-    search_objects,
 )
 from .word_to_html import WordExportResult, export_word_to_html
 
@@ -88,11 +87,11 @@ class App:
         self.certificate_summary_text_var = tk.StringVar(value="证件资料筛选结果会显示在这里")
         self.bucket_status_var = tk.StringVar(value="未加载 bucket 列表")
         self.folder_status_var = tk.StringVar(value="未加载 bucket 文件夹")
-        self.search_status_var = tk.StringVar(value="未搜索文件")
+        self.search_status_var = tk.StringVar(value="未搜索文件夹")
         self.selected_folder_info_var = tk.StringVar(value="当前未选择 bucket 文件夹")
         self.certificate_bucket_status_var = tk.StringVar(value="未加载 bucket 列表")
         self.certificate_folder_status_var = tk.StringVar(value="未加载 bucket 文件夹")
-        self.certificate_search_status_var = tk.StringVar(value="未搜索文件")
+        self.certificate_search_status_var = tk.StringVar(value="未搜索文件夹")
         self.certificate_selected_folder_info_var = tk.StringVar(value="当前未选择 bucket 文件夹")
         self.word_status_var = tk.StringVar(value="未开始导出")
         self.word_result_var = tk.StringVar(value="Word 转 HTML 结果会显示在这里")
@@ -101,6 +100,8 @@ class App:
         self.certificate_folder_tree: Optional[ttk.Treeview] = None
         self.folder_nodes: Dict[str, BrowserEntry] = {}
         self.certificate_folder_nodes: Dict[str, BrowserEntry] = {}
+        self.current_folder_entries: List[BrowserEntry] = []
+        self.current_certificate_folder_entries: List[BrowserEntry] = []
         self.progress_bar: Optional[ttk.Progressbar] = None
         self.certificate_progress_bar: Optional[ttk.Progressbar] = None
         self.last_summary: Optional[WorkflowSummary] = None
@@ -327,11 +328,10 @@ class App:
         self.photo_browser_frame = ttk.LabelFrame(self.photo_right_frame, text="Bucket 文件夹浏览", padding=12)
         self.photo_browser_frame.grid(row=0, column=0, sticky="nsew")
         self.photo_browser_frame.columnconfigure(0, weight=1)
-        self.photo_browser_frame.rowconfigure(1, weight=1)
+        self.photo_browser_frame.rowconfigure(2, weight=1)
 
         browser_toolbar = ttk.Frame(self.photo_browser_frame)
         browser_toolbar.grid(row=0, column=0, sticky="ew")
-        browser_toolbar.columnconfigure(3, weight=1)
 
         ttk.Button(
             browser_toolbar,
@@ -349,17 +349,21 @@ class App:
             command=self.go_to_parent_prefix,
         ).grid(row=0, column=2, sticky="w", padx=(8, 0))
 
-        search_entry = self.create_text_entry(browser_toolbar, textvariable=self.search_keyword_var)
-        search_entry.grid(row=0, column=3, sticky="ew", padx=(12, 8))
+        search_toolbar = ttk.Frame(self.photo_browser_frame)
+        search_toolbar.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        search_toolbar.columnconfigure(0, weight=1)
+
+        search_entry = self.create_text_entry(search_toolbar, textvariable=self.search_keyword_var)
+        search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
         ttk.Button(
-            browser_toolbar,
-            text="搜索当前文件夹",
+            search_toolbar,
+            text="搜索当前层级文件夹",
             command=self.search_bucket_files,
-        ).grid(row=0, column=4, sticky="e")
+        ).grid(row=0, column=1, sticky="e")
 
         tree_frame = ttk.Frame(self.photo_browser_frame)
-        tree_frame.grid(row=1, column=0, sticky="nsew", pady=(10, 10))
+        tree_frame.grid(row=2, column=0, sticky="nsew", pady=(10, 10))
         tree_frame.columnconfigure(0, weight=1)
         tree_frame.rowconfigure(0, weight=1)
 
@@ -387,10 +391,10 @@ class App:
         self.folder_tree.configure(yscrollcommand=tree_scrollbar.set)
 
         ttk.Label(self.photo_browser_frame, textvariable=self.folder_status_var).grid(
-            row=2, column=0, sticky="w"
+            row=3, column=0, sticky="w"
         )
         ttk.Label(self.photo_browser_frame, textvariable=self.selected_folder_info_var).grid(
-            row=3, column=0, sticky="w", pady=(6, 0)
+            row=4, column=0, sticky="w", pady=(6, 0)
         )
         ttk.Label(self.photo_browser_frame, textvariable=self.search_status_var).grid(
             row=5, column=0, sticky="w", pady=(10, 0)
@@ -605,11 +609,10 @@ class App:
         )
         self.certificate_browser_frame.grid(row=0, column=0, sticky="nsew")
         self.certificate_browser_frame.columnconfigure(0, weight=1)
-        self.certificate_browser_frame.rowconfigure(1, weight=1)
+        self.certificate_browser_frame.rowconfigure(2, weight=1)
 
         cert_browser_toolbar = ttk.Frame(self.certificate_browser_frame)
         cert_browser_toolbar.grid(row=0, column=0, sticky="ew")
-        cert_browser_toolbar.columnconfigure(2, weight=1)
         ttk.Button(
             cert_browser_toolbar,
             text="加载当前层级",
@@ -621,21 +624,25 @@ class App:
             command=self.go_to_certificate_parent_prefix,
         ).grid(row=0, column=1, sticky="w", padx=(8, 0))
 
+        cert_search_toolbar = ttk.Frame(self.certificate_browser_frame)
+        cert_search_toolbar.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        cert_search_toolbar.columnconfigure(0, weight=1)
+
         self.certificate_search_keyword_var = tk.StringVar()
         cert_search_entry = self.create_text_entry(
-            cert_browser_toolbar,
+            cert_search_toolbar,
             textvariable=self.certificate_search_keyword_var,
         )
-        cert_search_entry.grid(row=0, column=2, sticky="ew", padx=(12, 8))
+        cert_search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
         ttk.Button(
-            cert_browser_toolbar,
-            text="搜索当前文件夹",
+            cert_search_toolbar,
+            text="搜索当前层级文件夹",
             command=self.search_certificate_files,
-        ).grid(row=0, column=3, sticky="e")
+        ).grid(row=0, column=1, sticky="e")
 
         cert_tree_frame = ttk.Frame(self.certificate_browser_frame)
-        cert_tree_frame.grid(row=1, column=0, sticky="nsew", pady=(10, 10))
+        cert_tree_frame.grid(row=2, column=0, sticky="nsew", pady=(10, 10))
         cert_tree_frame.columnconfigure(0, weight=1)
         cert_tree_frame.rowconfigure(0, weight=1)
 
@@ -663,12 +670,12 @@ class App:
         self.certificate_folder_tree.configure(yscrollcommand=cert_tree_scrollbar.set)
 
         ttk.Label(self.certificate_browser_frame, textvariable=self.certificate_folder_status_var).grid(
-            row=2, column=0, sticky="w"
+            row=3, column=0, sticky="w"
         )
         ttk.Label(
             self.certificate_browser_frame,
             textvariable=self.certificate_selected_folder_info_var,
-        ).grid(row=3, column=0, sticky="w", pady=(6, 0))
+        ).grid(row=4, column=0, sticky="w", pady=(6, 0))
 
         ttk.Label(
             self.certificate_browser_frame,
@@ -824,7 +831,7 @@ class App:
         self.write_log("桌面工具已启动。")
         self.write_log("建议先勾选“仅预览”，确认下载与分类路径后再正式执行。")
         self.write_log("可以在右侧浏览 bucket 文件夹，双击进入子目录。")
-        self.write_log("也可以在右侧下方按文件名搜索当前文件夹内的文件。")
+        self.write_log("也可以在右侧按文件夹名称筛选当前层级目录。")
         self.render_word_preview("")
         self.update_photo_source_mode_ui()
         self.update_certificate_mode_ui()
@@ -1235,7 +1242,7 @@ class App:
         if is_oss:
             self.run_button.configure(text="下载并生成模板")
             self.folder_status_var.set("未加载 bucket 文件夹")
-            self.search_status_var.set("未搜索文件")
+            self.search_status_var.set("未搜索文件夹")
             self.selected_folder_info_var.set("当前未选择 bucket 文件夹")
         else:
             self.run_button.configure(text="生成本地模板")
@@ -1256,7 +1263,7 @@ class App:
         if is_oss:
             self.certificate_download_button.configure(state="normal")
             self.certificate_folder_status_var.set("未加载 bucket 文件夹")
-            self.certificate_search_status_var.set("未搜索文件")
+            self.certificate_search_status_var.set("未搜索文件夹")
             self.certificate_selected_folder_info_var.set("当前未选择 bucket 文件夹")
         else:
             self.certificate_download_button.configure(state="disabled")
@@ -1477,6 +1484,23 @@ class App:
         self.last_certificate_summary = summary
         if summary is None:
             self.certificate_summary_text_var.set("证件资料筛选结果会显示在这里")
+            self.open_certificate_report_button.configure(state="disabled")
+            return
+
+        if summary.total_rows == 0 and summary.download_result is not None:
+            lines = [
+                f"证件资料下载完成：共找到 {summary.download_result.total_found} 个文件，"
+                f"新下载 {summary.download_result.downloaded_count} 个，"
+                f"跳过已存在 {summary.download_result.skipped_existing_count} 个。",
+                f"实际下载目录：{summary.source_dir}",
+            ]
+            if summary.cancelled:
+                lines.append("任务已取消。")
+            elif summary.dry_run:
+                lines.append("当前为预览模式，没有实际下载文件。")
+            else:
+                lines.append("请到上面的“证件资料目录”查看下载结果。")
+            self.certificate_summary_text_var.set("\n".join(lines))
             self.open_certificate_report_button.configure(state="disabled")
             return
 
@@ -2143,6 +2167,7 @@ class App:
             return
 
         entries = entries or []
+        self.current_folder_entries = entries
         folders = [entry.key for entry in entries if entry.entry_type == "folder"]
         self.set_folder_values(folders)
         self.render_folder_tree(entries)
@@ -2171,6 +2196,7 @@ class App:
             return
 
         entries = entries or []
+        self.current_certificate_folder_entries = entries
         folders = [entry.key for entry in entries if entry.entry_type == "folder"]
         self.set_certificate_folder_values(folders)
         self.render_certificate_folder_tree(entries)
@@ -2317,126 +2343,83 @@ class App:
         if self.photo_source_mode_var.get() != "oss":
             messagebox.showinfo("本地模式", "本地模式不使用 bucket 搜索。")
             return
-        try:
-            config = self.build_config()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
 
         keyword = self.search_keyword_var.get().strip()
         if not keyword:
-            messagebox.showinfo("缺少关键词", "请输入要搜索的文件名关键词。")
+            messagebox.showinfo("缺少关键词", "请输入要搜索的文件夹名称关键词。")
             return
 
-        current_prefix = self.prefix_var.get().strip()
-        self.search_status_var.set("正在搜索当前文件夹...")
-        self.write_log(f"开始搜索当前文件夹：{current_prefix or '/'}，关键词：{keyword}")
-
-        def worker() -> None:
-            try:
-                object_keys = search_objects(config, keyword, prefix=current_prefix)
-            except Exception as exc:
-                self.root.after(
-                    0,
-                    lambda: self.finish_search(error=f"{type(exc).__name__}: {exc}"),
-                )
-                return
-            self.root.after(0, lambda: self.finish_search(object_keys=object_keys))
-
-        threading.Thread(target=worker, daemon=True).start()
+        current_prefix = self.prefix_var.get().strip() or "/"
+        self.search_status_var.set("正在筛选当前层级文件夹...")
+        self.write_log(f"开始筛选当前层级文件夹：{current_prefix}，关键词：{keyword}")
+        self.finish_search(entries=self.filter_folder_entries(self.current_folder_entries, keyword))
 
     def search_certificate_files(self) -> None:
         if self.certificate_source_mode_var.get() != "oss":
             messagebox.showinfo("本地模式", "本地模式不使用 bucket 搜索。")
             return
-        try:
-            config = self.build_certificate_config()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
 
         keyword = self.certificate_search_keyword_var.get().strip()
         if not keyword:
-            messagebox.showinfo("缺少关键词", "请输入要搜索的文件名关键词。")
+            messagebox.showinfo("缺少关键词", "请输入要搜索的文件夹名称关键词。")
             return
 
-        current_prefix = self.certificate_prefix_var.get().strip()
-        self.certificate_search_status_var.set("正在搜索当前文件夹...")
-        self.write_log(f"开始搜索证件资料当前文件夹：{current_prefix or '/'}，关键词：{keyword}")
+        current_prefix = self.certificate_prefix_var.get().strip() or "/"
+        self.certificate_search_status_var.set("正在筛选当前层级文件夹...")
+        self.write_log(f"开始筛选证件资料当前层级文件夹：{current_prefix}，关键词：{keyword}")
+        self.finish_certificate_search(
+            entries=self.filter_folder_entries(self.current_certificate_folder_entries, keyword)
+        )
 
-        def worker() -> None:
-            try:
-                object_keys = search_objects(config, keyword, prefix=current_prefix)
-            except Exception as exc:
-                self.root.after(
-                    0,
-                    lambda: self.finish_certificate_search(
-                        error=f"{type(exc).__name__}: {exc}"
-                    ),
-                )
-                return
-            self.root.after(
-                0,
-                lambda: self.finish_certificate_search(object_keys=object_keys),
-            )
-
-        threading.Thread(target=worker, daemon=True).start()
+    def filter_folder_entries(self, entries: List[BrowserEntry], keyword: str) -> List[BrowserEntry]:
+        cleaned_keyword = keyword.strip().lower()
+        if not cleaned_keyword:
+            return entries
+        return [
+            entry
+            for entry in entries
+            if entry.entry_type == "folder" and cleaned_keyword in entry.display_name.lower()
+        ]
 
     def finish_search(
         self,
-        object_keys: Optional[List[str]] = None,
+        entries: Optional[List[BrowserEntry]] = None,
         error: Optional[str] = None,
     ) -> None:
         if error is not None:
             self.search_status_var.set("搜索失败")
-            self.write_log(f"搜索文件失败：{error}")
+            self.write_log(f"搜索文件夹失败：{error}")
             messagebox.showerror("搜索失败", self.format_cloud_error(error))
             return
 
-        object_keys = object_keys or []
-        entries = [
-            BrowserEntry(
-                key=object_key,
-                entry_type="file",
-                display_name=Path(object_key).name,
-            )
-            for object_key in object_keys
-        ]
+        entries = entries or []
         self.render_folder_tree(entries)
-        if object_keys:
-            self.search_status_var.set(f"找到 {len(object_keys)} 个匹配文件")
-            self.write_log(f"搜索完成，找到 {len(object_keys)} 个匹配文件。")
+        if entries:
+            self.search_status_var.set(f"找到 {len(entries)} 个匹配文件夹")
+            self.write_log(f"搜索完成，找到 {len(entries)} 个匹配文件夹。")
         else:
-            self.search_status_var.set("没有找到匹配文件")
-            self.write_log("没有找到匹配文件。")
+            self.search_status_var.set("没有找到匹配文件夹")
+            self.write_log("没有找到匹配文件夹。")
 
     def finish_certificate_search(
         self,
-        object_keys: Optional[List[str]] = None,
+        entries: Optional[List[BrowserEntry]] = None,
         error: Optional[str] = None,
     ) -> None:
         if error is not None:
             self.certificate_search_status_var.set("搜索失败")
-            self.write_log(f"搜索证件资料文件失败：{error}")
+            self.write_log(f"搜索证件资料文件夹失败：{error}")
             messagebox.showerror("搜索失败", self.format_cloud_error(error))
             return
 
-        object_keys = object_keys or []
-        entries = [
-            BrowserEntry(
-                key=object_key,
-                entry_type="file",
-                display_name=Path(object_key).name,
-            )
-            for object_key in object_keys
-        ]
         self.render_certificate_folder_tree(entries)
-        if object_keys:
-            self.certificate_search_status_var.set(f"找到 {len(object_keys)} 个匹配文件")
-            self.write_log(f"证件资料搜索完成，找到 {len(object_keys)} 个匹配文件。")
+        entries = entries or []
+        if entries:
+            self.certificate_search_status_var.set(f"找到 {len(entries)} 个匹配文件夹")
+            self.write_log(f"证件资料搜索完成，找到 {len(entries)} 个匹配文件夹。")
         else:
-            self.certificate_search_status_var.set("没有找到匹配文件")
-            self.write_log("没有找到匹配的证件资料文件。")
+            self.certificate_search_status_var.set("没有找到匹配文件夹")
+            self.write_log("没有找到匹配的证件资料文件夹。")
 
     def on_search_double_click(self, _event=None) -> None:
         if self.search_tree is None:

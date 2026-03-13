@@ -178,7 +178,6 @@ def _wrap_html(body_html: str) -> str:
     html, body {{
       margin: 0;
       padding: 0;
-      background: #f3f3f3;
     }}
     body {{
       font-family: SimSun, "Microsoft YaHei", sans-serif;
@@ -191,8 +190,6 @@ def _wrap_html(body_html: str) -> str:
       margin: 16px auto;
       padding: 24px;
       box-sizing: border-box;
-      background: #fff;
-      box-shadow: 0 0 4px rgba(0, 0, 0, 0.12);
     }}
     table {{
       border-collapse: collapse;
@@ -210,9 +207,6 @@ def _wrap_html(body_html: str) -> str:
       margin: 6px 0;
     }}
     @media print {{
-      html, body {{
-        background: #fff;
-      }}
       .page {{
         width: auto;
         min-height: auto;
