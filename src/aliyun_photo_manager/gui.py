@@ -19,6 +19,7 @@ from .app import (
     run_photo_classification_only,
     run_photo_download_and_template,
 )
+from . import __version__
 from .certificate_filter import (
     CertificateFilterOptions,
     CertificateFilterSummary,
@@ -45,7 +46,7 @@ class App:
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("报名系统工具箱")
+        self.root.title(f"报名系统工具箱 v{__version__}")
         self.root.geometry("1080x760")
         self.root.minsize(920, 680)
 
@@ -158,7 +159,7 @@ class App:
 
         title = ttk.Label(
             container,
-            text="报名系统工具箱",
+            text=f"报名系统工具箱 v{__version__}",
             font=("Helvetica", 16, "bold"),
         )
         title.grid(row=0, column=0, sticky="w")
@@ -913,74 +914,91 @@ class App:
         self.root.after(120, lambda: self.reset_split_default("photo"))
 
     def set_help_content(self) -> None:
-        help_content = """报名系统工具箱使用说明
+        help_content = f"""报名系统工具箱 使用说明
+版本：v{__version__}
 
 一、照片下载与分类
 
-这个功能用来下载、整理和分类考生照片。
+适用场景：
+- 批量下载考生照片
+- 只下载模板中的人员照片
+- 按模板中的分类信息整理照片
 
-使用步骤：
-1. 先选择数据来源：
-   - 从云端下载后处理
+操作步骤：
+1. 选择数据来源：
+   - 从云存储下载后处理
    - 直接处理本地目录
-2. 如果是云端来源，填写云类型、Endpoint / Region、AccessKey、Bucket。
-3. 选择下载目录和分类目录。
-4. 点击“下载并生成模板”。
-5. 程序会在照片目录里生成一份 Excel 模板。
-6. 打开模板，填写“分类一 / 分类二 / 分类三 / 修改名称”。
-7. 填写完成后，回到程序点击“按模板分类”。
+2. 如果使用云存储，填写云类型、Endpoint / Region、AccessKey，并点击“加载 Bucket”。
+3. 选择 bucket 后，点击右侧“加载当前层级”，找到照片所在目录。
+4. 选择下载目录和分类目录。
+5. 如需按名单下载，选择人员模板，点击“加载模板列”，选择匹配列，再勾选“只下载模板中的人员”。
+6. 点击“下载并生成模板”。
+7. 打开生成的 Excel 模板，填写“分类一 / 分类二 / 分类三 / 修改名称”。
+8. 回到程序，点击“按模板分类”。
 
-补充说明：
-- 分类一、分类二、分类三都可以不填。
-- 修改名称也可以不填。
-- 处理完成后，会自动生成“照片分类结果清单.xlsx”。
+结果说明：
+- 会生成“照片分类模板.xlsx”
+- 会生成“照片分类结果清单.xlsx”
+- 如果勾选“仅预览，不实际执行”，只显示计划，不真正下载和分类
 
 二、证件资料筛选
 
-这个功能用来按模板筛选人员证件资料。
+适用场景：
+- 按模板筛选部分人员的证件资料
+- 按分类一、分类二、分类三整理资料
+- 只导出某类证件，例如“学历证书”
 
-使用步骤：
-1. 选择人员模板。
-2. 选择证件资料目录。
-3. 选择输出目录。
-4. 选择匹配列，例如“身份证号”或“报名序号”。
-5. 选择筛选模式：
+操作步骤：
+1. 选择数据来源：
+   - 从云存储下载后处理
+   - 直接处理本地目录
+2. 选择人员模板，点击“加载模板列”，选择匹配列。
+3. 如果需要，勾选“导出后文件夹重命名”，再选择“导出后文件夹名称列”。
+4. 如果使用云存储，填写云类型、Endpoint / Region、AccessKey，并点击“加载 Bucket”。
+5. 选择 bucket 后，点击右侧“加载当前层级”，找到证件资料目录。
+6. 选择证件资料目录。
+7. 如果需要先下载资料，可以点击“下载证件资料”。
+8. 选择输出目录。
+9. 选择筛选模式：
    - 复制整个人员文件夹
    - 只复制关键词文件
-6. 如果选择关键词模式，再填写关键词，例如“学历证书”。
-7. 如有需要，可以勾选“按分类一 / 分类二 / 分类三建立目录”或“仅预览，不实际执行”。
-8. 如果证件资料在云端，可以先点击“下载证件资料”。
-9. 点击“开始筛选”。
+10. 如果是关键词模式，填写关键词，例如“学历证书”。
+11. 根据需要勾选“按分类一 / 分类二 / 分类三建立目录”或“仅预览，不实际执行”。
+12. 点击“开始筛选”。
 
-补充说明：
-- 模板默认读取第一个 sheet。
-- 处理完成后，会自动生成“证件资料筛选结果清单.xlsx”。
+结果说明：
+- 会生成“证件资料筛选结果清单.xlsx”
+- 如果模板中有分类信息，可以按分类目录导出
+- 如果勾选“导出后文件夹重命名”，输出目录中的人员文件夹名称会按你选择的列来命名
 
 三、Word 转 HTML
 
-这个功能用来把 Word 模板转换成 HTML 代码。
+适用场景：
+- 把 Word 报名表模板转换成 HTML 代码
+- 生成 Net 版或 Java 版占位符模板
 
-使用步骤：
-1. 选择 Word 文件。
-2. 根据需要点击“Net版导出”或“Java版导出”。
-3. 导出后可以在“代码”页复制 HTML。
-4. 也可以切到“预览”页查看效果。
+操作步骤：
+1. 选择 Word 文件（.doc 或 .docx）。
+2. 点击“Net版导出”或“Java版导出”。
+3. 在“代码”页查看并复制 HTML。
+4. 如需查看页面效果，可以使用“浏览器预览”。
 
-补充说明：
-- Net 版占位符格式示例：{[#考生表视图.姓名#]}
-- Java 版占位符格式示例：${考生.姓名}
-- Windows 下如果内置预览不稳定，直接使用“浏览器预览”即可。
+结果说明：
+- Net 版占位符示例：{{[#考生表视图.姓名#]}}
+- Java 版占位符示例：${{考生.姓名}}
+- Windows 下建议使用“浏览器预览”
 
 四、使用建议
 
-- 第一次处理大批量文件时，建议先用少量文件测试。
-- 使用模板时，建议先确认内容填写无误，再进行正式处理。
-- 如果页面里已经生成“结果清单”，可以直接点击“打开结果清单”进行核对。
+- 第一次处理大批量文件时，建议先用少量数据测试。
+- 使用模板前，建议先确认匹配列和分类列填写正确。
+- 处理完成后，可以直接点击“打开结果清单”核对结果。
+- 切换阿里云 / 腾讯云时，程序会分别记住两套配置。
 
 五、运行日志
 
-运行日志主要用来查看处理过程。
-如果需要回看详细步骤，可以打开“运行日志”页查看。
+运行日志用于查看下载、筛选、分类和导出的详细过程。
+如果需要回看处理步骤，可以打开“运行日志”页查看。
 """
         self.help_text.configure(state="normal")
         self.help_text.delete("1.0", tk.END)
@@ -2241,7 +2259,7 @@ class App:
             self.certificate_bucket_status_var.set(f"已加载 {len(buckets)} 个 bucket")
             self.write_log(f"找到 {len(buckets)} 个 bucket。")
             self.prefix_var.set("")
-            self.load_bucket_folders()
+            self.folder_status_var.set("请选择 bucket 后点击“加载当前层级”")
         else:
             self.bucket_status_var.set("未找到可用 bucket")
             self.certificate_bucket_status_var.set("未找到可用 bucket")
@@ -2272,7 +2290,7 @@ class App:
             self.bucket_status_var.set(f"已加载 {len(buckets)} 个 bucket")
             self.write_log(f"证件资料找到 {len(buckets)} 个 bucket。")
             self.certificate_prefix_var.set("")
-            self.load_certificate_folders()
+            self.certificate_folder_status_var.set("请选择 bucket 后点击“加载当前层级”")
         else:
             self.certificate_bucket_status_var.set("未找到可用 bucket")
             self.bucket_status_var.set("未找到可用 bucket")
