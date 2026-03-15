@@ -1,6 +1,8 @@
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Event
+from threading import Event, local
+from time import sleep
 from typing import Callable, Iterable, List, Optional
 
 from .config import OssConfig
@@ -18,6 +20,14 @@ IMAGE_EXTENSIONS = {
     ".heic",
     ".heif",
 }
+
+DEFAULT_MAX_WORKERS = {
+    "aliyun": 4,
+    "tencent": 3,
+}
+SUBMIT_DELAY_SECONDS = 0.03
+
+_CLIENT_LOCAL = local()
 
 
 @dataclass
@@ -332,15 +342,29 @@ def download_photos(
 
 
 def _download_aliyun_object(config: OssConfig, object_key: str, local_path: Path) -> None:
-    bucket = _build_aliyun_bucket(config)
+    bucket = getattr(_CLIENT_LOCAL, "aliyun_bucket", None)
+    if bucket is None:
+        bucket = _build_aliyun_bucket(config)
+        _CLIENT_LOCAL.aliyun_bucket = bucket
     bucket.get_object_to_file(object_key, str(local_path))
 
 
 def _download_tencent_object(config: OssConfig, object_key: str, local_path: Path) -> None:
-    client = _build_tencent_client(config)
+    client = getattr(_CLIENT_LOCAL, "tencent_client", None)
+    if client is None:
+        client = _build_tencent_client(config)
+        _CLIENT_LOCAL.tencent_client = client
     response = client.get_object(Bucket=config.bucket_name, Key=object_key)
     body = response["Body"]
     local_path.write_bytes(body.get_raw_stream().read())
+
+
+def _resolve_worker_count(config: OssConfig, total: int) -> int:
+    provider = _detect_provider(config)
+    default = DEFAULT_MAX_WORKERS.get(provider, 3)
+    if total <= 1:
+        return 1
+    return max(1, min(default, total))
 
 
 def download_objects(
@@ -382,37 +406,94 @@ def download_objects(
         progress_callback(stage, 0, total, "")
     log(f"共找到 {total} 个可下载文件。")
 
-    for index, object_key in enumerate(object_keys, start=1):
-        if cancel_event is not None and cancel_event.is_set():
-            log(f"下载已取消，已处理 {index - 1}/{total} 个文件。")
-            if progress_callback is not None:
-                progress_callback(stage, index - 1, total, "")
-            break
+    if total == 0:
+        return DownloadResult(
+            total_found=0,
+            downloaded_count=0,
+            skipped_existing_count=0,
+        )
 
+    if dry_run:
+        for index, object_key in enumerate(object_keys, start=1):
+            if index == 1 or index % 100 == 0 or index == total:
+                log(f"下载进度 {index}/{total}：{Path(object_key).name}")
+            downloaded_count += 1
+            if progress_callback is not None:
+                progress_callback(stage, index, total, object_key)
+        return DownloadResult(
+            total_found=total,
+            downloaded_count=downloaded_count,
+            skipped_existing_count=0,
+        )
+
+    pending_items: List[tuple[str, Path]] = []
+    processed_count = 0
+    for object_key in object_keys:
         relative_path = build_local_relative_path(object_key, prefix)
         local_path = download_dir / relative_path
 
         if skip_existing and local_path.exists():
-            if index == 1 or index % 100 == 0 or index == total:
-                log(f"下载进度 {index}/{total}，跳过已存在文件。")
             skipped_existing_count += 1
+            processed_count += 1
+            if processed_count == 1 or processed_count % 100 == 0 or processed_count == total:
+                log(f"下载进度 {processed_count}/{total}，跳过已存在文件。")
             if progress_callback is not None:
-                progress_callback(stage, index, total, object_key)
+                progress_callback(stage, processed_count, total, object_key)
             continue
 
-        if index == 1 or index % 100 == 0 or index == total:
-            log(f"下载进度 {index}/{total}：{Path(object_key).name}")
+        pending_items.append((object_key, local_path))
 
-        if not dry_run:
-            local_path.parent.mkdir(parents=True, exist_ok=True)
-            if _detect_provider(config) == "aliyun":
-                _download_aliyun_object(config, object_key, local_path)
-            else:
-                _download_tencent_object(config, object_key, local_path)
-        downloaded_count += 1
+    worker_count = _resolve_worker_count(config, len(pending_items))
 
-        if progress_callback is not None:
-            progress_callback(stage, index, total, object_key)
+    def worker(object_key: str, local_path: Path) -> str:
+        if cancel_event is not None and cancel_event.is_set():
+            return object_key
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        if _detect_provider(config) == "aliyun":
+            _download_aliyun_object(config, object_key, local_path)
+        else:
+            _download_tencent_object(config, object_key, local_path)
+        return object_key
+
+    in_flight = {}
+    next_index = 0
+    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="bucket-download") as executor:
+        while next_index < len(pending_items) and len(in_flight) < worker_count:
+            object_key, local_path = pending_items[next_index]
+            future = executor.submit(worker, object_key, local_path)
+            in_flight[future] = object_key
+            next_index += 1
+            sleep(SUBMIT_DELAY_SECONDS)
+
+        while in_flight:
+            done, _ = wait(in_flight.keys(), return_when=FIRST_COMPLETED)
+            for future in done:
+                object_key = in_flight.pop(future)
+                future.result()
+                downloaded_count += 1
+                processed_count += 1
+                if processed_count == 1 or processed_count % 100 == 0 or processed_count == total:
+                    log(f"下载进度 {processed_count}/{total}：{Path(object_key).name}")
+                if progress_callback is not None:
+                    progress_callback(stage, processed_count, total, object_key)
+
+                if cancel_event is not None and cancel_event.is_set():
+                    for queued in in_flight:
+                        queued.cancel()
+                    in_flight.clear()
+                    log(f"下载已取消，已处理 {processed_count}/{total} 个文件。")
+                    if progress_callback is not None:
+                        progress_callback(stage, processed_count, total, "")
+                    break
+
+                if next_index < len(pending_items):
+                    next_object_key, next_local_path = pending_items[next_index]
+                    queued = executor.submit(worker, next_object_key, next_local_path)
+                    in_flight[queued] = next_object_key
+                    next_index += 1
+                    sleep(SUBMIT_DELAY_SECONDS)
+            if cancel_event is not None and cancel_event.is_set():
+                break
 
     return DownloadResult(
         total_found=total,

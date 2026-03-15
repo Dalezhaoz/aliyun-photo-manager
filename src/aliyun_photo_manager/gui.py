@@ -28,6 +28,13 @@ from .certificate_filter import (
     run_certificate_filter,
 )
 from .config import OssConfig, validate_oss_config, validate_oss_credentials
+from .data_matcher import (
+    ColumnMapping,
+    DataMatchOptions,
+    DataMatchSummary,
+    list_headers as list_match_headers,
+    run_data_match,
+)
 from .downloader import (
     BrowserEntry,
     count_photos_in_prefix,
@@ -96,6 +103,15 @@ class App:
         self.pack_use_custom_password_var = tk.BooleanVar(value=False)
         self.pack_password_var = tk.StringVar()
         self.pack_query_var = tk.StringVar()
+        self.match_target_var = tk.StringVar()
+        self.match_source_var = tk.StringVar()
+        self.match_target_key_var = tk.StringVar()
+        self.match_source_key_var = tk.StringVar()
+        self.match_output_var = tk.StringVar()
+        self.match_extra_target_var = tk.StringVar()
+        self.match_extra_source_var = tk.StringVar()
+        self.match_transfer_target_var = tk.StringVar()
+        self.match_transfer_source_var = tk.StringVar()
 
         self.status_var = tk.StringVar(value="就绪")
         self.progress_text_var = tk.StringVar(value="未开始")
@@ -116,6 +132,8 @@ class App:
         self.word_preview_status_var = tk.StringVar(value="未生成预览")
         self.pack_status_var = tk.StringVar(value="未开始打包")
         self.pack_result_var = tk.StringVar(value="结果打包信息会显示在这里")
+        self.match_status_var = tk.StringVar(value="未开始匹配")
+        self.match_result_var = tk.StringVar(value="数据匹配结果会显示在这里")
         self.folder_tree: Optional[ttk.Treeview] = None
         self.certificate_folder_tree: Optional[ttk.Treeview] = None
         self.folder_nodes: Dict[str, BrowserEntry] = {}
@@ -128,11 +146,17 @@ class App:
         self.last_certificate_summary: Optional[CertificateFilterSummary] = None
         self.last_word_export: Optional[WordExportResult] = None
         self.last_pack_summary: Optional[PackSummary] = None
+        self.last_match_summary: Optional[DataMatchSummary] = None
         self.word_code_text = None
         self.word_preview_widget = None
+        self.match_result_text = None
         self.pack_query_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []
+        self.match_target_headers: List[str] = []
+        self.match_source_headers: List[str] = []
+        self.match_extra_mappings: List[ColumnMapping] = []
+        self.match_transfer_mappings: List[ColumnMapping] = []
         self.certificate_bucket_values: List[str] = []
         self.certificate_folder_values: List[str] = [""]
         self.default_sash_pending = {"photo": True, "certificate": True}
@@ -153,6 +177,13 @@ class App:
             self.certificate_template_var.get().strip()
         ).exists():
             self.load_certificate_headers()
+        if (
+            self.match_target_var.get().strip()
+            and self.match_source_var.get().strip()
+            and Path(self.match_target_var.get().strip()).exists()
+            and Path(self.match_source_var.get().strip()).exists()
+        ):
+            self.load_match_headers()
         self.root.after(150, self.flush_logs)
 
     def build_ui(self) -> None:
@@ -867,6 +898,172 @@ class App:
         self.word_preview_container.columnconfigure(0, weight=1)
         self.word_preview_container.rowconfigure(0, weight=1)
 
+        match_frame = ttk.Frame(notebook, padding=14)
+        match_frame.columnconfigure(0, weight=1)
+        match_frame.rowconfigure(3, weight=1)
+        notebook.add(match_frame, text="数据匹配")
+
+        match_form = ttk.LabelFrame(match_frame, text="表格匹配补列", padding=12)
+        match_form.grid(row=0, column=0, sticky="ew")
+        match_form.columnconfigure(1, weight=1)
+        self.add_file_row(
+            match_form,
+            row=0,
+            label="目标表",
+            variable=self.match_target_var,
+            command=self.choose_match_target,
+            button_text="选择文件",
+        )
+        self.add_file_row(
+            match_form,
+            row=1,
+            label="来源表",
+            variable=self.match_source_var,
+            command=self.choose_match_source,
+            button_text="选择文件",
+        )
+        self.add_entry_row(match_form, 2, "输出文件", self.match_output_var)
+        ttk.Button(match_form, text="自动生成", command=self.fill_match_output_path).grid(
+            row=2, column=2, padx=(8, 0), pady=4
+        )
+        ttk.Label(match_form, text="目标表匹配列", width=16).grid(row=3, column=0, sticky="w", pady=4)
+        self.match_target_key_combo = ttk.Combobox(
+            match_form,
+            textvariable=self.match_target_key_var,
+            values=self.match_target_headers,
+            state="readonly",
+        )
+        self.match_target_key_combo.grid(row=3, column=1, sticky="ew", pady=4)
+        ttk.Label(match_form, text="来源表匹配列", width=16).grid(row=4, column=0, sticky="w", pady=4)
+        self.match_source_key_combo = ttk.Combobox(
+            match_form,
+            textvariable=self.match_source_key_var,
+            values=self.match_source_headers,
+            state="readonly",
+        )
+        self.match_source_key_combo.grid(row=4, column=1, sticky="ew", pady=4)
+        ttk.Button(match_form, text="加载表头", command=self.load_match_headers).grid(
+            row=4, column=2, padx=(8, 0), pady=4
+        )
+
+        match_lists = ttk.Frame(match_frame)
+        match_lists.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        match_lists.columnconfigure(0, weight=1)
+        match_lists.columnconfigure(1, weight=1)
+
+        extra_frame = ttk.LabelFrame(match_lists, text="附加匹配列映射", padding=12)
+        extra_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        extra_frame.columnconfigure(0, weight=1)
+        ttk.Label(extra_frame, text="目标表列").grid(row=0, column=0, sticky="w")
+        ttk.Label(extra_frame, text="来源表列").grid(row=0, column=1, sticky="w", padx=(8, 0))
+        self.match_extra_target_combo = ttk.Combobox(
+            extra_frame,
+            textvariable=self.match_extra_target_var,
+            values=self.match_target_headers,
+            state="readonly",
+        )
+        self.match_extra_target_combo.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        self.match_extra_source_combo = ttk.Combobox(
+            extra_frame,
+            textvariable=self.match_extra_source_var,
+            values=self.match_source_headers,
+            state="readonly",
+        )
+        self.match_extra_source_combo.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(4, 0))
+        ttk.Button(extra_frame, text="添加映射", command=self.add_extra_match_mapping).grid(
+            row=1, column=2, padx=(8, 0), pady=(4, 0)
+        )
+        self.match_extra_tree = ttk.Treeview(
+            extra_frame,
+            columns=("target", "source"),
+            show="headings",
+            height=5,
+        )
+        self.match_extra_tree.heading("target", text="目标表列")
+        self.match_extra_tree.heading("source", text="来源表列")
+        self.match_extra_tree.column("target", width=160, anchor="w")
+        self.match_extra_tree.column("source", width=160, anchor="w")
+        self.match_extra_tree.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        extra_frame.rowconfigure(2, weight=1)
+        ttk.Button(extra_frame, text="删除所选", command=self.remove_extra_match_mapping).grid(
+            row=2, column=2, padx=(8, 0), sticky="n"
+        )
+
+        transfer_frame = ttk.LabelFrame(match_lists, text="补充列映射", padding=12)
+        transfer_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        transfer_frame.columnconfigure(0, weight=1)
+        ttk.Label(transfer_frame, text="结果列名").grid(row=0, column=0, sticky="w")
+        ttk.Label(transfer_frame, text="来源表列").grid(row=0, column=1, sticky="w", padx=(8, 0))
+        self.match_transfer_target_entry = self.create_text_entry(
+            transfer_frame,
+            textvariable=self.match_transfer_target_var,
+        )
+        self.match_transfer_target_entry.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        self.match_transfer_source_combo = ttk.Combobox(
+            transfer_frame,
+            textvariable=self.match_transfer_source_var,
+            values=self.match_source_headers,
+            state="readonly",
+        )
+        self.match_transfer_source_combo.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(4, 0))
+        ttk.Button(transfer_frame, text="添加补充列", command=self.add_transfer_mapping).grid(
+            row=1, column=2, padx=(8, 0), pady=(4, 0)
+        )
+        self.match_transfer_tree = ttk.Treeview(
+            transfer_frame,
+            columns=("target", "source"),
+            show="headings",
+            height=5,
+        )
+        self.match_transfer_tree.heading("target", text="结果列名")
+        self.match_transfer_tree.heading("source", text="来源表列")
+        self.match_transfer_tree.column("target", width=160, anchor="w")
+        self.match_transfer_tree.column("source", width=160, anchor="w")
+        self.match_transfer_tree.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        transfer_frame.rowconfigure(2, weight=1)
+        ttk.Button(transfer_frame, text="删除所选", command=self.remove_transfer_mapping).grid(
+            row=2, column=2, padx=(8, 0), sticky="n"
+        )
+
+        match_action = ttk.Frame(match_frame)
+        match_action.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        self.match_run_button = ttk.Button(match_action, text="开始匹配", command=self.start_match_run)
+        self.match_run_button.pack(side="left")
+        self.match_open_button = ttk.Button(
+            match_action,
+            text="打开结果文件",
+            command=self.open_match_result_file,
+            state="disabled",
+        )
+        self.match_open_button.pack(side="left", padx=(10, 0))
+        ttk.Label(match_action, textvariable=self.match_status_var).pack(side="right")
+
+        match_result_frame = ttk.LabelFrame(match_frame, text="匹配结果", padding=12)
+        match_result_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        match_result_frame.columnconfigure(0, weight=1)
+        match_result_frame.rowconfigure(0, weight=1)
+        self.match_result_text = tk.Text(
+            match_result_frame,
+            wrap="word",
+            height=8,
+            relief="solid",
+            bd=1,
+            bg="#FCFCFC",
+            fg="#222222",
+            insertbackground="#1677FF",
+            padx=10,
+            pady=10,
+        )
+        self.match_result_text.grid(row=0, column=0, sticky="nsew")
+        self.match_result_text.configure(state="disabled")
+        match_result_scroll = ttk.Scrollbar(
+            match_result_frame,
+            orient="vertical",
+            command=self.match_result_text.yview,
+        )
+        match_result_scroll.grid(row=0, column=1, sticky="ns")
+        self.match_result_text.configure(yscrollcommand=match_result_scroll.set)
+
         pack_frame = ttk.Frame(notebook, padding=14)
         pack_frame.columnconfigure(0, weight=1)
         pack_frame.rowconfigure(2, weight=1)
@@ -1022,6 +1219,7 @@ class App:
         self.write_log("可以在右侧浏览 bucket 文件夹，双击进入子目录。")
         self.write_log("也可以在右侧按文件夹名称筛选当前层级目录。")
         self.render_word_preview("")
+        self.set_match_result_text(self.match_result_var.get())
         self.update_pack_password_mode_ui()
         self.set_pack_query_result_text("可按文件夹名、压缩包名或密码查询最近打包记录。")
         self.update_photo_source_mode_ui()
@@ -1104,7 +1302,31 @@ class App:
 - Java 版占位符示例：${{考生.姓名}}
 - Windows 下建议使用“浏览器预览”
 
-四、结果打包
+四、数据匹配
+
+适用场景：
+- 两张 Excel 通过共同字段补列
+- 替代手工写 VLOOKUP / XLOOKUP
+- 支持 `.xlsx` 和 `.xls`
+
+操作步骤：
+1. 选择目标表和来源表。
+2. 点击“加载表头”。
+3. 选择目标表匹配列和来源表匹配列。
+4. 如果重名较多，可添加附加匹配列映射，例如：
+   - 目标表“单位” -> 来源表“报考单位”
+   - 目标表“岗位” -> 来源表“报考岗位”
+5. 添加需要从来源表补回来的列。
+6. 点击“开始匹配”。
+
+结果说明：
+- 会生成一个新的 Excel 结果文件
+- 结果文件包含：
+  - 匹配结果
+  - 匹配结果清单
+- 可查看未匹配、来源重复键等情况
+
+五、结果打包
 
 适用场景：
 - 把照片结果、证件资料结果或其他交付目录打包发给客户
@@ -1122,14 +1344,14 @@ class App:
 - 自动密码格式：当天日期 + 4位随机字符，例如 `260313A7KQ`
 - 每次打包都会把压缩包路径、密码和时间写入本地 `.pack_history.json`
 
-五、使用建议
+六、使用建议
 
 - 第一次处理大批量文件时，建议先用少量数据测试。
 - 使用模板前，建议先确认匹配列和分类列填写正确。
 - 处理完成后，可以直接点击“打开结果清单”核对结果。
 - 切换阿里云 / 腾讯云时，程序会分别记住两套配置。
 
-六、运行日志
+七、运行日志
 
 运行日志用于查看下载、筛选、分类和导出的详细过程。
 如果需要回看处理步骤，可以打开“运行日志”页查看。
@@ -1429,6 +1651,130 @@ class App:
         if selected:
             self.word_source_var.set(selected)
 
+    def choose_match_target(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.match_target_var.get()).parent)
+            if self.match_target_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.match_target_var.set(selected)
+            self.fill_match_output_path()
+            self.load_match_headers()
+
+    def choose_match_source(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.match_source_var.get()).parent)
+            if self.match_source_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.match_source_var.set(selected)
+            self.load_match_headers()
+
+    def fill_match_output_path(self) -> None:
+        target_value = self.match_target_var.get().strip()
+        if not target_value:
+            return
+        target_path = Path(target_value)
+        self.match_output_var.set(str(target_path.with_name(f"{target_path.stem}_数据匹配结果.xlsx")))
+
+    def load_match_headers(self) -> None:
+        target_value = self.match_target_var.get().strip()
+        source_value = self.match_source_var.get().strip()
+        self.match_target_headers = []
+        self.match_source_headers = []
+        self.match_extra_mappings = []
+        self.match_transfer_mappings = []
+        self.match_target_key_combo.configure(values=[])
+        self.match_source_key_combo.configure(values=[])
+        self.match_extra_target_combo.configure(values=[])
+        self.match_extra_source_combo.configure(values=[])
+        self.match_transfer_source_combo.configure(values=[])
+        for item_id in self.match_extra_tree.get_children():
+            self.match_extra_tree.delete(item_id)
+        for item_id in self.match_transfer_tree.get_children():
+            self.match_transfer_tree.delete(item_id)
+        if not target_value or not source_value:
+            return
+        target_path = Path(target_value)
+        source_path = Path(source_value)
+        if not target_path.exists() or not source_path.exists():
+            return
+        try:
+            self.match_target_headers = list_match_headers(target_path)
+            self.match_source_headers = list_match_headers(source_path)
+        except Exception as exc:
+            messagebox.showerror("加载失败", str(exc))
+            return
+        self.match_target_key_combo.configure(values=self.match_target_headers)
+        self.match_source_key_combo.configure(values=self.match_source_headers)
+        self.match_extra_target_combo.configure(values=self.match_target_headers)
+        self.match_extra_source_combo.configure(values=self.match_source_headers)
+        self.match_transfer_source_combo.configure(values=self.match_source_headers)
+        if not self.match_target_key_var.get().strip() and self.match_target_headers:
+            self.match_target_key_var.set(self.match_target_headers[0])
+        if not self.match_source_key_var.get().strip() and self.match_source_headers:
+            self.match_source_key_var.set(self.match_source_headers[0])
+        if self.match_source_headers and not self.match_transfer_source_var.get().strip():
+            self.match_transfer_source_var.set(self.match_source_headers[0])
+            self.match_transfer_target_var.set(self.match_source_headers[0])
+
+    def add_extra_match_mapping(self) -> None:
+        target_column = self.match_extra_target_var.get().strip()
+        source_column = self.match_extra_source_var.get().strip()
+        if not target_column or not source_column:
+            messagebox.showerror("参数错误", "请选择目标表列和来源表列。")
+            return
+        mapping = ColumnMapping(target_column=target_column, source_column=source_column)
+        if mapping in self.match_extra_mappings:
+            return
+        self.match_extra_mappings.append(mapping)
+        self.match_extra_tree.insert("", tk.END, values=(target_column, source_column))
+
+    def remove_extra_match_mapping(self) -> None:
+        selected = self.match_extra_tree.selection()
+        if not selected:
+            return
+        for item_id in selected:
+            values = self.match_extra_tree.item(item_id, "values")
+            self.match_extra_tree.delete(item_id)
+            self.match_extra_mappings = [
+                item
+                for item in self.match_extra_mappings
+                if (item.target_column, item.source_column) != tuple(values)
+            ]
+
+    def add_transfer_mapping(self) -> None:
+        target_column = self.match_transfer_target_var.get().strip()
+        source_column = self.match_transfer_source_var.get().strip()
+        if not source_column:
+            messagebox.showerror("参数错误", "请选择来源表补充列。")
+            return
+        if not target_column:
+            target_column = source_column
+            self.match_transfer_target_var.set(target_column)
+        mapping = ColumnMapping(target_column=target_column, source_column=source_column)
+        if mapping in self.match_transfer_mappings:
+            return
+        self.match_transfer_mappings.append(mapping)
+        self.match_transfer_tree.insert("", tk.END, values=(target_column, source_column))
+
+    def remove_transfer_mapping(self) -> None:
+        selected = self.match_transfer_tree.selection()
+        if not selected:
+            return
+        for item_id in selected:
+            values = self.match_transfer_tree.item(item_id, "values")
+            self.match_transfer_tree.delete(item_id)
+            self.match_transfer_mappings = [
+                item
+                for item in self.match_transfer_mappings
+                if (item.target_column, item.source_column) != tuple(values)
+            ]
+
     def create_text_entry(self, parent, textvariable: tk.StringVar, show: str = ""):
         entry_widget = tk.Entry(
             parent,
@@ -1615,6 +1961,9 @@ class App:
                     self.word_net_button.configure(state="normal")
                     self.word_java_button.configure(state="normal")
                     self.word_status_var.set("完成")
+                elif message == "__MATCH_DONE__":
+                    self.match_run_button.configure(state="normal")
+                    self.match_status_var.set("完成")
                 elif message == "__PACK_DONE__":
                     self.pack_run_button.configure(state="normal")
                     self.pack_status_var.set("完成")
@@ -1624,6 +1973,15 @@ class App:
                     self.pack_result_var.set(f"打包失败：\n{message.split('::', 1)[1]}")
                     self.pack_copy_password_button.configure(state="disabled")
                     self.pack_open_button.configure(state="disabled")
+                    self.write_log(message.split("::", 1)[1])
+                elif isinstance(message, dict) and message.get("type") == "match_summary":
+                    self.update_match_summary_ui(message.get("summary"))
+                elif isinstance(message, str) and message.startswith("__MATCH_FAILED__::"):
+                    self.match_run_button.configure(state="normal")
+                    self.match_status_var.set("失败")
+                    self.match_result_var.set(f"匹配失败：\n{message.split('::', 1)[1]}")
+                    self.match_open_button.configure(state="disabled")
+                    self.set_match_result_text(self.match_result_var.get())
                     self.write_log(message.split("::", 1)[1])
                 elif isinstance(message, str) and message.startswith("__WORD_EXPORT_FAILED__::"):
                     self.word_net_button.configure(state="normal")
@@ -1918,6 +2276,37 @@ class App:
         self.pack_copy_password_button.configure(state="normal")
         self.pack_open_button.configure(state="normal")
 
+    def update_match_summary_ui(self, summary: Optional[DataMatchSummary]) -> None:
+        self.last_match_summary = summary
+        if summary is None:
+            self.match_result_var.set("数据匹配结果会显示在这里")
+            self.match_open_button.configure(state="disabled")
+            self.set_match_result_text(self.match_result_var.get())
+            return
+        self.match_result_var.set(
+            "匹配完成：\n"
+            f"目标表：{summary.target_path}\n"
+            f"来源表：{summary.source_path}\n"
+            f"结果文件：{summary.output_path}\n"
+            f"目标表表头：第 {summary.target_header_row} 行\n"
+            f"来源表表头：第 {summary.source_header_row} 行\n"
+            f"总行数：{summary.total_rows}\n"
+            f"匹配成功：{summary.matched_rows}\n"
+            f"未匹配：{summary.unmatched_rows}\n"
+            f"来源重复键：{summary.duplicate_source_keys}\n"
+            f"重复未写入：{summary.ambiguous_rows}"
+        )
+        self.set_match_result_text(self.match_result_var.get())
+        self.match_open_button.configure(state="normal")
+
+    def set_match_result_text(self, content: str) -> None:
+        if self.match_result_text is None:
+            return
+        self.match_result_text.configure(state="normal")
+        self.match_result_text.delete("1.0", tk.END)
+        self.match_result_text.insert("1.0", content)
+        self.match_result_text.configure(state="disabled")
+
     def set_pack_query_result_text(self, content: str) -> None:
         if self.pack_query_result_text is None:
             return
@@ -1996,6 +2385,11 @@ class App:
         if self.last_pack_summary is None:
             return
         self.open_local_file(self.last_pack_summary.output_path, "未找到压缩包")
+
+    def open_match_result_file(self) -> None:
+        if self.last_match_summary is None:
+            return
+        self.open_local_file(self.last_match_summary.output_path, "未找到匹配结果文件")
 
     def open_local_file(self, file_path: Path, not_found_title: str) -> None:
         if not file_path.exists():
@@ -2277,6 +2671,11 @@ class App:
             settings.get("pack_use_custom_password", self.pack_use_custom_password_var.get())
         )
         self.pack_query_var.set(settings.get("pack_query", ""))
+        self.match_target_var.set(settings.get("match_target", ""))
+        self.match_source_var.set(settings.get("match_source", ""))
+        self.match_target_key_var.set(settings.get("match_target_key", ""))
+        self.match_source_key_var.set(settings.get("match_source_key", ""))
+        self.match_output_var.set(settings.get("match_output", ""))
 
     def save_settings(self) -> None:
         settings = {
@@ -2316,6 +2715,11 @@ class App:
             "pack_output_dir": self.pack_output_dir_var.get().strip(),
             "pack_use_custom_password": self.pack_use_custom_password_var.get(),
             "pack_query": self.pack_query_var.get().strip(),
+            "match_target": self.match_target_var.get().strip(),
+            "match_source": self.match_source_var.get().strip(),
+            "match_target_key": self.match_target_key_var.get().strip(),
+            "match_source_key": self.match_source_key_var.get().strip(),
+            "match_output": self.match_output_var.get().strip(),
         }
         self.SETTINGS_FILE.write_text(
             json.dumps(settings, ensure_ascii=False, indent=2),
@@ -3451,6 +3855,75 @@ class App:
             else:
                 self.log_queue.put({"type": "pack_summary", "summary": summary})
                 self.log_queue.put("__PACK_DONE__")
+
+        self.worker = threading.Thread(target=runner, daemon=True)
+        self.worker.start()
+
+    def start_match_run(self) -> None:
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("任务执行中", "当前任务还没结束。")
+            return
+
+        target_value = self.match_target_var.get().strip()
+        source_value = self.match_source_var.get().strip()
+        if not target_value or not source_value:
+            messagebox.showerror("参数错误", "请选择目标表和来源表。")
+            return
+        target_key = self.match_target_key_var.get().strip()
+        source_key = self.match_source_key_var.get().strip()
+        if not target_key or not source_key:
+            messagebox.showerror("参数错误", "请选择目标表匹配列和来源表匹配列。")
+            return
+        transfer_mappings = list(self.match_transfer_mappings)
+        if not transfer_mappings:
+            messagebox.showerror("参数错误", "请至少选择一个来源表补充列。")
+            return
+        extra_mappings = [
+            mapping
+            for mapping in self.match_extra_mappings
+            if not (
+                mapping.target_column == target_key
+                and mapping.source_column == source_key
+            )
+        ]
+        target_path = Path(target_value)
+        source_path = Path(source_value)
+        if target_path.suffix.lower() not in {".xlsx", ".xls"} or source_path.suffix.lower() not in {".xlsx", ".xls"}:
+            messagebox.showerror("参数错误", "数据匹配仅支持 `.xlsx` 或 `.xls` 文件。")
+            return
+        output_value = self.match_output_var.get().strip()
+        output_path = Path(output_value) if output_value else target_path.with_name(
+            f"{target_path.stem}_数据匹配结果.xlsx"
+        )
+        self.match_output_var.set(str(output_path))
+        self.save_settings()
+
+        self.match_run_button.configure(state="disabled")
+        self.match_open_button.configure(state="disabled")
+        self.match_status_var.set("匹配中")
+        self.match_result_var.set("正在执行数据匹配，请稍候...")
+        self.set_match_result_text(self.match_result_var.get())
+        self.write_log(f"启动数据匹配任务：{target_path.name} <- {source_path.name}")
+
+        def runner() -> None:
+            try:
+                summary = run_data_match(
+                    DataMatchOptions(
+                        target_path=target_path,
+                        source_path=source_path,
+                        target_key_column=target_key,
+                        source_key_column=source_key,
+                        extra_match_mappings=extra_mappings,
+                        transfer_mappings=transfer_mappings,
+                        output_path=output_path,
+                    ),
+                    logger=self.make_logger(),
+                )
+            except Exception as exc:
+                self.log_queue.put(f"__MATCH_FAILED__::{type(exc).__name__}: {exc}")
+            else:
+                self.log_queue.put({"type": "match_summary", "summary": summary})
+                self.log_queue.put("__MATCH_DONE__")
 
         self.worker = threading.Thread(target=runner, daemon=True)
         self.worker.start()
