@@ -1073,12 +1073,17 @@ class App:
         pack_form.grid(row=0, column=0, sticky="ew")
         pack_form.columnconfigure(1, weight=1)
 
-        self.add_path_row(
-            pack_form,
-            row=0,
-            label="待打包文件夹",
-            variable=self.pack_source_dir_var,
-        )
+        ttk.Label(pack_form, text="待打包文件/文件夹", width=16).grid(row=0, column=0, sticky="w", pady=4)
+        pack_source_entry = self.create_text_entry(pack_form, textvariable=self.pack_source_dir_var)
+        pack_source_entry.grid(row=0, column=1, sticky="ew", pady=4)
+        pack_source_action = ttk.Frame(pack_form)
+        pack_source_action.grid(row=0, column=2, sticky="w", padx=(8, 0), pady=4)
+        ttk.Button(pack_source_action, text="选文件", command=self.choose_pack_file).pack(side="left")
+        ttk.Button(
+            pack_source_action,
+            text="选文件夹",
+            command=lambda: self.choose_directory(self.pack_source_dir_var),
+        ).pack(side="left", padx=(8, 0))
         self.add_path_row(
             pack_form,
             row=1,
@@ -1334,7 +1339,7 @@ class App:
 - 把照片结果、证件资料结果或其他交付目录打包发给客户
 
 操作步骤：
-1. 选择待打包文件夹。
+1. 选择待打包文件或文件夹。
 2. 选择输出目录。
 3. 如需客户指定密码，可勾选“手动设置密码”并输入密码。
 4. 点击“一键打包并加密”。
@@ -1342,7 +1347,7 @@ class App:
 6. 如需回查历史密码，可在下方输入文件夹名、压缩包名或密码查询。
 
 结果说明：
-- 压缩包默认使用原文件夹名称
+- 压缩包默认使用原文件或文件夹名称
 - 自动密码格式：当天日期 + 4位随机字符，例如 `260313A7KQ`
 - 每次打包都会把压缩包路径、密码和时间写入本地 `.pack_history.json`
 
@@ -1652,6 +1657,15 @@ class App:
         )
         if selected:
             self.word_source_var.set(selected)
+
+    def choose_pack_file(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.pack_source_dir_var.get()).parent)
+            if self.pack_source_dir_var.get().strip()
+            else str(Path.cwd())
+        )
+        if selected:
+            self.pack_source_dir_var.set(selected)
 
     def choose_match_target(self) -> None:
         selected = filedialog.askopenfilename(
@@ -2269,7 +2283,7 @@ class App:
 
         self.pack_result_var.set(
             "打包完成：\n"
-            f"源目录：{summary.source_dir}\n"
+            f"源文件：{summary.source_path}\n"
             f"压缩包：{summary.output_path}\n"
             f"文件数：{summary.file_count}\n"
             f"时间：{summary.created_at}\n"
@@ -2335,7 +2349,7 @@ class App:
         self.set_pack_query_result_text(
             (
                 f"最近匹配记录：\n"
-                f"文件夹：{latest.get('source_name', '')}\n"
+                f"来源：{latest.get('source_name', '')}\n"
                 f"压缩包：{latest.get('archive_name', '')}\n"
                 f"时间：{latest.get('created_at', '')}\n"
                 f"密码：{latest.get('password', '')}\n"
@@ -3820,12 +3834,12 @@ class App:
 
         source_value = self.pack_source_dir_var.get().strip()
         if not source_value:
-            messagebox.showerror("参数错误", "请选择待打包文件夹。")
+            messagebox.showerror("参数错误", "请选择待打包文件或文件夹。")
             return
 
         source_dir = Path(source_value)
-        if not source_dir.exists() or not source_dir.is_dir():
-            messagebox.showerror("参数错误", f"待打包文件夹不存在：{source_dir}")
+        if not source_dir.exists():
+            messagebox.showerror("参数错误", f"待打包文件或文件夹不存在：{source_dir}")
             return
 
         output_value = self.pack_output_dir_var.get().strip()

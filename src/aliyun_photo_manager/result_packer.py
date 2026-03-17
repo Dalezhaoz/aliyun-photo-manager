@@ -12,7 +12,7 @@ LogFn = Optional[Callable[[str], None]]
 
 @dataclass
 class PackSummary:
-    source_dir: Path
+    source_path: Path
     output_path: Path
     file_count: int
     password: str
@@ -37,9 +37,9 @@ def _load_pyzipper():
     return pyzipper
 
 
-def build_archive_name_and_password(source_dir: Path) -> tuple[str, str]:
-    folder_name = source_dir.name.strip() or "打包结果"
-    archive_name = f"{folder_name}.zip"
+def build_archive_name_and_password(source_path: Path) -> tuple[str, str]:
+    source_name = source_path.name.strip() or "打包结果"
+    archive_name = f"{source_name}.zip"
     random_suffix = "".join(
         secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4)
     )
@@ -66,8 +66,8 @@ def save_pack_history(summary: PackSummary) -> None:
         {
             "archive_name": summary.output_path.name,
             "output_path": str(summary.output_path),
-            "source_dir": str(summary.source_dir),
-            "source_name": summary.source_dir.name,
+            "source_path": str(summary.source_path),
+            "source_name": summary.source_path.name,
             "password": summary.password,
             "created_at": summary.created_at,
         },
@@ -88,6 +88,7 @@ def query_pack_history(keyword: str) -> list[dict]:
             [
                 str(item.get("archive_name", "")),
                 str(item.get("source_name", "")),
+                str(item.get("source_path", "")),
                 str(item.get("source_dir", "")),
                 str(item.get("output_path", "")),
                 str(item.get("password", "")),
@@ -105,8 +106,8 @@ def pack_encrypted_folder(
     password: Optional[str] = None,
     logger: LogFn = None,
 ) -> PackSummary:
-    if not source_dir.exists() or not source_dir.is_dir():
-        raise FileNotFoundError(f"待打包目录不存在：{source_dir}")
+    if not source_dir.exists():
+        raise FileNotFoundError(f"待打包文件或文件夹不存在：{source_dir}")
 
     pyzipper = _load_pyzipper()
     auto_archive_name, auto_password = build_archive_name_and_password(source_dir)
@@ -119,11 +120,21 @@ def pack_encrypted_folder(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / safe_name
 
-    files = [path for path in source_dir.rglob("*") if path.is_file()]
-    if not files:
-        raise ValueError("所选目录下没有可打包的文件。")
+    if source_dir.is_file():
+        files = [(source_dir, source_dir.name)]
+        _log(logger, f"开始打包文件：{source_dir}")
+    elif source_dir.is_dir():
+        files = [
+            (path, str(path.relative_to(source_dir)))
+            for path in source_dir.rglob("*")
+            if path.is_file()
+        ]
+        if not files:
+            raise ValueError("所选文件夹下没有可打包的文件。")
+        _log(logger, f"开始打包文件夹：{source_dir}")
+    else:
+        raise ValueError(f"不支持的打包对象：{source_dir}")
 
-    _log(logger, f"开始打包目录：{source_dir}")
     _log(logger, f"输出文件：{output_path}")
 
     with pyzipper.AESZipFile(
@@ -133,13 +144,12 @@ def pack_encrypted_folder(
         encryption=pyzipper.WZ_AES,
     ) as zip_file:
         zip_file.setpassword(final_password.encode("utf-8"))
-        for file_path in files:
-            relative_path = file_path.relative_to(source_dir)
-            zip_file.write(file_path, arcname=str(relative_path))
+        for file_path, archive_member in files:
+            zip_file.write(file_path, arcname=archive_member)
 
     _log(logger, f"打包完成，共写入 {len(files)} 个文件。")
     summary = PackSummary(
-        source_dir=source_dir,
+        source_path=source_dir,
         output_path=output_path,
         file_count=len(files),
         password=final_password,
