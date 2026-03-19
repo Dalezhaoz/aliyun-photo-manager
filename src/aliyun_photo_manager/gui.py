@@ -46,6 +46,12 @@ from .downloader import (
 )
 from .excel_classifier import generate_template
 from .result_packer import PackSummary, pack_encrypted_folder, query_pack_history
+from .update_sql_generator import (
+    UpdateSqlResult,
+    export_update_sql_template,
+    load_update_field_mappings,
+    render_update_sql,
+)
 from .word_to_html import WordExportResult, export_word_to_html
 
 
@@ -112,6 +118,12 @@ class App:
         self.match_extra_source_var = tk.StringVar()
         self.match_transfer_target_var = tk.StringVar()
         self.match_transfer_source_var = tk.StringVar()
+        self.update_sql_mapping_var = tk.StringVar()
+        self.update_sql_target_table_var = tk.StringVar()
+        self.update_sql_source_table_var = tk.StringVar()
+        self.update_sql_target_key_var = tk.StringVar()
+        self.update_sql_source_key_var = tk.StringVar()
+        self.update_sql_ignore_empty_var = tk.BooleanVar(value=True)
 
         self.status_var = tk.StringVar(value="就绪")
         self.progress_text_var = tk.StringVar(value="未开始")
@@ -134,6 +146,8 @@ class App:
         self.pack_result_var = tk.StringVar(value="结果打包信息会显示在这里")
         self.match_status_var = tk.StringVar(value="未开始匹配")
         self.match_result_var = tk.StringVar(value="数据匹配结果会显示在这里")
+        self.update_sql_status_var = tk.StringVar(value="未生成 SQL")
+        self.update_sql_result_var = tk.StringVar(value="更新 SQL 会显示在这里")
         self.folder_tree: Optional[ttk.Treeview] = None
         self.certificate_folder_tree: Optional[ttk.Treeview] = None
         self.folder_nodes: Dict[str, BrowserEntry] = {}
@@ -147,14 +161,18 @@ class App:
         self.last_word_export: Optional[WordExportResult] = None
         self.last_pack_summary: Optional[PackSummary] = None
         self.last_match_summary: Optional[DataMatchSummary] = None
+        self.last_update_sql_result: Optional[UpdateSqlResult] = None
         self.word_code_text = None
         self.word_preview_widget = None
         self.match_result_text = None
         self.pack_query_result_text = None
+        self.update_sql_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []
         self.match_target_headers: List[str] = []
         self.match_source_headers: List[str] = []
+        self.update_sql_target_headers: List[str] = []
+        self.update_sql_source_headers: List[str] = []
         self.match_extra_mappings: List[ColumnMapping] = []
         self.match_transfer_mappings: List[ColumnMapping] = []
         self.certificate_bucket_values: List[str] = []
@@ -184,6 +202,10 @@ class App:
             and Path(self.match_source_var.get().strip()).exists()
         ):
             self.load_match_headers()
+        if self.update_sql_mapping_var.get().strip() and Path(
+            self.update_sql_mapping_var.get().strip()
+        ).exists():
+            self.load_update_sql_headers()
         self.root.after(150, self.flush_logs)
 
     def build_ui(self) -> None:
@@ -1173,6 +1195,103 @@ class App:
         pack_query_scroll.grid(row=1, column=2, sticky="ns", pady=(8, 0))
         self.pack_query_result_text.configure(yscrollcommand=pack_query_scroll.set)
 
+        update_sql_frame = ttk.Frame(notebook, padding=14)
+        update_sql_frame.columnconfigure(0, weight=1)
+        update_sql_frame.rowconfigure(2, weight=1)
+        notebook.add(update_sql_frame, text="更新SQL生成")
+
+        update_sql_form = ttk.LabelFrame(update_sql_frame, text="字段映射更新", padding=12)
+        update_sql_form.grid(row=0, column=0, sticky="ew")
+        update_sql_form.columnconfigure(1, weight=1)
+        self.add_file_row(
+            update_sql_form,
+            row=0,
+            label="映射模板",
+            variable=self.update_sql_mapping_var,
+            command=self.choose_update_sql_mapping,
+            button_text="选择文件",
+        )
+        update_sql_template_action = ttk.Frame(update_sql_form)
+        update_sql_template_action.grid(row=1, column=1, sticky="w", pady=(0, 4))
+        ttk.Button(
+            update_sql_template_action,
+            text="加载字段",
+            command=self.load_update_sql_headers,
+        ).pack(side="left")
+        ttk.Button(
+            update_sql_template_action,
+            text="导出模板",
+            command=self.export_update_sql_template_file,
+        ).pack(side="left", padx=(8, 0))
+        self.add_entry_row(update_sql_form, 2, "考生表名称", self.update_sql_target_table_var)
+        self.add_entry_row(update_sql_form, 3, "临时表名称", self.update_sql_source_table_var)
+        ttk.Label(update_sql_form, text="考生表关联字段", width=16).grid(row=4, column=0, sticky="w", pady=4)
+        self.update_sql_target_key_combo = ttk.Combobox(
+            update_sql_form,
+            textvariable=self.update_sql_target_key_var,
+            values=self.update_sql_target_headers,
+            state="readonly",
+        )
+        self.update_sql_target_key_combo.grid(row=4, column=1, sticky="ew", pady=4)
+        ttk.Label(update_sql_form, text="临时表关联字段", width=16).grid(row=5, column=0, sticky="w", pady=4)
+        self.update_sql_source_key_combo = ttk.Combobox(
+            update_sql_form,
+            textvariable=self.update_sql_source_key_var,
+            values=self.update_sql_source_headers,
+            state="readonly",
+        )
+        self.update_sql_source_key_combo.grid(row=5, column=1, sticky="ew", pady=4)
+        self.add_tick_checkbutton(
+            update_sql_form,
+            row=6,
+            text="忽略空值，不覆盖正式表",
+            variable=self.update_sql_ignore_empty_var,
+        )
+
+        update_sql_action = ttk.Frame(update_sql_frame)
+        update_sql_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        self.update_sql_run_button = ttk.Button(
+            update_sql_action,
+            text="生成 SQL",
+            command=self.start_update_sql_render,
+        )
+        self.update_sql_run_button.pack(side="left")
+        self.update_sql_copy_button = ttk.Button(
+            update_sql_action,
+            text="复制 SQL",
+            command=self.copy_update_sql,
+            state="disabled",
+        )
+        self.update_sql_copy_button.pack(side="left", padx=(10, 0))
+        ttk.Label(update_sql_action, textvariable=self.update_sql_status_var).pack(side="right")
+
+        update_sql_result_frame = ttk.LabelFrame(update_sql_frame, text="生成结果", padding=12)
+        update_sql_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        update_sql_result_frame.columnconfigure(0, weight=1)
+        update_sql_result_frame.rowconfigure(0, weight=1)
+        self.update_sql_result_text = tk.Text(
+            update_sql_result_frame,
+            wrap="word",
+            height=10,
+            relief="solid",
+            bd=1,
+            bg="#FCFCFC",
+            fg="#222222",
+            insertbackground="#1677FF",
+            font=("Menlo", 11),
+            padx=10,
+            pady=10,
+        )
+        self.update_sql_result_text.grid(row=0, column=0, sticky="nsew")
+        self.update_sql_result_text.configure(state="disabled")
+        update_sql_result_scroll = ttk.Scrollbar(
+            update_sql_result_frame,
+            orient="vertical",
+            command=self.update_sql_result_text.yview,
+        )
+        update_sql_result_scroll.grid(row=0, column=1, sticky="ns")
+        self.update_sql_result_text.configure(yscrollcommand=update_sql_result_scroll.set)
+
         help_frame = ttk.Frame(notebook, padding=14)
         notebook.add(help_frame, text="使用说明")
         help_frame.columnconfigure(0, weight=1)
@@ -1225,6 +1344,7 @@ class App:
         self.write_log("也可以在右侧按文件夹名称筛选当前层级目录。")
         self.render_word_preview("")
         self.set_match_result_text(self.match_result_var.get())
+        self.set_update_sql_result_text(self.update_sql_result_var.get())
         self.update_pack_password_mode_ui()
         self.set_pack_query_result_text("可按文件夹名、压缩包名或密码查询最近打包记录。")
         self.update_photo_source_mode_ui()
@@ -1351,14 +1471,39 @@ class App:
 - 自动密码格式：当天日期 + 4位随机字符，例如 `260313A7KQ`
 - 每次打包都会把压缩包路径、密码和时间写入本地 `.pack_history.json`
 
-六、使用建议
+六、更新SQL生成
+
+适用场景：
+- 考生表先导入主要字段，补充信息先导入临时表
+- 通过字段映射模板生成 UPDATE SQL
+- 先备份两张表，再更新正式表
+
+操作步骤：
+1. 点击“导出模板”，生成“更新SQL字段映射模板.xlsx”。
+2. 在模板里填写：
+   - 考生表字段名
+   - 临时表字段名
+   - 是否更新
+3. 选择映射模板并点击“加载字段”。
+4. 输入考生表名称和临时表名称。
+5. 选择考生表关联字段和临时表关联字段。
+6. 如需避免空值覆盖正式表，可勾选“忽略空值，不覆盖正式表”。
+7. 点击“生成 SQL”，下方会显示完整脚本。
+8. 点击“复制 SQL”，再到数据库工具中执行。
+
+结果说明：
+- 生成的脚本会先备份考生表和临时表
+- 备份表名会自动附加时间戳
+- 只更新模板中“是否更新”为“是”的字段
+
+七、使用建议
 
 - 第一次处理大批量文件时，建议先用少量数据测试。
 - 使用模板前，建议先确认匹配列和分类列填写正确。
 - 处理完成后，可以直接点击“打开结果清单”核对结果。
 - 切换阿里云 / 腾讯云时，程序会分别记住两套配置。
 
-七、运行日志
+八、运行日志
 
 运行日志用于查看下载、筛选、分类和导出的详细过程。
 如果需要回看处理步骤，可以打开“运行日志”页查看。
@@ -1690,6 +1835,64 @@ class App:
             self.match_source_var.set(selected)
             self.load_match_headers()
 
+    def choose_update_sql_mapping(self) -> None:
+        selected = filedialog.askopenfilename(
+            initialdir=str(Path(self.update_sql_mapping_var.get()).parent)
+            if self.update_sql_mapping_var.get().strip()
+            else str(Path.cwd()),
+            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
+        )
+        if selected:
+            self.update_sql_mapping_var.set(selected)
+            self.load_update_sql_headers()
+
+    def export_update_sql_template_file(self) -> None:
+        selected = filedialog.asksaveasfilename(
+            initialdir=str(Path(self.update_sql_mapping_var.get()).parent)
+            if self.update_sql_mapping_var.get().strip()
+            else str(Path.cwd()),
+            defaultextension=".xlsx",
+            initialfile="更新SQL字段映射模板.xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")],
+        )
+        if not selected:
+            return
+        try:
+            summary = export_update_sql_template(Path(selected))
+        except Exception as exc:
+            messagebox.showerror("导出失败", str(exc))
+            return
+        self.update_sql_mapping_var.set(str(summary.output_path))
+        self.load_update_sql_headers()
+        self.update_sql_status_var.set("模板已导出")
+        self.write_log(f"已导出更新SQL字段映射模板：{summary.output_path}")
+
+    def load_update_sql_headers(self) -> None:
+        mapping_value = self.update_sql_mapping_var.get().strip()
+        self.update_sql_target_headers = []
+        self.update_sql_source_headers = []
+        self.update_sql_target_key_combo.configure(values=[])
+        self.update_sql_source_key_combo.configure(values=[])
+        if not mapping_value:
+            return
+        mapping_path = Path(mapping_value)
+        if not mapping_path.exists():
+            return
+        try:
+            _, target_values, source_values = load_update_field_mappings(mapping_path)
+        except Exception as exc:
+            messagebox.showerror("加载失败", str(exc))
+            return
+        self.update_sql_target_headers = target_values
+        self.update_sql_source_headers = source_values
+        self.update_sql_target_key_combo.configure(values=target_values)
+        self.update_sql_source_key_combo.configure(values=source_values)
+        if target_values and not self.update_sql_target_key_var.get().strip():
+            self.update_sql_target_key_var.set(target_values[0])
+        if source_values and not self.update_sql_source_key_var.get().strip():
+            self.update_sql_source_key_var.set(source_values[0])
+        self.update_sql_status_var.set("字段已加载")
+
     def fill_match_output_path(self) -> None:
         target_value = self.match_target_var.get().strip()
         if not target_value:
@@ -1992,6 +2195,20 @@ class App:
                     self.write_log(message.split("::", 1)[1])
                 elif isinstance(message, dict) and message.get("type") == "match_summary":
                     self.update_match_summary_ui(message.get("summary"))
+                elif isinstance(message, dict) and message.get("type") == "update_sql_result":
+                    result = message.get("result")
+                    self.last_update_sql_result = result
+                    if result is not None:
+                        self.update_sql_result_var.set(
+                            "SQL 生成完成：\n"
+                            f"映射模板：{result.mapping_path}\n"
+                            f"考生表：{result.target_table}\n"
+                            f"临时表：{result.source_table}\n"
+                            f"备份表：{result.backup_target_table} / {result.backup_source_table}\n\n"
+                            f"{result.sql_content}"
+                        )
+                        self.set_update_sql_result_text(self.update_sql_result_var.get())
+                        self.update_sql_copy_button.configure(state="normal")
                 elif isinstance(message, str) and message.startswith("__MATCH_FAILED__::"):
                     self.match_run_button.configure(state="normal")
                     self.match_status_var.set("失败")
@@ -1999,6 +2216,17 @@ class App:
                     self.match_open_button.configure(state="disabled")
                     self.set_match_result_text(self.match_result_var.get())
                     self.write_log(message.split("::", 1)[1])
+                elif message == "__UPDATE_SQL_DONE__":
+                    self.update_sql_run_button.configure(state="normal")
+                    self.update_sql_status_var.set("完成")
+                elif isinstance(message, str) and message.startswith("__UPDATE_SQL_FAILED__::"):
+                    error_text = message.split("::", 1)[1]
+                    self.update_sql_run_button.configure(state="normal")
+                    self.update_sql_copy_button.configure(state="disabled")
+                    self.update_sql_status_var.set("失败")
+                    self.update_sql_result_var.set(f"生成失败：\n{error_text}")
+                    self.set_update_sql_result_text(self.update_sql_result_var.get())
+                    self.write_log(error_text)
                 elif isinstance(message, str) and message.startswith("__WORD_EXPORT_FAILED__::"):
                     self.word_net_button.configure(state="normal")
                     self.word_java_button.configure(state="normal")
@@ -2323,6 +2551,14 @@ class App:
         self.match_result_text.insert("1.0", content)
         self.match_result_text.configure(state="disabled")
 
+    def set_update_sql_result_text(self, content: str) -> None:
+        if self.update_sql_result_text is None:
+            return
+        self.update_sql_result_text.configure(state="normal")
+        self.update_sql_result_text.delete("1.0", tk.END)
+        self.update_sql_result_text.insert("1.0", content)
+        self.update_sql_result_text.configure(state="disabled")
+
     def set_pack_query_result_text(self, content: str) -> None:
         if self.pack_query_result_text is None:
             return
@@ -2406,6 +2642,14 @@ class App:
         if self.last_match_summary is None:
             return
         self.open_local_file(self.last_match_summary.output_path, "未找到匹配结果文件")
+
+    def copy_update_sql(self) -> None:
+        if self.last_update_sql_result is None:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.last_update_sql_result.sql_content)
+        self.root.update()
+        self.update_sql_status_var.set("已复制 SQL")
 
     def open_local_file(self, file_path: Path, not_found_title: str) -> None:
         if not file_path.exists():
@@ -2692,6 +2936,14 @@ class App:
         self.match_target_key_var.set(settings.get("match_target_key", ""))
         self.match_source_key_var.set(settings.get("match_source_key", ""))
         self.match_output_var.set(settings.get("match_output", ""))
+        self.update_sql_mapping_var.set(settings.get("update_sql_mapping", ""))
+        self.update_sql_target_table_var.set(settings.get("update_sql_target_table", ""))
+        self.update_sql_source_table_var.set(settings.get("update_sql_source_table", ""))
+        self.update_sql_target_key_var.set(settings.get("update_sql_target_key", ""))
+        self.update_sql_source_key_var.set(settings.get("update_sql_source_key", ""))
+        self.update_sql_ignore_empty_var.set(
+            settings.get("update_sql_ignore_empty", self.update_sql_ignore_empty_var.get())
+        )
 
     def save_settings(self) -> None:
         settings = {
@@ -2736,6 +2988,12 @@ class App:
             "match_target_key": self.match_target_key_var.get().strip(),
             "match_source_key": self.match_source_key_var.get().strip(),
             "match_output": self.match_output_var.get().strip(),
+            "update_sql_mapping": self.update_sql_mapping_var.get().strip(),
+            "update_sql_target_table": self.update_sql_target_table_var.get().strip(),
+            "update_sql_source_table": self.update_sql_source_table_var.get().strip(),
+            "update_sql_target_key": self.update_sql_target_key_var.get().strip(),
+            "update_sql_source_key": self.update_sql_source_key_var.get().strip(),
+            "update_sql_ignore_empty": self.update_sql_ignore_empty_var.get(),
         }
         self.SETTINGS_FILE.write_text(
             json.dumps(settings, ensure_ascii=False, indent=2),
@@ -3940,6 +4198,54 @@ class App:
             else:
                 self.log_queue.put({"type": "match_summary", "summary": summary})
                 self.log_queue.put("__MATCH_DONE__")
+
+        self.worker = threading.Thread(target=runner, daemon=True)
+        self.worker.start()
+
+    def start_update_sql_render(self) -> None:
+        mapping_value = self.update_sql_mapping_var.get().strip()
+        if not mapping_value:
+            messagebox.showerror("参数错误", "请选择字段映射模板。")
+            return
+        mapping_path = Path(mapping_value)
+        if not mapping_path.exists():
+            messagebox.showerror("参数错误", f"未找到映射模板：{mapping_path}")
+            return
+        target_table = self.update_sql_target_table_var.get().strip()
+        source_table = self.update_sql_source_table_var.get().strip()
+        target_key = self.update_sql_target_key_var.get().strip()
+        source_key = self.update_sql_source_key_var.get().strip()
+        if not target_table or not source_table:
+            messagebox.showerror("参数错误", "请输入考生表名称和临时表名称。")
+            return
+        if not target_key or not source_key:
+            messagebox.showerror("参数错误", "请选择关联字段。")
+            return
+
+        self.save_settings()
+        self.update_sql_run_button.configure(state="disabled")
+        self.update_sql_copy_button.configure(state="disabled")
+        self.update_sql_status_var.set("生成中")
+        self.update_sql_result_var.set("正在生成 SQL，请稍候...")
+        self.set_update_sql_result_text(self.update_sql_result_var.get())
+        self.write_log(f"启动更新SQL生成任务：{target_table} <- {source_table}")
+
+        def runner() -> None:
+            try:
+                result = render_update_sql(
+                    mapping_path=mapping_path,
+                    target_table=target_table,
+                    source_table=source_table,
+                    target_key_column=target_key,
+                    source_key_column=source_key,
+                    ignore_empty=self.update_sql_ignore_empty_var.get(),
+                    logger=self.make_logger(),
+                )
+            except Exception as exc:
+                self.log_queue.put(f"__UPDATE_SQL_FAILED__::{type(exc).__name__}: {exc}")
+            else:
+                self.log_queue.put({"type": "update_sql_result", "result": result})
+                self.log_queue.put("__UPDATE_SQL_DONE__")
 
         self.worker = threading.Thread(target=runner, daemon=True)
         self.worker.start()
