@@ -56,6 +56,7 @@ from .exam_arranger import (
     list_headers as list_exam_headers,
     run_exam_arrangement,
 )
+from .project_stage_report import ProjectStageSummary, StageServerConfig
 from .word_to_html import WordExportResult, export_word_to_html
 from .ui import (
     add_entry_row as ui_add_entry_row,
@@ -139,6 +140,18 @@ from .ui import (
     open_local_file as ui_open_local_file,
     open_pack_file as ui_open_pack_file,
     copy_pack_password as ui_copy_pack_password,
+    build_status_tab,
+    clear_status_server_form as ui_clear_status_server_form,
+    delete_status_server as ui_delete_status_server,
+    dump_status_settings as ui_dump_status_settings,
+    export_status_result as ui_export_status_result,
+    load_status_settings as ui_load_status_settings,
+    on_status_server_select as ui_on_status_server_select,
+    refresh_status_server_tree as ui_refresh_status_server_tree,
+    save_status_server as ui_save_status_server,
+    start_status_query as ui_start_status_query,
+    test_status_server as ui_test_status_server,
+    update_status_summary_ui as ui_update_status_summary_ui,
     run_pack_history_query as ui_run_pack_history_query,
     set_pack_query_result_text as ui_set_pack_query_result_text,
     set_sql_result_text as ui_set_sql_result_text,
@@ -271,6 +284,15 @@ class App:
         self.exam_sort_mode_var = tk.StringVar(value="random")
         self.exam_rule_type_var = tk.StringVar(value="自定义")
         self.exam_rule_custom_var = tk.StringVar()
+        self.status_server_name_var = tk.StringVar()
+        self.status_server_host_var = tk.StringVar()
+        self.status_server_port_var = tk.StringVar(value="1433")
+        self.status_server_user_var = tk.StringVar()
+        self.status_server_password_var = tk.StringVar()
+        self.status_server_enabled_var = tk.BooleanVar(value=True)
+        self.status_filter_var = tk.StringVar(value="正在进行 + 即将开始")
+        self.status_stage_keyword_var = tk.StringVar()
+        self.status_project_keyword_var = tk.StringVar()
 
         self.status_var = tk.StringVar(value="就绪")
         self.progress_text_var = tk.StringVar(value="未开始")
@@ -297,6 +319,7 @@ class App:
         self.match_result_var = tk.StringVar(value="数据匹配结果会显示在这里")
         self.exam_status_var = tk.StringVar(value="未开始编排")
         self.exam_result_var = tk.StringVar(value="考场编排结果会显示在这里")
+        self.status_query_status_var = tk.StringVar(value="未开始查询")
         self.folder_tree: Optional[ttk.Treeview] = None
         self.certificate_folder_tree: Optional[ttk.Treeview] = None
         self.folder_nodes: Dict[str, BrowserEntry] = {}
@@ -313,6 +336,7 @@ class App:
         self.last_match_summary: Optional[DataMatchSummary] = None
         self.last_exam_summary: Optional[ExamArrangeSummary] = None
         self.last_exam_template_export: Optional[ExamTemplateExportSummary] = None
+        self.last_status_summary: Optional[ProjectStageSummary] = None
         self.word_code_text = None
         self.word_preview_widget = None
         self.match_result_text = None
@@ -328,6 +352,8 @@ class App:
         self.exam_rule_items: List[ExamRuleItem] = []
         self.exam_group_headers: List[str] = []
         self.exam_rule_base_types = ["自定义", "考点", "考场", "座号", "流水号"]
+        self.status_server_configs: List[StageServerConfig] = []
+        self.status_server_selected_index: Optional[int] = None
         self.certificate_bucket_values: List[str] = []
         self.certificate_folder_values: List[str] = [""]
         self.default_sash_pending = {"photo": True, "certificate": True}
@@ -515,6 +541,7 @@ class App:
         build_certificate_tab(self, notebook)
         build_template_tab(self, notebook)
         build_sql_tab(self, notebook)
+        build_status_tab(self, notebook)
         build_match_tab(self, notebook)
         build_exam_tab(self, notebook)
         build_pack_tab(self, notebook)
@@ -530,6 +557,8 @@ class App:
         self.update_certificate_mode_ui()
         self.update_certificate_source_mode_ui()
         self.update_pack_password_mode_ui()
+        self.refresh_status_server_tree()
+        self.update_status_summary_ui(None)
         self.set_match_result_text(self.match_result_var.get())
         self.set_sql_result_text("")
         self.load_exam_group_headers()
@@ -636,7 +665,30 @@ class App:
   - YYYY-MM-DD HH:MM[:SS]
   - YYYY/MM/DD HH:MM[:SS]
 
-五、数据匹配
+五、项目阶段汇总
+
+适用场景：
+- 一次查看多台 SQL Server 上所有报名项目阶段的状态
+- 自动跳过没有业务表的数据库
+- 汇总“正在进行”和“即将开始”的项目阶段
+
+操作步骤：
+1. 在“服务器配置”里填写服务器名称、地址、端口、用户名和密码。
+2. 点击“新增/更新”保存服务器。
+3. 可先点“测试连接”确认该服务器能连接。
+4. 根据需要设置：
+   - 状态筛选
+   - 阶段关键字
+   - 项目关键字
+5. 点击“开始查询”。
+6. 查询完成后，可点击“导出 Excel”。
+
+结果说明：
+- 会遍历每台服务器上的在线数据库
+- 只有同时存在 EI_ExamTreeDesc、web_SR_CodeItem、WEB_SR_SetTime 三张表的库才参与汇总
+- 结果会显示：服务器、数据库、项目名称、阶段名称、开始时间、结束时间、当前状态
+
+六、数据匹配
 
 适用场景：
 - 两个 Excel 表之间按考号、身份证号、姓名等字段补列
@@ -657,7 +709,7 @@ class App:
 - 会额外生成一个“匹配结果清单”sheet，方便核对未匹配和重复键
 - 如果第一行只是“附件1”这类说明，程序会尽量自动跳过并识别真正表头
 
-六、考场编排
+七、考场编排
 
 适用场景：
 - 根据标准模板给考生批量补充考点、考场、座号、考号
@@ -689,7 +741,7 @@ class App:
 - 如果岗位未找到归组，或科目组未找到编排片段，会在“编排备注”里标明原因
 - 同一科目组内默认随机打乱后再分配，也可以手动切换为按原顺序
 
-七、结果打包
+八、结果打包
 
 适用场景：
 - 把处理后的结果文件夹直接压缩成加密 zip
@@ -710,14 +762,14 @@ class App:
 - 打包记录会保存到本地 JSON 文件，方便后期查询密码
 - 可直接点击“复制密码”或“打开压缩包”
 
-八、使用建议
+九、使用建议
 
 - 第一次处理大批量文件时，建议先用少量数据测试。
 - 使用模板前，建议先确认匹配列和分类列填写正确。
 - 处理完成后，可以直接点击“打开结果清单”核对结果。
 - 切换阿里云 / 腾讯云时，程序会分别记住两套配置。
 
-九、运行日志
+十、运行日志
 
 运行日志用于查看下载、筛选、分类和导出的详细过程。
 如果需要回看处理步骤，可以打开“运行日志”页查看。
@@ -983,6 +1035,30 @@ class App:
     def choose_sql_template(self) -> None:
         ui_choose_sql_template(self)
 
+    def clear_status_server_form(self) -> None:
+        ui_clear_status_server_form(self)
+
+    def on_status_server_select(self, _event=None) -> None:
+        ui_on_status_server_select(self, _event)
+
+    def save_status_server(self) -> None:
+        ui_save_status_server(self)
+
+    def delete_status_server(self) -> None:
+        ui_delete_status_server(self)
+
+    def test_status_server(self) -> None:
+        ui_test_status_server(self)
+
+    def start_status_query(self) -> None:
+        ui_start_status_query(self)
+
+    def export_status_result(self) -> None:
+        ui_export_status_result(self)
+
+    def refresh_status_server_tree(self) -> None:
+        ui_refresh_status_server_tree(self)
+
     def choose_match_target(self) -> None:
         ui_choose_match_target(self)
 
@@ -1143,6 +1219,9 @@ class App:
     def update_exam_summary_ui(self, summary: Optional[ExamArrangeSummary]) -> None:
         ui_update_exam_summary_ui(self, summary)
 
+    def update_status_summary_ui(self, summary: Optional[ProjectStageSummary]) -> None:
+        ui_update_status_summary_ui(self, summary)
+
     def set_exam_result_text(self, content: str) -> None:
         ui_set_exam_result_text(self, content)
 
@@ -1265,9 +1344,26 @@ class App:
 
     def load_saved_settings(self) -> None:
         ui_load_saved_settings(self)
+        settings = {}
+        if self.SETTINGS_FILE.exists():
+            try:
+                settings = json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                settings = {}
+        ui_load_status_settings(self, settings)
 
     def save_settings(self) -> None:
         ui_save_settings(self)
+        settings = {}
+        if self.SETTINGS_FILE.exists():
+            try:
+                settings = json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                settings = {}
+        settings.update(ui_dump_status_settings(self))
+        self.SETTINGS_FILE.write_text(
+            json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     def update_certificate_mode_ui(self) -> None:
         ui_update_certificate_mode_ui(self)

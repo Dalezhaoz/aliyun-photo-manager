@@ -105,6 +105,20 @@ from .pack_actions import (
     update_pack_summary_ui,
 )
 from .pack_tab import build_pack_tab
+from .status_actions import (
+    clear_status_server_form,
+    delete_status_server,
+    dump_status_settings,
+    export_status_result,
+    load_status_settings,
+    on_status_server_select,
+    refresh_status_server_tree,
+    save_status_server,
+    start_status_query,
+    test_status_server,
+    update_status_summary_ui,
+)
+from .status_tab import build_status_tab
 from .sql_actions import choose_sql_template, copy_sql_text, set_sql_result_text, start_sql_render
 from .sql_tab import build_sql_tab
 from .photo_actions import (
@@ -212,6 +226,17 @@ __all__ = [
     "copy_pack_password",
     "open_pack_file",
     "start_pack_run",
+    "clear_status_server_form",
+    "delete_status_server",
+    "dump_status_settings",
+    "export_status_result",
+    "load_status_settings",
+    "on_status_server_select",
+    "refresh_status_server_tree",
+    "save_status_server",
+    "start_status_query",
+    "test_status_server",
+    "update_status_summary_ui",
     "build_exam_tab",
     "choose_exam_candidate_file",
     "choose_exam_group_file",
@@ -230,6 +255,7 @@ __all__ = [
     "open_exam_result_file",
     "start_exam_arrange_run",
     "build_pack_tab",
+    "build_status_tab",
     "build_sql_tab",
     "build_help_tab",
     "build_log_tab",
