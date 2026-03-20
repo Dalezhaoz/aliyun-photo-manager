@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import threading
+import sys
+import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -8,8 +12,10 @@ from tkinter import filedialog, messagebox
 from ..project_stage_report import (
     ProjectStageSummary,
     StageServerConfig,
+    dump_status_query_payload,
     export_project_stages,
     query_project_stages,
+    summary_from_dict,
 )
 
 
@@ -180,13 +186,33 @@ def start_status_query(app) -> None:
 
     def runner() -> None:
         try:
-            summary = query_project_stages(
-                servers=app.status_server_configs,
-                status_filter=app.status_filter_var.get().strip() or "正在进行 + 即将开始",
-                stage_keyword=app.status_stage_keyword_var.get().strip(),
-                project_keyword=app.status_project_keyword_var.get().strip(),
-                logger=app.make_logger(),
-            )
+            with tempfile.TemporaryDirectory(prefix="project_stage_") as temp_dir:
+                temp_path = Path(temp_dir)
+                input_path = temp_path / "query.json"
+                output_path = temp_path / "result.json"
+                dump_status_query_payload(
+                    servers=app.status_server_configs,
+                    status_filter=app.status_filter_var.get().strip() or "正在进行 + 即将开始",
+                    stage_keyword=app.status_stage_keyword_var.get().strip(),
+                    project_keyword=app.status_project_keyword_var.get().strip(),
+                    output_path=input_path,
+                )
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "aliyun_photo_manager.project_stage_runner",
+                        str(input_path),
+                        str(output_path),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    error_text = (result.stderr or result.stdout or "项目阶段汇总查询失败").strip()
+                    raise RuntimeError(error_text)
+                summary = summary_from_dict(json.loads(output_path.read_text(encoding="utf-8")))
         except Exception as exc:
             app.log_queue.put(f"__STATUS_FAILED__::{type(exc).__name__}: {exc}")
         else:

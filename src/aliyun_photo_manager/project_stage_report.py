@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
+import json
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional
 
@@ -40,6 +41,46 @@ class ProjectStageSummary:
     matched_databases: int
     ongoing_count: int
     upcoming_count: int
+
+
+def summary_to_dict(summary: ProjectStageSummary) -> dict:
+    return {
+        "records": [
+            {
+                **asdict(item),
+                "start_time": item.start_time.isoformat(),
+                "end_time": item.end_time.isoformat(),
+            }
+            for item in summary.records
+        ],
+        "enabled_servers": summary.enabled_servers,
+        "visited_databases": summary.visited_databases,
+        "matched_databases": summary.matched_databases,
+        "ongoing_count": summary.ongoing_count,
+        "upcoming_count": summary.upcoming_count,
+    }
+
+
+def summary_from_dict(data: dict) -> ProjectStageSummary:
+    return ProjectStageSummary(
+        records=[
+            ProjectStageRecord(
+                server_name=str(item.get("server_name", "")),
+                database_name=str(item.get("database_name", "")),
+                project_name=str(item.get("project_name", "")),
+                stage_name=str(item.get("stage_name", "")),
+                start_time=datetime.fromisoformat(str(item.get("start_time", ""))),
+                end_time=datetime.fromisoformat(str(item.get("end_time", ""))),
+                status=str(item.get("status", "")),
+            )
+            for item in data.get("records", [])
+        ],
+        enabled_servers=int(data.get("enabled_servers", 0)),
+        visited_databases=int(data.get("visited_databases", 0)),
+        matched_databases=int(data.get("matched_databases", 0)),
+        ongoing_count=int(data.get("ongoing_count", 0)),
+        upcoming_count=int(data.get("upcoming_count", 0)),
+    )
 
 
 def _log(logger: Logger, message: str) -> None:
@@ -327,4 +368,21 @@ def export_project_stages(summary: ProjectStageSummary, output_path: Path) -> Pa
     info_sheet.append(["正在进行", summary.ongoing_count])
     info_sheet.append(["即将开始", summary.upcoming_count])
     workbook.save(output_path)
+    return output_path
+
+
+def dump_status_query_payload(
+    servers: List[StageServerConfig],
+    status_filter: str,
+    stage_keyword: str,
+    project_keyword: str,
+    output_path: Path,
+) -> Path:
+    payload = {
+        "servers": [asdict(item) for item in servers],
+        "status_filter": status_filter,
+        "stage_keyword": stage_keyword,
+        "project_keyword": project_keyword,
+    }
+    output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return output_path
