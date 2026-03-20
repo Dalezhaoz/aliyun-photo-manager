@@ -197,11 +197,11 @@ def start_status_query(app) -> None:
                     project_keyword=app.status_project_keyword_var.get().strip(),
                     output_path=input_path,
                 )
+                runner_path = Path(__file__).resolve().parents[1] / "project_stage_runner.py"
                 result = subprocess.run(
                     [
                         sys.executable,
-                        "-m",
-                        "aliyun_photo_manager.project_stage_runner",
+                        str(runner_path),
                         str(input_path),
                         str(output_path),
                     ],

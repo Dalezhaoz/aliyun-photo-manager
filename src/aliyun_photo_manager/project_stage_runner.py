@@ -4,12 +4,19 @@ import json
 import sys
 from pathlib import Path
 
-from .project_stage_report import (
-    StageServerConfig,
-    dump_status_query_payload,
-    query_project_stages,
-    summary_to_dict,
-)
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from aliyun_photo_manager.project_stage_report import (  # type: ignore
+        StageServerConfig,
+        query_project_stages,
+        summary_to_dict,
+    )
+else:
+    from .project_stage_report import (
+        StageServerConfig,
+        query_project_stages,
+        summary_to_dict,
+    )
 
 
 def main() -> int:
