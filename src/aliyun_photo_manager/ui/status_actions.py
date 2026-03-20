@@ -210,8 +210,16 @@ def start_status_query(app) -> None:
                     check=False,
                 )
                 if result.returncode != 0:
-                    error_text = (result.stderr or result.stdout or "项目阶段汇总查询失败").strip()
-                    raise RuntimeError(error_text)
+                    stderr_text = (result.stderr or "").strip()
+                    stdout_text = (result.stdout or "").strip()
+                    details = [f"返回码: {result.returncode}"]
+                    if stderr_text:
+                        details.append(f"stderr: {stderr_text}")
+                    if stdout_text:
+                        details.append(f"stdout: {stdout_text}")
+                    if not stderr_text and not stdout_text:
+                        details.append("未捕获到标准输出，请检查本机 Python/ODBC 环境。")
+                    raise RuntimeError("项目阶段汇总查询失败\n" + "\n".join(details))
                 summary = summary_from_dict(json.loads(output_path.read_text(encoding="utf-8")))
         except Exception as exc:
             app.log_queue.put(f"__STATUS_FAILED__::{type(exc).__name__}: {exc}")
