@@ -12,6 +12,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="Interop.DeDll">
       <HintPath>..\..\Interop.DeDll.dll</HintPath>
       <Private>true</Private>
