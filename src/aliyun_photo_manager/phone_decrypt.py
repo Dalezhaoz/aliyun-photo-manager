@@ -156,7 +156,65 @@ def _probe_connection_string(connection_string: str) -> tuple[bool, str]:
     return False, error
 
 
+class _DbConnection:
+    """统一 pyodbc 和 pymssql 的接口差异。"""
+
+    def __init__(self, raw_conn, backend: str) -> None:
+        self._conn = raw_conn
+        self.backend = backend
+        # pymssql 用 %s，pyodbc 用 ?
+        self._placeholder = "%s" if backend == "pymssql" else "?"
+
+    def cursor(self):
+        return self._conn.cursor()
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+    def rewrite_sql(self, sql: str) -> str:
+        """将 SQL 中的 ? 占位符替换为当前后端使用的占位符。"""
+        if self._placeholder == "?":
+            return sql
+        return sql.replace("?", self._placeholder)
+
+    def set_fast_executemany(self, cursor) -> None:
+        """仅 pyodbc 支持 fast_executemany。"""
+        if self.backend == "pyodbc":
+            cursor.fast_executemany = True
+
+
+def _connect_pymssql(options: PhoneDecryptOptions, logger: LogFn = None) -> _DbConnection | None:
+    """使用 pymssql 连接 SQL Server（不依赖 ODBC 驱动）。"""
+    try:
+        import pymssql  # type: ignore
+    except ImportError:
+        return None
+    _log(logger, "尝试使用 pymssql 连接...")
+    try:
+        conn = pymssql.connect(
+            server=options.server,
+            port=options.port,
+            user=options.username,
+            password=options.password,
+            login_timeout=8,
+        )
+        _log(logger, "pymssql 连接成功。")
+        return _DbConnection(conn, "pymssql")
+    except Exception as exc:
+        _log(logger, f"pymssql 连接失败：{exc}")
+        return None
+
+
 def _connect_sql_server(options: PhoneDecryptOptions, logger: LogFn = None):
+    # 优先尝试 pymssql（不依赖 ODBC，兼容性好）
+    conn = _connect_pymssql(options, logger=logger)
+    if conn is not None:
+        return conn
+
+    # 回退到 pyodbc
     pyodbc = _load_pyodbc()
     errors: List[str] = []
     for driver in _ordered_drivers(pyodbc):
@@ -178,13 +236,15 @@ def _connect_sql_server(options: PhoneDecryptOptions, logger: LogFn = None):
                 continue
             _log(logger, f"  探测成功，正式连接...")
             try:
-                return pyodbc.connect(connection_string, timeout=8)
+                return _DbConnection(pyodbc.connect(connection_string, timeout=8), "pyodbc")
             except Exception as exc:  # pragma: no cover
                 detail = f"[{driver}] Encrypt={encrypt_option}: {exc}"
                 _log(logger, f"  连接失败：{exc}")
                 errors.append(detail)
     raise RuntimeError(
-        "连接 SQL Server 失败，所有驱动均不可用：\n" + "\n".join(errors)
+        "连接 SQL Server 失败，所有驱动均不可用。\n"
+        "建议执行 pip install pymssql 安装替代驱动。\n"
+        "详细错误：\n" + "\n".join(errors)
     )
 
 
@@ -529,7 +589,7 @@ def _iter_chunked(items: Sequence[str], size: int = 500) -> Iterable[Sequence[st
         yield items[index : index + size]
 
 
-def _fetch_candidate_rows(cursor, options: PhoneDecryptOptions) -> List[tuple[str, str, str, str]]:
+def _fetch_candidate_rows(cursor, connection: _DbConnection, options: PhoneDecryptOptions) -> List[tuple[str, str, str, str]]:
     signup_db = _escape_identifier(options.signup_database)
     phone_db = _escape_identifier(options.phone_database or options.signup_database)
     candidate_table = _escape_identifier(options.candidate_table)
@@ -550,9 +610,10 @@ def _fetch_candidate_rows(cursor, options: PhoneDecryptOptions) -> List[tuple[st
         cursor.execute(base_sql + " ORDER BY ks.[主键编号]")
         return [(str(row[0]), str(row[1]), str(row[2]), str(row[3])) for row in cursor.fetchall()]
 
+    placeholder = connection._placeholder
     rows: List[tuple[str, str, str, str]] = []
     for chunk in _iter_chunked(list(options.candidate_id_cards)):
-        placeholders = ",".join("?" for _ in chunk)
+        placeholders = ",".join(placeholder for _ in chunk)
         cursor.execute(
             base_sql + f" AND CAST(ks.[身份证号] AS VARCHAR(50)) IN ({placeholders}) ORDER BY ks.[主键编号]",
             list(chunk),
@@ -605,7 +666,7 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
     connection = _connect_sql_server(options, logger=logger)
     try:
         cursor = connection.cursor()
-        rows = _fetch_candidate_rows(cursor, options)
+        rows = _fetch_candidate_rows(cursor, connection, options)
         _log(logger, f"共读取到 {len(rows)} 条待处理记录。")
 
         records: List[PhoneDecryptRecord] = []
@@ -758,12 +819,12 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
         if updates:
             signup_db = _escape_identifier(options.signup_database)
             candidate_table = _escape_identifier(options.candidate_table)
-            update_sql = f"""
+            update_sql = connection.rewrite_sql(f"""
             UPDATE [{signup_db}].[dbo].[{candidate_table}]
             SET [备用3] = ?
             WHERE CAST([主键编号] AS VARCHAR(50)) = ?
-            """
-            cursor.fast_executemany = True
+            """)
+            connection.set_fast_executemany(cursor)
             cursor.executemany(update_sql, updates)
             connection.commit()
             _log(logger, f"已更新 {len(updates)} 条电话到备用3。")
