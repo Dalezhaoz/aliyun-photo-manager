@@ -334,11 +334,19 @@ def _run_helper_batch(requests: Sequence[_PhoneDecryptRequest], logger: LogFn = 
         output_path = temp_path / "output.json"
         input_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         _log(logger, f"调用 32 位电话解密 helper：{helper_path}")
-        result = subprocess.run(
-            [str(helper_path), str(input_path), str(output_path)],
+        run_kwargs: dict = dict(
             capture_output=True,
             text=True,
             check=False,
+            stdin=subprocess.DEVNULL,
+        )
+        if sys.platform == "win32":
+            run_kwargs["creationflags"] = getattr(
+                subprocess, "CREATE_NO_WINDOW", 0x08000000
+            )
+        result = subprocess.run(
+            [str(helper_path), str(input_path), str(output_path)],
+            **run_kwargs,
         )
         if result.returncode != 0:
             details = [f"helper 返回码: {result.returncode}"]
