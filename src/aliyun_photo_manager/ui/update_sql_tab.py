@@ -10,8 +10,36 @@ def build_update_sql_tab(app, notebook: ttk.Notebook) -> None:
     update_sql_frame.rowconfigure(2, weight=1)
     notebook.add(update_sql_frame, text="更新SQL生成")
 
-    update_sql_form = ttk.LabelFrame(update_sql_frame, text="字段映射更新", padding=12)
-    update_sql_form.grid(row=0, column=0, sticky="ew")
+    intro_frame = tk.Frame(
+        update_sql_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="更新SQL生成",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="通过字段映射模板生成标准 UPDATE SQL。适合正式表与临时表按关联字段批量补值，并可选择忽略空值覆盖。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+    update_sql_form = ttk.LabelFrame(update_sql_frame, text="1. 模板与关联设置", padding=14)
+    update_sql_form.grid(row=1, column=0, sticky="ew")
     update_sql_form.columnconfigure(1, weight=1)
     app.add_file_row(
         update_sql_form,
@@ -64,8 +92,8 @@ def build_update_sql_tab(app, notebook: ttk.Notebook) -> None:
         padx=(0, 0),
     )
 
-    update_sql_action = ttk.Frame(update_sql_frame)
-    update_sql_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+    update_sql_action = ttk.LabelFrame(update_sql_frame, text="2. 生成操作", padding=14)
+    update_sql_action.grid(row=2, column=0, sticky="ew", pady=(14, 0))
     app.update_sql_run_button = ttk.Button(
         update_sql_action,
         text="生成 SQL",
@@ -84,8 +112,8 @@ def build_update_sql_tab(app, notebook: ttk.Notebook) -> None:
     app.update_sql_copy_button.pack(side="left", padx=(10, 0))
     ttk.Label(update_sql_action, textvariable=app.update_sql_status_var).pack(side="right")
 
-    update_sql_result_frame = ttk.LabelFrame(update_sql_frame, text="生成结果", padding=12)
-    update_sql_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+    update_sql_result_frame = ttk.LabelFrame(update_sql_frame, text="3. 生成结果", padding=14)
+    update_sql_result_frame.grid(row=3, column=0, sticky="nsew", pady=(14, 0))
     update_sql_result_frame.columnconfigure(0, weight=1)
     update_sql_result_frame.rowconfigure(0, weight=1)
     app.update_sql_result_text = tk.Text(

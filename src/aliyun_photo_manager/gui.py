@@ -195,6 +195,8 @@ from .ui import (
     build_certificate_tab,
     build_exam_tab,
     build_help_tab,
+    build_home_tab,
+    build_home_settings_tab,
     build_id_card_tab,
     build_log_tab,
     build_match_tab,
@@ -232,6 +234,81 @@ from .ui import (
 
 class App:
     SETTINGS_FILE = Path(__file__).resolve().parents[2] / ".gui_settings.json"
+    HOME_SHORTCUT_DEFAULTS = [
+        "照片下载与分类",
+        "证件资料筛选",
+        "电话解密",
+        "更新SQL生成",
+        "身份证工具",
+        "运行日志",
+    ]
+    HOME_SHORTCUT_OPTIONS = [
+        "照片下载与分类",
+        "证件资料筛选",
+        "表样转换",
+        "结果打包",
+        "数据匹配",
+        "更新SQL生成",
+        "电话解密",
+        "身份证工具",
+        "使用说明",
+        "运行日志",
+        "考场编排",
+        "SQL 配置执行",
+        "项目阶段汇总",
+    ]
+    NAV_GROUPS = [
+        (
+            "开始使用",
+            [
+                ("首页", "首页"),
+                ("首页设置", "首页设置"),
+            ],
+        ),
+        (
+            "文件处理",
+            [
+                ("照片下载与分类", "照片下载与分类"),
+                ("证件资料筛选", "证件资料筛选"),
+                ("表样转换", "表样转换"),
+                ("结果打包", "结果打包"),
+            ],
+        ),
+        (
+            "数据处理",
+            [
+                ("数据匹配", "数据匹配"),
+            ],
+        ),
+        (
+            "数据库工具",
+            [
+                ("更新 SQL 生成", "更新SQL生成"),
+                ("电话解密", "电话解密"),
+            ],
+        ),
+        (
+            "查询与辅助",
+            [
+                ("身份证工具", "身份证工具"),
+            ],
+        ),
+        (
+            "实验功能",
+            [
+                ("考场编排", "考场编排"),
+                ("SQL 配置执行", "SQL 配置执行"),
+                ("项目阶段汇总", "项目阶段汇总"),
+            ],
+        ),
+        (
+            "说明与日志",
+            [
+                ("使用说明", "使用说明"),
+                ("运行日志", "运行日志"),
+            ],
+        ),
+    ]
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -242,6 +319,12 @@ class App:
         self.log_queue: "queue.Queue[object]" = queue.Queue()
         self.worker: Optional[threading.Thread] = None
         self.cancel_event = threading.Event()
+        self.tab_ids_by_text: Dict[str, str] = {}
+        self.nav_item_buttons: Dict[str, tk.Button] = {}
+        self.nav_group_frames: Dict[str, tk.Frame] = {}
+        self.nav_group_indicators: Dict[str, ttk.Label] = {}
+        self.nav_group_expanded: Dict[str, bool] = {}
+        self.nav_selected_text = ""
 
         self.prefix_var = tk.StringVar()
         self.photo_source_mode_var = tk.StringVar(value="oss")
@@ -327,6 +410,9 @@ class App:
         self.id_gender_var = tk.StringVar(value="男")
         self.id_generated_var = tk.StringVar()
         self.id_region_hint_var = tk.StringVar(value="北京市 东城区（110101）")
+        self.home_shortcut_vars = [
+            tk.StringVar(value=value) for value in self.HOME_SHORTCUT_DEFAULTS
+        ]
 
         self.exam_candidate_var = tk.StringVar()
         self.exam_group_var = tk.StringVar()
@@ -460,73 +546,96 @@ class App:
             style.theme_use("clam")
         except tk.TclError:
             pass
+        self.root.configure(background="#EAF0F6")
 
-        style.configure("TFrame", background="#F6F4EF")
-        style.configure("TLabelframe", background="#F6F4EF", borderwidth=1, relief="solid", padding=10)
+        base_font = ("Microsoft YaHei UI", 11)
+        bold_font = ("Microsoft YaHei UI", 11, "bold")
+        title_font = ("Microsoft YaHei UI", 18, "bold")
+
+        style.configure("TFrame", background="#F4F7FB")
+        style.configure(
+            "TLabelframe",
+            background="#F4F7FB",
+            borderwidth=1,
+            relief="solid",
+            padding=12,
+            bordercolor="#D7E1EC",
+            lightcolor="#D7E1EC",
+            darkcolor="#D7E1EC",
+        )
         style.configure(
             "TLabelframe.Label",
-            background="#F6F4EF",
-            foreground="#2F2A24",
-            font=("Helvetica", 11, "bold"),
+            background="#F4F7FB",
+            foreground="#162033",
+            font=bold_font,
         )
         style.configure(
             "TLabel",
-            background="#F6F4EF",
-            foreground="#2F2A24",
+            background="#F4F7FB",
+            foreground="#243247",
             padding=1,
-            font=("Helvetica", 11),
+            font=base_font,
         )
         style.configure(
             "TRadiobutton",
-            background="#F6F4EF",
-            foreground="#2F2A24",
-            font=("Helvetica", 11),
+            background="#F4F7FB",
+            foreground="#243247",
+            font=base_font,
         )
         style.configure(
             "TCheckbutton",
-            background="#F6F4EF",
-            foreground="#2F2A24",
-            font=("Helvetica", 11),
+            background="#F4F7FB",
+            foreground="#243247",
+            font=base_font,
         )
         style.configure(
             "TButton",
-            padding=(14, 9),
-            font=("Helvetica", 11),
+            padding=(14, 10),
+            font=base_font,
             relief="flat",
+            borderwidth=0,
+            background="#FFFFFF",
+            foreground="#1F3147",
         )
         style.map(
             "TButton",
             background=[
-                ("disabled", "#E2DED3"),
-                ("pressed", "#CFC8B8"),
-                ("active", "#E7E0D0"),
-                ("!disabled", "#DDD6C5"),
+                ("disabled", "#E9EEF4"),
+                ("pressed", "#D8E5F6"),
+                ("active", "#EDF4FC"),
+                ("!disabled", "#FFFFFF"),
             ],
             foreground=[
-                ("disabled", "#9B9588"),
-                ("!disabled", "#2F2A24"),
+                ("disabled", "#90A0B3"),
+                ("!disabled", "#1F3147"),
             ],
         )
         style.configure(
             "Accent.TButton",
-            padding=(14, 9),
-            font=("Helvetica", 11, "bold"),
+            padding=(14, 10),
+            font=bold_font,
             foreground="#FFFFFF",
-            background="#5D8C63",
+            background="#3E7BFA",
         )
         style.configure(
             "TCombobox",
-            padding=(8, 6),
+            padding=(10, 7),
             arrowsize=16,
-            font=("Helvetica", 11),
+            font=base_font,
+            fieldbackground="#FFFFFF",
+            background="#FFFFFF",
+            foreground="#162033",
+            bordercolor="#D7E1EC",
+            lightcolor="#D7E1EC",
+            darkcolor="#D7E1EC",
         )
         style.map(
             "Accent.TButton",
             background=[
-                ("disabled", "#A5B9A8"),
-                ("pressed", "#4E7753"),
-                ("active", "#6A9971"),
-                ("!disabled", "#5D8C63"),
+                ("disabled", "#A9C4FB"),
+                ("pressed", "#2D66D4"),
+                ("active", "#5A92FA"),
+                ("!disabled", "#3E7BFA"),
             ],
             foreground=[
                 ("disabled", "#F2F2F2"),
@@ -535,79 +644,96 @@ class App:
         )
         style.configure(
             "TNotebook",
-            background="#F6F4EF",
+            background="#F4F7FB",
             borderwidth=0,
             tabmargins=(0, 0, 0, 0),
         )
+        style.layout("Navless.TNotebook.Tab", [])
         style.configure(
             "TNotebook.Tab",
             padding=(20, 12),
-            background="#DDD6C5",
-            foreground="#6C6659",
-            font=("Helvetica", 12, "bold"),
+            background="#EEF3F8",
+            foreground="#5A6D83",
+            font=("Microsoft YaHei UI", 12, "bold"),
         )
         style.map(
             "TNotebook.Tab",
             background=[
-                ("selected", "#F7F4EC"),
-                ("active", "#EAE3D3"),
-                ("!selected", "#DDD6C5"),
+                ("selected", "#FFFFFF"),
+                ("active", "#F6F9FD"),
+                ("!selected", "#EEF3F8"),
             ],
             foreground=[
-                ("selected", "#1F1B17"),
-                ("!selected", "#6C6659"),
+                ("selected", "#1A2940"),
+                ("!selected", "#5A6D83"),
             ],
             expand=[("selected", (0, 2, 0, 0))],
         )
         style.configure(
             "Treeview",
-            rowheight=30,
-            fieldbackground="#FCFBF7",
-            background="#FCFBF7",
-            foreground="#2F2A24",
-            bordercolor="#D8D1C3",
-            lightcolor="#D8D1C3",
-            darkcolor="#D8D1C3",
-            font=("Helvetica", 11),
+            rowheight=32,
+            fieldbackground="#FFFFFF",
+            background="#FFFFFF",
+            foreground="#243247",
+            bordercolor="#D7E1EC",
+            lightcolor="#D7E1EC",
+            darkcolor="#D7E1EC",
+            font=base_font,
         )
         style.configure(
             "Treeview.Heading",
             padding=(8, 8),
-            font=("Helvetica", 11, "bold"),
-            background="#E7E0D0",
-            foreground="#2F2A24",
+            font=bold_font,
+            background="#EEF3F8",
+            foreground="#1F3147",
         )
         style.map(
             "Treeview",
-            background=[("selected", "#DCE8D7")],
-            foreground=[("selected", "#1F1B17")],
+            background=[("selected", "#DCE8FF")],
+            foreground=[("selected", "#162033")],
         )
         style.configure(
             "Horizontal.TProgressbar",
-            troughcolor="#E7E0D0",
-            bordercolor="#D8D1C3",
-            background="#5D8C63",
-            lightcolor="#5D8C63",
-            darkcolor="#5D8C63",
+            troughcolor="#E7EEF8",
+            bordercolor="#D7E1EC",
+            background="#3E7BFA",
+            lightcolor="#3E7BFA",
+            darkcolor="#3E7BFA",
         )
 
-        container = ttk.Frame(self.root, padding=16)
+        container = ttk.Frame(self.root, padding=18)
         container.pack(fill="both", expand=True)
-        container.columnconfigure(0, weight=1)
+        container.columnconfigure(0, weight=0)
+        container.columnconfigure(1, weight=1)
         container.rowconfigure(1, weight=1)
 
-        title = ttk.Label(
-            container,
-            text=f"报名系统工具箱 v{__version__}",
-            font=("Helvetica", 18, "bold"),
-        )
-        title.grid(row=0, column=0, sticky="w")
+        title_bar = tk.Frame(container, bg="#F4F7FB")
+        title_bar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 14))
+        title_bar.grid_columnconfigure(0, weight=1)
+        tk.Label(
+            title_bar,
+            text=f"报名系统工具箱  v{__version__}",
+            font=title_font,
+            bg="#F4F7FB",
+            fg="#162033",
+        ).grid(row=0, column=0, sticky="w")
+        sidebar = tk.Frame(container, bg="#F8FBFF", width=252, highlightthickness=1, highlightbackground="#D7E1EC")
+        sidebar.grid(row=1, column=0, sticky="nsw", pady=(12, 0))
+        sidebar.grid_propagate(False)
+        self.sidebar = sidebar
 
-        notebook = ttk.Notebook(container)
-        notebook.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        content_frame = ttk.Frame(container)
+        content_frame.grid(row=1, column=1, sticky="nsew", pady=(12, 0), padx=(12, 0))
+        content_frame.columnconfigure(0, weight=1)
+        content_frame.rowconfigure(0, weight=1)
+
+        notebook = ttk.Notebook(content_frame, style="Navless.TNotebook")
+        notebook.grid(row=0, column=0, sticky="nsew")
         self.notebook = notebook
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
+        build_home_tab(self, notebook)
+        build_home_settings_tab(self, notebook)
         build_photo_tab(self, notebook)
         build_certificate_tab(self, notebook)
         build_template_tab(self, notebook)
@@ -621,6 +747,11 @@ class App:
         build_pack_tab(self, notebook)
         build_help_tab(self, notebook)
         build_log_tab(self, notebook)
+        self.tab_ids_by_text = {
+            self.notebook.tab(tab_id, "text"): tab_id for tab_id in self.notebook.tabs()
+        }
+        self.build_sidebar_navigation(sidebar)
+        self.show_tab_by_text("首页")
 
         self.write_log("桌面工具已启动。")
         self.write_log("建议先勾选“仅预览”，确认下载与分类路径后再正式执行。")
@@ -907,10 +1038,130 @@ class App:
     def on_tab_changed(self, _event=None) -> None:
         current_tab = self.notebook.select()
         tab_text = self.notebook.tab(current_tab, "text")
+        self.sync_sidebar_selection(tab_text)
         if tab_text == "照片下载与分类":
             self.reset_split_default("photo")
         elif tab_text == "证件资料筛选":
             self.reset_split_default("certificate")
+
+    def build_sidebar_navigation(self, parent: tk.Frame) -> None:
+        header = tk.Label(
+            parent,
+            text="功能导航",
+            bg="#F8FBFF",
+            fg="#162033",
+            font=("Microsoft YaHei UI", 13, "bold"),
+            anchor="w",
+            padx=16,
+            pady=16,
+        )
+        header.pack(fill="x")
+
+        for group_name, items in self.NAV_GROUPS:
+            self.nav_group_expanded[group_name] = True
+            group_frame = tk.Frame(parent, bg="#F8FBFF")
+            group_frame.pack(fill="x", pady=(0, 6))
+
+            header_row = tk.Frame(group_frame, bg="#F8FBFF")
+            header_row.pack(fill="x")
+            button = tk.Button(
+                header_row,
+                text=group_name,
+                command=lambda name=group_name: self.toggle_nav_group(name),
+                anchor="w",
+                relief="flat",
+                bd=0,
+                bg="#F8FBFF",
+                activebackground="#EEF5FF",
+                fg="#213349",
+                activeforeground="#213349",
+                font=("Microsoft YaHei UI", 12, "bold"),
+                padx=16,
+                pady=10,
+                cursor="hand2",
+            )
+            button.pack(side="left", fill="x", expand=True)
+            indicator = ttk.Label(
+                header_row,
+                text="▾",
+                background="#F8FBFF",
+                foreground="#678099",
+                font=("Microsoft YaHei UI", 12, "bold"),
+            )
+            indicator.pack(side="right", padx=(0, 16))
+            self.nav_group_indicators[group_name] = indicator
+
+            items_frame = tk.Frame(group_frame, bg="#F8FBFF")
+            items_frame.pack(fill="x")
+            self.nav_group_frames[group_name] = items_frame
+            for label, tab_text in items:
+                item_button = tk.Button(
+                    items_frame,
+                    text=label,
+                    command=lambda name=tab_text: self.show_tab_by_text(name),
+                    anchor="w",
+                    relief="flat",
+                    bd=0,
+                    bg="#F8FBFF",
+                    activebackground="#EAF2FF",
+                    fg="#40546A",
+                    activeforeground="#162033",
+                    font=("Microsoft YaHei UI", 11),
+                    padx=32,
+                    pady=9,
+                    cursor="hand2",
+                )
+                item_button.pack(fill="x")
+                self.nav_item_buttons[tab_text] = item_button
+
+        for group_name in list(self.nav_group_frames.keys())[1:]:
+            self.toggle_nav_group(group_name, expanded=False)
+
+    def toggle_nav_group(self, group_name: str, expanded: Optional[bool] = None) -> None:
+        current = self.nav_group_expanded.get(group_name, True)
+        target = (not current) if expanded is None else expanded
+        self.nav_group_expanded[group_name] = target
+        frame = self.nav_group_frames[group_name]
+        indicator = self.nav_group_indicators[group_name]
+        if target:
+            frame.pack(fill="x")
+            indicator.configure(text="▾")
+        else:
+            frame.pack_forget()
+            indicator.configure(text="▸")
+
+    def show_tab_by_text(self, tab_text: str) -> None:
+        tab_id = self.tab_ids_by_text.get(tab_text)
+        if not tab_id:
+            return
+        self.notebook.select(tab_id)
+        self.sync_sidebar_selection(tab_text)
+
+    def open_home_shortcut(self, index: int) -> None:
+        if index < 0 or index >= len(self.home_shortcut_vars):
+            return
+        tab_text = self.home_shortcut_vars[index].get().strip()
+        if tab_text:
+            self.show_tab_by_text(tab_text)
+
+    def save_home_shortcuts(self) -> None:
+        self.save_settings()
+        self.write_log("首页快捷入口配置已保存。")
+
+    def sync_sidebar_selection(self, tab_text: str) -> None:
+        self.nav_selected_text = tab_text
+        for text, button in self.nav_item_buttons.items():
+            is_selected = text == tab_text
+            button.configure(
+                bg="#DCE8FF" if is_selected else "#F8FBFF",
+                fg="#173052" if is_selected else "#40546A",
+                font=("Microsoft YaHei UI", 11, "bold") if is_selected else ("Microsoft YaHei UI", 11),
+            )
+        for group_name, items in self.NAV_GROUPS:
+            if any(item_tab_text == tab_text for _, item_tab_text in items):
+                if not self.nav_group_expanded.get(group_name, True):
+                    self.toggle_nav_group(group_name, expanded=True)
+                break
 
     def reset_split_default(self, pane_name: str) -> None:
         if not self.default_sash_pending.get(pane_name):

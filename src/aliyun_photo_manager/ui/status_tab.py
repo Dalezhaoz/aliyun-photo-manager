@@ -10,8 +10,36 @@ def build_status_tab(app, notebook: ttk.Notebook) -> None:
     status_frame.rowconfigure(2, weight=1)
     notebook.add(status_frame, text="项目阶段汇总")
 
-    server_frame = ttk.LabelFrame(status_frame, text="服务器配置", padding=12)
-    server_frame.grid(row=0, column=0, sticky="ew")
+    intro_frame = tk.Frame(
+        status_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="项目阶段汇总",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="一次查看多台 SQL Server 上报名项目的阶段状态，支持服务器配置管理、关键字筛选和结果导出。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+    server_frame = ttk.LabelFrame(status_frame, text="1. 服务器配置", padding=14)
+    server_frame.grid(row=1, column=0, sticky="ew")
     server_frame.columnconfigure(0, weight=1)
     server_frame.columnconfigure(1, weight=1)
 
@@ -69,8 +97,8 @@ def build_status_tab(app, notebook: ttk.Notebook) -> None:
         side="left", padx=(8, 0)
     )
 
-    filter_frame = ttk.LabelFrame(status_frame, text="查询条件", padding=12)
-    filter_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+    filter_frame = ttk.LabelFrame(status_frame, text="2. 查询条件", padding=14)
+    filter_frame.grid(row=2, column=0, sticky="ew", pady=(14, 0))
     filter_frame.columnconfigure(1, weight=1)
     filter_frame.columnconfigure(3, weight=1)
     ttk.Label(filter_frame, text="状态").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=4)
@@ -111,8 +139,8 @@ def build_status_tab(app, notebook: ttk.Notebook) -> None:
     )
     app.status_export_button.pack(side="left", padx=(8, 0))
 
-    result_frame = ttk.LabelFrame(status_frame, text="查询结果", padding=12)
-    result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+    result_frame = ttk.LabelFrame(status_frame, text="3. 查询结果", padding=14)
+    result_frame.grid(row=3, column=0, sticky="nsew", pady=(14, 0))
     result_frame.columnconfigure(0, weight=1)
     result_frame.rowconfigure(1, weight=1)
     ttk.Label(result_frame, textvariable=app.status_query_status_var).grid(row=0, column=0, sticky="w")

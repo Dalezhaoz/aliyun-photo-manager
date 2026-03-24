@@ -10,8 +10,36 @@ def build_match_tab(app, notebook: ttk.Notebook) -> None:
     match_frame.rowconfigure(3, weight=1)
     notebook.add(match_frame, text="数据匹配")
 
-    match_form = ttk.LabelFrame(match_frame, text="表格匹配补列", padding=12)
-    match_form.grid(row=0, column=0, sticky="ew")
+    intro_frame = tk.Frame(
+        match_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="数据匹配",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="适合按共同主键把来源表字段补回目标表，也支持附加匹配列降低重名或重复键误匹配。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+    match_form = ttk.LabelFrame(match_frame, text="1. 文件与主键设置", padding=14)
+    match_form.grid(row=1, column=0, sticky="ew")
     match_form.columnconfigure(1, weight=1)
     app.add_file_row(
         match_form,
@@ -54,11 +82,11 @@ def build_match_tab(app, notebook: ttk.Notebook) -> None:
     )
 
     match_lists = ttk.Frame(match_frame)
-    match_lists.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+    match_lists.grid(row=2, column=0, sticky="ew", pady=(14, 0))
     match_lists.columnconfigure(0, weight=1)
     match_lists.columnconfigure(1, weight=1)
 
-    extra_frame = ttk.LabelFrame(match_lists, text="附加匹配列映射", padding=12)
+    extra_frame = ttk.LabelFrame(match_lists, text="2. 附加匹配列映射", padding=14)
     extra_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
     extra_frame.columnconfigure(0, weight=1)
     ttk.Label(extra_frame, text="目标表列").grid(row=0, column=0, sticky="w")
@@ -96,7 +124,7 @@ def build_match_tab(app, notebook: ttk.Notebook) -> None:
         row=2, column=2, padx=(8, 0), sticky="n"
     )
 
-    transfer_frame = ttk.LabelFrame(match_lists, text="补充列映射", padding=12)
+    transfer_frame = ttk.LabelFrame(match_lists, text="3. 补充列映射", padding=14)
     transfer_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
     transfer_frame.columnconfigure(0, weight=1)
     ttk.Label(transfer_frame, text="结果列名").grid(row=0, column=0, sticky="w")
@@ -132,8 +160,8 @@ def build_match_tab(app, notebook: ttk.Notebook) -> None:
         row=2, column=2, padx=(8, 0), sticky="n"
     )
 
-    match_action = ttk.Frame(match_frame)
-    match_action.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+    match_action = ttk.LabelFrame(match_frame, text="4. 执行", padding=14)
+    match_action.grid(row=3, column=0, sticky="ew", pady=(14, 0))
     app.match_run_button = ttk.Button(
         match_action,
         text="开始匹配",
@@ -152,8 +180,8 @@ def build_match_tab(app, notebook: ttk.Notebook) -> None:
     app.match_open_button.pack(side="left", padx=(10, 0))
     ttk.Label(match_action, textvariable=app.match_status_var).pack(side="right")
 
-    match_result_frame = ttk.LabelFrame(match_frame, text="匹配结果", padding=12)
-    match_result_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+    match_result_frame = ttk.LabelFrame(match_frame, text="5. 匹配结果", padding=14)
+    match_result_frame.grid(row=4, column=0, sticky="nsew", pady=(14, 0))
     match_result_frame.columnconfigure(0, weight=1)
     match_result_frame.rowconfigure(0, weight=1)
     app.match_result_text = tk.Text(

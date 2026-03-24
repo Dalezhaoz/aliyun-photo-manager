@@ -287,6 +287,11 @@ def load_saved_settings(app) -> None:
     app.id_birth_month_var.set(settings.get("id_birth_month", app.id_birth_month_var.get()))
     app.id_birth_day_var.set(settings.get("id_birth_day", app.id_birth_day_var.get()))
     app.id_gender_var.set(settings.get("id_gender", app.id_gender_var.get()))
+    shortcut_values = settings.get("home_shortcuts", [])
+    if isinstance(shortcut_values, list):
+        for index, var in enumerate(app.home_shortcut_vars):
+            if index < len(shortcut_values) and str(shortcut_values[index]).strip():
+                var.set(str(shortcut_values[index]).strip())
     app.load_exam_group_headers()
 
 
@@ -371,6 +376,7 @@ def save_settings(app) -> None:
         "id_birth_month": app.id_birth_month_var.get().strip(),
         "id_birth_day": app.id_birth_day_var.get().strip(),
         "id_gender": app.id_gender_var.get().strip(),
+        "home_shortcuts": [var.get().strip() for var in app.home_shortcut_vars],
     }
     app.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
     app.write_log(f"配置已保存到 {app.SETTINGS_FILE}")

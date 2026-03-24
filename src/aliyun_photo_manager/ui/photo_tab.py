@@ -9,11 +9,39 @@ from .common import TOOLBAR_BUTTON_WIDTH
 def build_photo_tab(app, notebook: ttk.Notebook) -> None:
     settings_frame = ttk.Frame(notebook, padding=14)
     settings_frame.columnconfigure(0, weight=1)
-    settings_frame.rowconfigure(0, weight=1)
+    settings_frame.rowconfigure(1, weight=1)
     notebook.add(settings_frame, text="照片下载与分类")
 
+    intro_frame = tk.Frame(
+        settings_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="照片下载与分类",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="适合从云端或本地目录批量下载照片，生成模板后再按分类字段整理结果。建议先预览，再正式执行。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
     photo_paned = ttk.Panedwindow(settings_frame, orient="horizontal")
-    photo_paned.grid(row=0, column=0, sticky="nsew")
+    photo_paned.grid(row=1, column=0, sticky="nsew")
     app.photo_paned = photo_paned
 
     left_outer = ttk.Frame(photo_paned)
@@ -48,7 +76,7 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
     photo_paned.add(left_outer, weight=1)
     photo_paned.add(app.photo_right_frame, weight=1)
 
-    photo_source_frame = ttk.LabelFrame(left_frame, text="数据来源", padding=12)
+    photo_source_frame = ttk.LabelFrame(left_frame, text="1. 数据来源", padding=14)
     photo_source_frame.grid(row=0, column=0, sticky="ew")
     ttk.Radiobutton(
         photo_source_frame,
@@ -65,13 +93,13 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
         command=app.update_photo_source_mode_ui,
     ).pack(side="left", padx=(10, 0))
 
-    paths_frame = ttk.LabelFrame(left_frame, text="目录", padding=12)
+    paths_frame = ttk.LabelFrame(left_frame, text="2. 输出目录", padding=14)
     paths_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
     paths_frame.columnconfigure(1, weight=1)
     app.add_path_row(paths_frame, row=0, label="下载目录", variable=app.download_dir_var)
     app.add_path_row(paths_frame, row=1, label="分类目录", variable=app.sorted_dir_var)
 
-    photo_template_frame = ttk.LabelFrame(left_frame, text="名单下载", padding=12)
+    photo_template_frame = ttk.LabelFrame(left_frame, text="3. 名单筛选", padding=14)
     photo_template_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
     photo_template_frame.columnconfigure(1, weight=1)
     app.add_file_row(
@@ -102,7 +130,7 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
         variable=app.photo_filter_by_template_var,
     ).grid(row=2, column=1, sticky="w", pady=(6, 0))
 
-    app.photo_oss_frame = ttk.LabelFrame(left_frame, text="OSS 配置", padding=12)
+    app.photo_oss_frame = ttk.LabelFrame(left_frame, text="4. 云存储配置", padding=14)
     app.photo_oss_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
     app.photo_oss_frame.columnconfigure(1, weight=1)
     app.add_cloud_type_row(app.photo_oss_frame, 0)
@@ -118,7 +146,7 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
     app.add_bucket_picker(app.photo_oss_frame, 4)
     app.add_prefix_picker(app.photo_oss_frame, 5)
 
-    options_frame = ttk.LabelFrame(left_frame, text="选项", padding=12)
+    options_frame = ttk.LabelFrame(left_frame, text="5. 执行选项", padding=14)
     options_frame.grid(row=4, column=0, sticky="ew", pady=(12, 0))
     for row, (label, variable) in enumerate(
         [
@@ -134,7 +162,7 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
             pady=4,
         )
 
-    action_frame = ttk.Frame(left_frame)
+    action_frame = ttk.LabelFrame(left_frame, text="6. 执行操作", padding=14)
     action_frame.grid(row=5, column=0, sticky="ew", pady=(14, 0))
     app.run_button = ttk.Button(
         action_frame,
@@ -162,7 +190,7 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
     app.cancel_button.pack(side="left", padx=(10, 0))
     ttk.Label(action_frame, textvariable=app.status_var).pack(side="right")
 
-    progress_frame = ttk.LabelFrame(left_frame, text="执行进度", padding=12)
+    progress_frame = ttk.LabelFrame(left_frame, text="7. 执行进度", padding=14)
     progress_frame.grid(row=6, column=0, sticky="ew", pady=(12, 0))
     progress_frame.columnconfigure(0, weight=1)
     app.progress_bar = ttk.Progressbar(
@@ -176,7 +204,7 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
         row=1, column=0, sticky="w", pady=(8, 0)
     )
 
-    summary_frame = ttk.LabelFrame(left_frame, text="任务结果", padding=12)
+    summary_frame = ttk.LabelFrame(left_frame, text="8. 结果与输出", padding=14)
     summary_frame.grid(row=7, column=0, sticky="ew", pady=(12, 0))
     summary_frame.columnconfigure(0, weight=1)
     ttk.Label(
@@ -202,13 +230,20 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
     )
     app.open_photo_report_button.grid(row=2, column=0, sticky="w", pady=(8, 0))
 
-    app.photo_browser_frame = ttk.LabelFrame(app.photo_right_frame, text="Bucket 文件夹浏览", padding=12)
+    app.photo_browser_frame = ttk.LabelFrame(app.photo_right_frame, text="Bucket 文件夹浏览", padding=14)
     app.photo_browser_frame.grid(row=0, column=0, sticky="nsew")
     app.photo_browser_frame.columnconfigure(0, weight=1)
     app.photo_browser_frame.rowconfigure(2, weight=1)
 
+    ttk.Label(
+        app.photo_browser_frame,
+        text="从右侧浏览当前 bucket 层级，双击进入子目录，确认目标前缀后再执行下载。",
+        justify="left",
+        wraplength=480,
+    ).grid(row=0, column=0, sticky="w", pady=(0, 10))
+
     browser_toolbar = ttk.Frame(app.photo_browser_frame)
-    browser_toolbar.grid(row=0, column=0, sticky="ew")
+    browser_toolbar.grid(row=1, column=0, sticky="ew")
     browser_toolbar.columnconfigure(3, weight=1)
     ttk.Button(
         browser_toolbar,
@@ -230,7 +265,7 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
     ).grid(row=0, column=2, sticky="w", padx=(8, 0))
 
     search_toolbar = ttk.Frame(app.photo_browser_frame)
-    search_toolbar.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+    search_toolbar.grid(row=2, column=0, sticky="ew", pady=(10, 0))
     search_toolbar.columnconfigure(0, weight=1)
     search_entry = app.create_text_entry(search_toolbar, textvariable=app.search_keyword_var)
     search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
@@ -242,7 +277,7 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
     ).grid(row=0, column=1, sticky="e")
 
     tree_frame = ttk.Frame(app.photo_browser_frame)
-    tree_frame.grid(row=2, column=0, sticky="nsew", pady=(10, 10))
+    tree_frame.grid(row=3, column=0, sticky="nsew", pady=(10, 10))
     tree_frame.columnconfigure(0, weight=1)
     tree_frame.rowconfigure(0, weight=1)
     app.folder_tree = ttk.Treeview(
@@ -263,10 +298,10 @@ def build_photo_tab(app, notebook: ttk.Notebook) -> None:
     tree_scrollbar.grid(row=0, column=1, sticky="ns")
     app.folder_tree.configure(yscrollcommand=tree_scrollbar.set)
 
-    ttk.Label(app.photo_browser_frame, textvariable=app.folder_status_var).grid(row=3, column=0, sticky="w")
+    ttk.Label(app.photo_browser_frame, textvariable=app.folder_status_var).grid(row=4, column=0, sticky="w")
     ttk.Label(app.photo_browser_frame, textvariable=app.selected_folder_info_var).grid(
-        row=4, column=0, sticky="w", pady=(6, 0)
+        row=5, column=0, sticky="w", pady=(6, 0)
     )
     ttk.Label(app.photo_browser_frame, textvariable=app.search_status_var).grid(
-        row=5, column=0, sticky="w", pady=(10, 0)
+        row=6, column=0, sticky="w", pady=(10, 0)
     )

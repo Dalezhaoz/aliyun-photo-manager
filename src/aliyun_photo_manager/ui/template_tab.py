@@ -10,8 +10,36 @@ def build_template_tab(app, notebook: ttk.Notebook) -> None:
     word_frame.rowconfigure(2, weight=1)
     notebook.add(word_frame, text="表样转换")
 
-    word_form = ttk.LabelFrame(word_frame, text="模板转换", padding=12)
-    word_form.grid(row=0, column=0, sticky="ew")
+    intro_frame = tk.Frame(
+        word_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="表样转换",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="把 Word / Excel 表样模板转换成 HTML，支持 Net 版和 Java 版占位符，并可直接查看代码与预览效果。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+    word_form = ttk.LabelFrame(word_frame, text="1. 模板文件", padding=14)
+    word_form.grid(row=1, column=0, sticky="ew")
     word_form.columnconfigure(1, weight=1)
     app.add_file_row(
         word_form,
@@ -22,8 +50,8 @@ def build_template_tab(app, notebook: ttk.Notebook) -> None:
         button_text="选择文件",
     )
 
-    word_action = ttk.Frame(word_frame)
-    word_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+    word_action = ttk.LabelFrame(word_frame, text="2. 导出操作", padding=14)
+    word_action.grid(row=2, column=0, sticky="ew", pady=(14, 0))
     app.word_net_button = ttk.Button(
         word_action,
         text="Net版导出",
@@ -58,8 +86,8 @@ def build_template_tab(app, notebook: ttk.Notebook) -> None:
     app.word_open_browser_button.pack(side="left", padx=(10, 0))
     ttk.Label(word_action, textvariable=app.word_status_var).pack(side="right")
 
-    word_result_frame = ttk.LabelFrame(word_frame, text="导出结果", padding=12)
-    word_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+    word_result_frame = ttk.LabelFrame(word_frame, text="3. 导出结果", padding=14)
+    word_result_frame.grid(row=3, column=0, sticky="nsew", pady=(14, 0))
     word_result_frame.columnconfigure(0, weight=1)
     word_result_frame.rowconfigure(1, weight=1)
     ttk.Label(

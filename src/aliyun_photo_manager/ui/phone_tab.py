@@ -7,11 +7,44 @@ from tkinter import ttk
 def build_phone_tab(app, notebook: ttk.Notebook) -> None:
     phone_frame = ttk.Frame(notebook, padding=14)
     phone_frame.columnconfigure(0, weight=1)
-    phone_frame.rowconfigure(3, weight=1)
+    phone_frame.rowconfigure(2, weight=1)
     notebook.add(phone_frame, text="电话解密")
 
-    db_frame = ttk.LabelFrame(phone_frame, text="数据库连接", padding=12)
-    db_frame.grid(row=0, column=0, sticky="ew")
+    intro_frame = tk.Frame(
+        phone_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="电话解密",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="按主键编号关联 `web_info.info1`，通过 helper 解密后回写到考生表 `备用3`。支持全部解密或按名单部分解密。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+    top_grid = ttk.Frame(phone_frame)
+    top_grid.grid(row=1, column=0, sticky="ew")
+    top_grid.columnconfigure(0, weight=1)
+    top_grid.columnconfigure(1, weight=1)
+
+    db_frame = ttk.LabelFrame(top_grid, text="1. 数据库连接", padding=14)
+    db_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
     db_frame.columnconfigure(1, weight=1)
     db_frame.columnconfigure(3, weight=1)
     ttk.Label(db_frame, text="服务器", width=16).grid(row=0, column=0, sticky="w", pady=6, padx=(0, 10))
@@ -39,8 +72,8 @@ def build_phone_tab(app, notebook: ttk.Notebook) -> None:
     )
     app.phone_info_database_entry.grid(row=2, column=3, sticky="ew", pady=6)
 
-    options_frame = ttk.LabelFrame(phone_frame, text="解密参数", padding=12)
-    options_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+    options_frame = ttk.LabelFrame(top_grid, text="2. 解密参数", padding=14)
+    options_frame.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
     options_frame.columnconfigure(1, weight=1)
     options_frame.columnconfigure(3, weight=1)
 
@@ -79,8 +112,8 @@ def build_phone_tab(app, notebook: ttk.Notebook) -> None:
     )
     app.phone_filter_button.grid(row=3, column=3, sticky="w", pady=6)
 
-    action_frame = ttk.Frame(phone_frame)
-    action_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+    action_frame = ttk.LabelFrame(phone_frame, text="3. 执行", padding=14)
+    action_frame.grid(row=2, column=0, sticky="ew", pady=(14, 0))
     app.phone_run_button = ttk.Button(
         action_frame,
         text="开始解密",
@@ -91,8 +124,8 @@ def build_phone_tab(app, notebook: ttk.Notebook) -> None:
     app.phone_run_button.pack(side="left")
     ttk.Label(action_frame, textvariable=app.phone_status_var).pack(side="right")
 
-    result_frame = ttk.LabelFrame(phone_frame, text="解密结果", padding=12)
-    result_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+    result_frame = ttk.LabelFrame(phone_frame, text="4. 解密结果", padding=14)
+    result_frame.grid(row=3, column=0, sticky="nsew", pady=(14, 0))
     result_frame.columnconfigure(0, weight=1)
     result_frame.rowconfigure(0, weight=1)
     app.phone_result_text = tk.Text(

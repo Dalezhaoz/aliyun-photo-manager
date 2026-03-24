@@ -10,8 +10,36 @@ def build_pack_tab(app, notebook: ttk.Notebook) -> None:
     pack_frame.rowconfigure(2, weight=1)
     notebook.add(pack_frame, text="结果打包")
 
-    pack_form = ttk.LabelFrame(pack_frame, text="压缩加密", padding=12)
-    pack_form.grid(row=0, column=0, sticky="ew")
+    intro_frame = tk.Frame(
+        pack_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="结果打包",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="对任意结果文件或文件夹进行压缩与 AES 加密，并保存打包记录，便于后续查回密码。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+    pack_form = ttk.LabelFrame(pack_frame, text="1. 压缩加密", padding=14)
+    pack_form.grid(row=1, column=0, sticky="ew")
     pack_form.columnconfigure(1, weight=1)
     ttk.Label(pack_form, text="待打包对象", width=16).grid(row=0, column=0, sticky="w", pady=6)
     app.pack_source_entry = app.create_text_entry(pack_form, textvariable=app.pack_source_dir_var)
@@ -31,8 +59,8 @@ def build_pack_tab(app, notebook: ttk.Notebook) -> None:
     ).grid(row=2, column=1, sticky="w", pady=(4, 0))
     app.pack_password_entry = app.add_entry_row(pack_form, 3, "打包密码", app.pack_password_var)
 
-    pack_action = ttk.Frame(pack_frame)
-    pack_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+    pack_action = ttk.LabelFrame(pack_frame, text="2. 执行操作", padding=14)
+    pack_action.grid(row=2, column=0, sticky="ew", pady=(14, 0))
     app.pack_run_button = ttk.Button(
         pack_action,
         text="一键打包并加密",
@@ -59,8 +87,8 @@ def build_pack_tab(app, notebook: ttk.Notebook) -> None:
     app.pack_open_button.pack(side="left", padx=(10, 0))
     ttk.Label(pack_action, textvariable=app.pack_status_var).pack(side="right")
 
-    pack_result_frame = ttk.LabelFrame(pack_frame, text="打包结果", padding=12)
-    pack_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+    pack_result_frame = ttk.LabelFrame(pack_frame, text="3. 打包结果", padding=14)
+    pack_result_frame.grid(row=3, column=0, sticky="nsew", pady=(14, 0))
     pack_result_frame.columnconfigure(0, weight=1)
     ttk.Label(
         pack_result_frame,
@@ -69,8 +97,8 @@ def build_pack_tab(app, notebook: ttk.Notebook) -> None:
         wraplength=860,
     ).grid(row=0, column=0, sticky="w")
 
-    pack_query_frame = ttk.LabelFrame(pack_frame, text="密码查询", padding=12)
-    pack_query_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+    pack_query_frame = ttk.LabelFrame(pack_frame, text="4. 密码查询", padding=14)
+    pack_query_frame.grid(row=4, column=0, sticky="ew", pady=(14, 0))
     pack_query_frame.columnconfigure(0, weight=1)
     pack_query_frame.rowconfigure(1, weight=1)
     app.pack_query_entry = tk.Entry(

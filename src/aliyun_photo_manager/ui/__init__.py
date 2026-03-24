@@ -70,6 +70,8 @@ from .exam_actions import (
     update_exam_summary_ui,
 )
 from .help_tab import build_help_tab
+from .home_tab import build_home_tab
+from .home_settings_tab import build_home_settings_tab
 from .id_card_actions import (
     copy_generated_id_card,
     run_id_card_generate,
@@ -300,6 +302,8 @@ __all__ = [
     "build_sql_tab",
     "build_update_sql_tab",
     "build_help_tab",
+    "build_home_tab",
+    "build_home_settings_tab",
     "build_id_card_tab",
     "run_id_card_validate",
     "run_id_card_generate",

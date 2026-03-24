@@ -9,7 +9,7 @@ FORM_LABEL_WIDTH = 16
 PICKER_BUTTON_WIDTH = 12
 TOOLBAR_BUTTON_WIDTH = 14
 ROW_PADY = 6
-ENTRY_FONT = ("Helvetica", 11)
+ENTRY_FONT = ("Microsoft YaHei UI", 11)
 
 
 def create_text_entry(parent, textvariable: tk.StringVar, show: str = ""):
@@ -17,17 +17,17 @@ def create_text_entry(parent, textvariable: tk.StringVar, show: str = ""):
         parent,
         textvariable=textvariable,
         show=show,
-        relief="solid",
-        bd=1,
+        relief="flat",
+        bd=0,
         highlightthickness=1,
-        bg="#FCFCFC",
-        fg="#222222",
-        disabledbackground="#F2F2F2",
-        disabledforeground="#8A8A8A",
-        readonlybackground="#F7F7F7",
-        highlightbackground="#CFCFCF",
-        highlightcolor="#4A90E2",
-        insertbackground="#1677FF",
+        bg="#FFFFFF",
+        fg="#162033",
+        disabledbackground="#EEF3F8",
+        disabledforeground="#8A97A8",
+        readonlybackground="#F7FAFD",
+        highlightbackground="#D7E1EC",
+        highlightcolor="#4F8FE8",
+        insertbackground="#2F6FE4",
         insertwidth=2,
         insertborderwidth=0,
         cursor="xterm",

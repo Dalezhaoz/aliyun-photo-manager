@@ -10,8 +10,36 @@ def build_exam_tab(app, notebook: ttk.Notebook) -> None:
     exam_frame.rowconfigure(3, weight=1)
     notebook.add(exam_frame, text="考场编排")
 
-    exam_files_frame = ttk.LabelFrame(exam_frame, text="输入文件", padding=12)
-    exam_files_frame.grid(row=0, column=0, sticky="ew")
+    intro_frame = tk.Frame(
+        exam_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="考场编排",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="按考生明细、岗位归组和编排片段生成考号、考点、考场与座号。支持自定义考号规则和导出标准模板。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+    exam_files_frame = ttk.LabelFrame(exam_frame, text="1. 输入文件", padding=14)
+    exam_files_frame.grid(row=1, column=0, sticky="ew")
     exam_files_frame.columnconfigure(1, weight=1)
     app.add_file_row(
         exam_files_frame,
@@ -42,8 +70,8 @@ def build_exam_tab(app, notebook: ttk.Notebook) -> None:
         row=3, column=2, padx=(8, 0), pady=4
     )
 
-    exam_rule_frame = ttk.LabelFrame(exam_frame, text="考号规则", padding=12)
-    exam_rule_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+    exam_rule_frame = ttk.LabelFrame(exam_frame, text="2. 考号规则", padding=14)
+    exam_rule_frame.grid(row=2, column=0, sticky="ew", pady=(14, 0))
     exam_rule_frame.columnconfigure(0, weight=1)
     exam_digits_row = ttk.Frame(exam_rule_frame)
     exam_digits_row.grid(row=0, column=0, sticky="ew")
@@ -108,8 +136,8 @@ def build_exam_tab(app, notebook: ttk.Notebook) -> None:
     ttk.Button(exam_rule_actions, text="下移", command=app.move_exam_rule_down).pack(side="left", padx=(8, 0))
     ttk.Button(exam_rule_actions, text="删除所选", command=app.remove_exam_rule_item).pack(side="left", padx=(8, 0))
 
-    exam_action = ttk.Frame(exam_frame)
-    exam_action.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+    exam_action = ttk.LabelFrame(exam_frame, text="3. 执行操作", padding=14)
+    exam_action.grid(row=3, column=0, sticky="ew", pady=(14, 0))
     app.exam_template_button = ttk.Button(
         exam_action,
         text="导出标准模板",
@@ -135,8 +163,8 @@ def build_exam_tab(app, notebook: ttk.Notebook) -> None:
     app.exam_open_button.pack(side="left", padx=(10, 0))
     ttk.Label(exam_action, textvariable=app.exam_status_var).pack(side="right")
 
-    exam_result_frame = ttk.LabelFrame(exam_frame, text="编排结果", padding=12)
-    exam_result_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+    exam_result_frame = ttk.LabelFrame(exam_frame, text="4. 编排结果", padding=14)
+    exam_result_frame.grid(row=4, column=0, sticky="nsew", pady=(14, 0))
     exam_result_frame.columnconfigure(0, weight=1)
     exam_result_frame.rowconfigure(0, weight=1)
     app.exam_result_text = tk.Text(

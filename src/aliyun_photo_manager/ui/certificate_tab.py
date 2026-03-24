@@ -9,11 +9,39 @@ from .common import TOOLBAR_BUTTON_WIDTH
 def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
     certificate_frame = ttk.Frame(notebook, padding=14)
     certificate_frame.columnconfigure(0, weight=1)
-    certificate_frame.rowconfigure(0, weight=1)
+    certificate_frame.rowconfigure(1, weight=1)
     notebook.add(certificate_frame, text="证件资料筛选")
 
+    intro_frame = tk.Frame(
+        certificate_frame,
+        bg="#EAF2FF",
+        highlightthickness=1,
+        highlightbackground="#D1DDF3",
+        padx=18,
+        pady=16,
+    )
+    intro_frame.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+    intro_frame.grid_columnconfigure(0, weight=1)
+    tk.Label(
+        intro_frame,
+        text="证件资料筛选",
+        bg="#EAF2FF",
+        fg="#162033",
+        font=("Microsoft YaHei UI", 18, "bold"),
+        anchor="w",
+    ).grid(row=0, column=0, sticky="w")
+    tk.Label(
+        intro_frame,
+        text="按模板筛选证件材料，支持云端下载、本地目录处理、关键词筛选和按分类目录导出。",
+        bg="#EAF2FF",
+        fg="#5A6D83",
+        font=("Microsoft YaHei UI", 10),
+        anchor="w",
+        justify="left",
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
     cert_paned = ttk.Panedwindow(certificate_frame, orient="horizontal")
-    cert_paned.grid(row=0, column=0, sticky="nsew")
+    cert_paned.grid(row=1, column=0, sticky="nsew")
     app.certificate_paned = cert_paned
 
     cert_left_outer = ttk.Frame(cert_paned)
@@ -50,7 +78,7 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
     cert_paned.add(cert_left_outer, weight=1)
     cert_paned.add(cert_right_frame, weight=1)
 
-    cert_source_frame = ttk.LabelFrame(cert_left_frame, text="数据来源", padding=12)
+    cert_source_frame = ttk.LabelFrame(cert_left_frame, text="1. 数据来源", padding=14)
     cert_source_frame.grid(row=0, column=0, sticky="ew")
     ttk.Radiobutton(
         cert_source_frame,
@@ -67,7 +95,7 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
         command=app.update_certificate_source_mode_ui,
     ).pack(side="left", padx=(10, 0))
 
-    app.certificate_oss_frame = ttk.LabelFrame(cert_left_frame, text="证件资料 OSS 配置", padding=12)
+    app.certificate_oss_frame = ttk.LabelFrame(cert_left_frame, text="2. 云存储配置", padding=14)
     app.certificate_oss_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
     app.certificate_oss_frame.columnconfigure(1, weight=1)
     app.add_cloud_type_row(app.certificate_oss_frame, 0)
@@ -77,7 +105,7 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
     app.add_certificate_bucket_picker(app.certificate_oss_frame, 4)
     app.add_certificate_prefix_picker(app.certificate_oss_frame, 5)
 
-    cert_form = ttk.LabelFrame(cert_left_frame, text="筛选设置", padding=12)
+    cert_form = ttk.LabelFrame(cert_left_frame, text="3. 筛选设置", padding=14)
     cert_form.grid(row=2, column=0, sticky="ew", pady=(12, 0))
     cert_form.columnconfigure(1, weight=1)
     app.add_file_row(
@@ -155,7 +183,7 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
         variable=app.certificate_dry_run_var,
     ).grid(row=8, column=1, sticky="w", pady=(6, 0))
 
-    cert_action = ttk.Frame(cert_left_frame)
+    cert_action = ttk.LabelFrame(cert_left_frame, text="4. 执行操作", padding=14)
     cert_action.grid(row=3, column=0, sticky="ew", pady=(12, 0))
     app.certificate_download_button = ttk.Button(
         cert_action,
@@ -183,7 +211,7 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
     app.certificate_cancel_button.pack(side="left", padx=(10, 0))
     ttk.Label(cert_action, textvariable=app.certificate_status_var).pack(side="right")
 
-    cert_progress_frame = ttk.LabelFrame(cert_left_frame, text="筛选进度", padding=12)
+    cert_progress_frame = ttk.LabelFrame(cert_left_frame, text="5. 筛选进度", padding=14)
     cert_progress_frame.grid(row=4, column=0, sticky="ew", pady=(12, 0))
     cert_progress_frame.columnconfigure(0, weight=1)
     app.certificate_progress_bar = ttk.Progressbar(
@@ -197,7 +225,7 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
         row=1, column=0, sticky="w", pady=(8, 0)
     )
 
-    cert_summary_frame = ttk.LabelFrame(cert_left_frame, text="筛选结果", padding=12)
+    cert_summary_frame = ttk.LabelFrame(cert_left_frame, text="6. 筛选结果", padding=14)
     cert_summary_frame.grid(row=5, column=0, sticky="ew", pady=(12, 0))
     cert_summary_frame.columnconfigure(0, weight=1)
     ttk.Label(
@@ -215,13 +243,20 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
     )
     app.open_certificate_report_button.grid(row=1, column=0, sticky="w", pady=(8, 0))
 
-    app.certificate_browser_frame = ttk.LabelFrame(cert_right_frame, text="Bucket 文件夹浏览", padding=12)
+    app.certificate_browser_frame = ttk.LabelFrame(cert_right_frame, text="Bucket 文件夹浏览", padding=14)
     app.certificate_browser_frame.grid(row=0, column=0, sticky="nsew")
     app.certificate_browser_frame.columnconfigure(0, weight=1)
     app.certificate_browser_frame.rowconfigure(2, weight=1)
 
+    ttk.Label(
+        app.certificate_browser_frame,
+        text="从右侧浏览证件资料目录，定位到正确前缀后再下载或筛选。",
+        justify="left",
+        wraplength=480,
+    ).grid(row=0, column=0, sticky="w", pady=(0, 10))
+
     cert_browser_toolbar = ttk.Frame(app.certificate_browser_frame)
-    cert_browser_toolbar.grid(row=0, column=0, sticky="ew")
+    cert_browser_toolbar.grid(row=1, column=0, sticky="ew")
     cert_browser_toolbar.columnconfigure(2, weight=1)
     ttk.Button(
         cert_browser_toolbar,
@@ -237,7 +272,7 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
     ).grid(row=0, column=1, sticky="w", padx=(8, 0))
 
     cert_search_toolbar = ttk.Frame(app.certificate_browser_frame)
-    cert_search_toolbar.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+    cert_search_toolbar.grid(row=2, column=0, sticky="ew", pady=(10, 0))
     cert_search_toolbar.columnconfigure(0, weight=1)
     app.certificate_search_keyword_var = tk.StringVar()
     cert_search_entry = app.create_text_entry(
@@ -253,7 +288,7 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
     ).grid(row=0, column=1, sticky="e")
 
     cert_tree_frame = ttk.Frame(app.certificate_browser_frame)
-    cert_tree_frame.grid(row=2, column=0, sticky="nsew", pady=(10, 10))
+    cert_tree_frame.grid(row=3, column=0, sticky="nsew", pady=(10, 10))
     cert_tree_frame.columnconfigure(0, weight=1)
     cert_tree_frame.rowconfigure(0, weight=1)
     app.certificate_folder_tree = ttk.Treeview(
@@ -279,12 +314,12 @@ def build_certificate_tab(app, notebook: ttk.Notebook) -> None:
     app.certificate_folder_tree.configure(yscrollcommand=cert_tree_scrollbar.set)
 
     ttk.Label(app.certificate_browser_frame, textvariable=app.certificate_folder_status_var).grid(
-        row=3, column=0, sticky="w"
+        row=4, column=0, sticky="w"
     )
     ttk.Label(
         app.certificate_browser_frame,
         textvariable=app.certificate_selected_folder_info_var,
-    ).grid(row=4, column=0, sticky="w", pady=(6, 0))
+    ).grid(row=5, column=0, sticky="w", pady=(6, 0))
     ttk.Label(app.certificate_browser_frame, textvariable=app.certificate_search_status_var).grid(
-        row=5, column=0, sticky="w", pady=(10, 0)
+        row=6, column=0, sticky="w", pady=(10, 0)
     )
