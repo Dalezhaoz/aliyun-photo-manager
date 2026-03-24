@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -273,6 +274,10 @@ def _candidate_helper_paths() -> List[Path]:
     if env_path:
         candidates.append(Path(env_path))
 
+    meipass = getattr(sys, "_MEIPASS", "")
+    if meipass:
+        candidates.append(Path(meipass) / "PhoneDecryptHelper.exe")
+
     project_root = Path(__file__).resolve().parents[2]
     candidates.extend(
         [
@@ -280,6 +285,7 @@ def _candidate_helper_paths() -> List[Path]:
             project_root / "tools" / "PhoneDecryptHelper" / "bin" / "Release" / "net8.0-windows" / "win-x86" / "publish" / "PhoneDecryptHelper.exe",
             project_root / "tools" / "PhoneDecryptHelper" / "bin" / "Release" / "net8.0-windows" / "PhoneDecryptHelper.exe",
             Path.cwd() / "PhoneDecryptHelper.exe",
+            Path(sys.executable).resolve().parent / "PhoneDecryptHelper.exe",
         ]
     )
     seen = set()
@@ -421,6 +427,14 @@ def _load_win32com_decryptor() -> _DecryptorAdapter:
 def load_phone_decryptor() -> _DecryptorAdapter:
     if os.name != "nt":
         raise RuntimeError("电话解密仅支持 Windows 环境。")
+
+    python_bits = struct.calcsize("P") * 8
+    if python_bits != 32:
+        raise RuntimeError(
+            f"当前 Python 为 {python_bits} 位，无法直接加载 32 位解密 DLL。"
+            " 请确保 PhoneDecryptHelper.exe（32 位 helper）可用，"
+            " 或使用 32 位 Python 运行本程序。"
+        )
 
     errors: List[str] = []
     for loader in (_load_pythonnet_decryptor, _load_win32com_decryptor):

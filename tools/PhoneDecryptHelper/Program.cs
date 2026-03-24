@@ -47,7 +47,12 @@ internal static class Program
         {
             var inputPath = args[0];
             var outputPath = args[1];
-            var payload = JsonSerializer.Deserialize<RequestEnvelope>(File.ReadAllText(inputPath))
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+            var payload = JsonSerializer.Deserialize<RequestEnvelope>(File.ReadAllText(inputPath), jsonOptions)
                          ?? new RequestEnvelope();
 
             var decryptor = new DeAESClass();
@@ -93,8 +98,8 @@ internal static class Program
                 result.Responses.Add(response);
             }
 
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(outputPath, JsonSerializer.Serialize(result, options));
+            jsonOptions.WriteIndented = true;
+            File.WriteAllText(outputPath, JsonSerializer.Serialize(result, jsonOptions));
             return 0;
         }
         catch (Exception ex)
