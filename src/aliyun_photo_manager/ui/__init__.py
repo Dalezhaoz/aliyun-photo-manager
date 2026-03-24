@@ -96,6 +96,8 @@ from .match_actions import (
     update_match_summary_ui,
 )
 from .pack_actions import (
+    choose_pack_source_directory,
+    choose_pack_source_file,
     copy_pack_password,
     open_pack_file,
     run_pack_history_query,
@@ -121,6 +123,16 @@ from .status_actions import (
 from .status_tab import build_status_tab
 from .sql_actions import choose_sql_template, copy_sql_text, set_sql_result_text, start_sql_render
 from .sql_tab import build_sql_tab
+from .update_sql_actions import (
+    choose_update_sql_mapping,
+    copy_update_sql,
+    export_update_sql_template_file,
+    load_update_sql_headers,
+    set_update_sql_result_text,
+    start_update_sql_render,
+    update_update_sql_ui,
+)
+from .update_sql_tab import build_update_sql_tab
 from .photo_actions import (
     choose_photo_template,
     finish_count_refresh,
@@ -222,6 +234,8 @@ __all__ = [
     "update_pack_summary_ui",
     "set_pack_query_result_text",
     "update_pack_password_mode_ui",
+    "choose_pack_source_file",
+    "choose_pack_source_directory",
     "run_pack_history_query",
     "copy_pack_password",
     "open_pack_file",
@@ -257,6 +271,7 @@ __all__ = [
     "build_pack_tab",
     "build_status_tab",
     "build_sql_tab",
+    "build_update_sql_tab",
     "build_help_tab",
     "build_log_tab",
     "clear_log",
@@ -278,6 +293,13 @@ __all__ = [
     "set_sql_result_text",
     "copy_sql_text",
     "start_sql_render",
+    "choose_update_sql_mapping",
+    "load_update_sql_headers",
+    "export_update_sql_template_file",
+    "set_update_sql_result_text",
+    "copy_update_sql",
+    "update_update_sql_ui",
+    "start_update_sql_render",
     "build_credentials",
     "validate_cloud_endpoint",
     "check_endpoint_reachable",

@@ -13,7 +13,15 @@ def build_pack_tab(app, notebook: ttk.Notebook) -> None:
     pack_form = ttk.LabelFrame(pack_frame, text="压缩加密", padding=12)
     pack_form.grid(row=0, column=0, sticky="ew")
     pack_form.columnconfigure(1, weight=1)
-    app.add_path_row(pack_form, row=0, label="待打包文件夹", variable=app.pack_source_dir_var)
+    ttk.Label(pack_form, text="待打包对象", width=16).grid(row=0, column=0, sticky="w", pady=6)
+    app.pack_source_entry = app.create_text_entry(pack_form, textvariable=app.pack_source_dir_var)
+    app.pack_source_entry.grid(row=0, column=1, sticky="ew", pady=6)
+    ttk.Button(pack_form, text="选择文件", command=app.choose_pack_source_file, width=12).grid(
+        row=0, column=2, padx=(10, 0), pady=6
+    )
+    ttk.Button(pack_form, text="选择文件夹", command=app.choose_pack_source_directory, width=12).grid(
+        row=0, column=3, padx=(10, 0), pady=6
+    )
     app.add_path_row(pack_form, row=1, label="输出目录", variable=app.pack_output_dir_var)
     app.add_tick_checkbutton(
         pack_form,

@@ -308,7 +308,7 @@ def export_word_to_html(
     if variant not in {"net", "java"}:
         raise ValueError("variant 只支持 `net` 或 `java`。")
     if not source_path.exists():
-        raise FileNotFoundError(f"未找到 Word 文件：{source_path}")
+        raise FileNotFoundError(f"未找到表样文件：{source_path}")
 
     prepared_source = _prepare_source(source_path)
     _log(logger, f"开始转换表样：{source_path.name}")

@@ -40,6 +40,7 @@ from .downloader import (
 from .excel_classifier import generate_template
 from .result_packer import PackSummary, pack_encrypted_folder, query_pack_history
 from .sql_template_executor import SqlTemplateResult, render_sql_template
+from .update_sql_generator import UpdateSqlResult
 from .data_matcher import (
     ColumnMapping,
     DataMatchOptions,
@@ -74,12 +75,17 @@ from .ui import (
     choose_exam_plan_file as ui_choose_exam_plan_file,
     choose_match_source as ui_choose_match_source,
     choose_match_target as ui_choose_match_target,
+    choose_pack_source_directory as ui_choose_pack_source_directory,
+    choose_pack_source_file as ui_choose_pack_source_file,
     choose_photo_template as ui_choose_photo_template,
     choose_sql_template as ui_choose_sql_template,
+    choose_update_sql_mapping as ui_choose_update_sql_mapping,
     choose_word_source as ui_choose_word_source,
+    copy_update_sql as ui_copy_update_sql,
     copy_sql_text as ui_copy_sql_text,
     copy_word_html as ui_copy_word_html,
     export_exam_templates_from_ui as ui_export_exam_templates_from_ui,
+    export_update_sql_template_file as ui_export_update_sql_template_file,
     fill_exam_output_path as ui_fill_exam_output_path,
     fill_match_output_path as ui_fill_match_output_path,
     finish_count_refresh as ui_finish_count_refresh,
@@ -97,6 +103,7 @@ from .ui import (
     load_exam_group_headers as ui_load_exam_group_headers,
     load_match_headers as ui_load_match_headers,
     load_photo_headers as ui_load_photo_headers,
+    load_update_sql_headers as ui_load_update_sql_headers,
     load_bucket_folders as ui_load_bucket_folders,
     move_exam_rule_down as ui_move_exam_rule_down,
     move_exam_rule_up as ui_move_exam_rule_up,
@@ -155,6 +162,7 @@ from .ui import (
     run_pack_history_query as ui_run_pack_history_query,
     set_pack_query_result_text as ui_set_pack_query_result_text,
     set_sql_result_text as ui_set_sql_result_text,
+    set_update_sql_result_text as ui_set_update_sql_result_text,
     start_certificate_download_run as ui_start_certificate_download_run,
     start_certificate_run as ui_start_certificate_run,
     start_exam_arrange_run as ui_start_exam_arrange_run,
@@ -163,7 +171,9 @@ from .ui import (
     start_photo_classify_run as ui_start_photo_classify_run,
     start_photo_download_run as ui_start_photo_download_run,
     start_sql_render as ui_start_sql_render,
+    start_update_sql_render as ui_start_update_sql_render,
     start_word_export as ui_start_word_export,
+    update_update_sql_ui as ui_update_update_sql_ui,
     update_pack_password_mode_ui as ui_update_pack_password_mode_ui,
     update_pack_summary_ui as ui_update_pack_summary_ui,
     cancel_run as ui_cancel_run,
@@ -177,6 +187,7 @@ from .ui import (
     build_photo_tab,
     build_sql_tab,
     build_template_tab,
+    build_update_sql_tab,
     create_text_entry as ui_create_text_entry,
     default_cloud_profile as ui_default_cloud_profile,
     finish_bucket_load as ui_finish_bucket_load,
@@ -273,6 +284,12 @@ class App:
         self.match_extra_source_var = tk.StringVar()
         self.match_transfer_target_var = tk.StringVar()
         self.match_transfer_source_var = tk.StringVar()
+        self.update_sql_mapping_var = tk.StringVar()
+        self.update_sql_target_table_var = tk.StringVar()
+        self.update_sql_source_table_var = tk.StringVar()
+        self.update_sql_target_key_var = tk.StringVar()
+        self.update_sql_source_key_var = tk.StringVar()
+        self.update_sql_ignore_empty_var = tk.BooleanVar(value=True)
         self.exam_candidate_var = tk.StringVar()
         self.exam_group_var = tk.StringVar()
         self.exam_plan_var = tk.StringVar()
@@ -317,6 +334,8 @@ class App:
         self.sql_result_var = tk.StringVar(value="SQL 生成结果会显示在这里")
         self.match_status_var = tk.StringVar(value="未开始匹配")
         self.match_result_var = tk.StringVar(value="数据匹配结果会显示在这里")
+        self.update_sql_status_var = tk.StringVar(value="未生成 SQL")
+        self.update_sql_result_var = tk.StringVar(value="更新 SQL 会显示在这里")
         self.exam_status_var = tk.StringVar(value="未开始编排")
         self.exam_result_var = tk.StringVar(value="考场编排结果会显示在这里")
         self.status_query_status_var = tk.StringVar(value="未开始查询")
@@ -334,6 +353,7 @@ class App:
         self.last_pack_summary: Optional[PackSummary] = None
         self.last_sql_result: Optional[SqlTemplateResult] = None
         self.last_match_summary: Optional[DataMatchSummary] = None
+        self.last_update_sql_result: Optional[UpdateSqlResult] = None
         self.last_exam_summary: Optional[ExamArrangeSummary] = None
         self.last_exam_template_export: Optional[ExamTemplateExportSummary] = None
         self.last_status_summary: Optional[ProjectStageSummary] = None
@@ -342,11 +362,14 @@ class App:
         self.match_result_text = None
         self.pack_query_result_text = None
         self.sql_result_text = None
+        self.update_sql_result_text = None
         self.exam_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []
         self.match_target_headers: List[str] = []
         self.match_source_headers: List[str] = []
+        self.update_sql_target_headers: List[str] = []
+        self.update_sql_source_headers: List[str] = []
         self.match_extra_mappings: List[ColumnMapping] = []
         self.match_transfer_mappings: List[ColumnMapping] = []
         self.exam_rule_items: List[ExamRuleItem] = []
@@ -381,6 +404,10 @@ class App:
             and Path(self.match_source_var.get().strip()).exists()
         ):
             self.load_match_headers()
+        if self.update_sql_mapping_var.get().strip() and Path(
+            self.update_sql_mapping_var.get().strip()
+        ).exists():
+            self.load_update_sql_headers()
         self.root.after(150, self.flush_logs)
 
     def build_ui(self) -> None:
@@ -543,6 +570,7 @@ class App:
         build_sql_tab(self, notebook)
         build_status_tab(self, notebook)
         build_match_tab(self, notebook)
+        build_update_sql_tab(self, notebook)
         build_exam_tab(self, notebook)
         build_pack_tab(self, notebook)
         build_help_tab(self, notebook)
@@ -561,6 +589,7 @@ class App:
         self.update_status_summary_ui(None)
         self.set_match_result_text(self.match_result_var.get())
         self.set_sql_result_text("")
+        self.set_update_sql_result_text(self.update_sql_result_var.get())
         self.load_exam_group_headers()
         self.refresh_exam_rule_tree()
         self.set_exam_result_text(self.exam_result_var.get())
@@ -665,7 +694,32 @@ class App:
   - YYYY-MM-DD HH:MM[:SS]
   - YYYY/MM/DD HH:MM[:SS]
 
-五、项目阶段汇总
+五、更新SQL生成
+
+适用场景：
+- 考生表先导入基础字段，补充字段先导入临时表
+- 按字段映射模板生成标准 UPDATE SQL
+- 在执行前自动生成两张备份表
+
+操作步骤：
+1. 点击“导出模板”，生成“更新SQL字段映射模板.xlsx”。
+2. 在模板中填写：
+   - 考生表字段名
+   - 临时表字段名
+   - 是否更新
+3. 在程序中选择映射模板并点击“加载字段”。
+4. 输入考生表名称和临时表名称。
+5. 选择考生表关联字段和临时表关联字段。
+6. 如需防止空值覆盖正式表，勾选“忽略空值，不覆盖正式表”。
+7. 点击“生成 SQL”。
+8. 点击“复制 SQL”，再到数据库工具中执行。
+
+结果说明：
+- 生成的 SQL 会先备份考生表和临时表
+- 只更新模板中“是否更新”为“是”的字段
+- 可直接在结果区查看完整 SQL
+
+六、项目阶段汇总
 
 适用场景：
 - 一次查看多台 SQL Server 上所有报名项目阶段的状态
@@ -688,7 +742,7 @@ class App:
 - 只有同时存在 EI_ExamTreeDesc、web_SR_CodeItem、WEB_SR_SetTime 三张表的库才参与汇总
 - 结果会显示：服务器、数据库、项目名称、阶段名称、开始时间、结束时间、当前状态
 
-六、数据匹配
+七、数据匹配
 
 适用场景：
 - 两个 Excel 表之间按考号、身份证号、姓名等字段补列
@@ -709,7 +763,7 @@ class App:
 - 会额外生成一个“匹配结果清单”sheet，方便核对未匹配和重复键
 - 如果第一行只是“附件1”这类说明，程序会尽量自动跳过并识别真正表头
 
-七、考场编排
+八、考场编排
 
 适用场景：
 - 根据标准模板给考生批量补充考点、考场、座号、考号
@@ -741,20 +795,20 @@ class App:
 - 如果岗位未找到归组，或科目组未找到编排片段，会在“编排备注”里标明原因
 - 同一科目组内默认随机打乱后再分配，也可以手动切换为按原顺序
 
-八、结果打包
+九、结果打包
 
 适用场景：
-- 把处理后的结果文件夹直接压缩成加密 zip
+- 把处理后的结果文件或文件夹直接压缩成加密 zip
 - 发送给客户或第三方时提高安全性
 
 操作步骤：
-1. 选择“待打包文件夹”。
+1. 选择“待打包文件”或“待打包文件夹”。
 2. 选择“输出目录”。
 3. 如需客户指定密码，可勾选“手动设置密码”并输入密码。
 4. 点击“一键打包并加密”。
-5. 程序会自动使用文件夹名生成压缩包名。
+5. 程序会自动使用原文件名或文件夹名生成压缩包名。
 6. 如果未手动输入密码，程序会自动生成密码，并在结果区显示。
-7. 如忘记密码，可在下方“密码查询”中按文件夹名或压缩包名查询。
+7. 如忘记密码，可在下方“密码查询”中按来源名称或压缩包名查询。
 
 结果说明：
 - 压缩包名称默认和文件夹名称一致
@@ -762,14 +816,14 @@ class App:
 - 打包记录会保存到本地 JSON 文件，方便后期查询密码
 - 可直接点击“复制密码”或“打开压缩包”
 
-九、使用建议
+十、使用建议
 
 - 第一次处理大批量文件时，建议先用少量数据测试。
 - 使用模板前，建议先确认匹配列和分类列填写正确。
 - 处理完成后，可以直接点击“打开结果清单”核对结果。
 - 切换阿里云 / 腾讯云时，程序会分别记住两套配置。
 
-十、运行日志
+十一、运行日志
 
 运行日志用于查看下载、筛选、分类和导出的详细过程。
 如果需要回看处理步骤，可以打开“运行日志”页查看。
@@ -1035,6 +1089,15 @@ class App:
     def choose_sql_template(self) -> None:
         ui_choose_sql_template(self)
 
+    def choose_update_sql_mapping(self) -> None:
+        ui_choose_update_sql_mapping(self)
+
+    def choose_pack_source_file(self) -> None:
+        ui_choose_pack_source_file(self)
+
+    def choose_pack_source_directory(self) -> None:
+        ui_choose_pack_source_directory(self)
+
     def clear_status_server_form(self) -> None:
         ui_clear_status_server_form(self)
 
@@ -1091,6 +1154,12 @@ class App:
 
     def load_match_headers(self) -> None:
         ui_load_match_headers(self)
+
+    def load_update_sql_headers(self) -> None:
+        ui_load_update_sql_headers(self)
+
+    def export_update_sql_template_file(self) -> None:
+        ui_export_update_sql_template_file(self)
 
     def add_extra_match_mapping(self) -> None:
         ui_add_extra_match_mapping(self)
@@ -1216,6 +1285,12 @@ class App:
     def set_sql_result_text(self, content: str) -> None:
         ui_set_sql_result_text(self, content)
 
+    def set_update_sql_result_text(self, content: str) -> None:
+        ui_set_update_sql_result_text(self, content)
+
+    def update_update_sql_ui(self, result: Optional[UpdateSqlResult]) -> None:
+        ui_update_update_sql_ui(self, result)
+
     def update_exam_summary_ui(self, summary: Optional[ExamArrangeSummary]) -> None:
         ui_update_exam_summary_ui(self, summary)
 
@@ -1242,6 +1317,9 @@ class App:
 
     def copy_sql_text(self) -> None:
         ui_copy_sql_text(self)
+
+    def copy_update_sql(self) -> None:
+        ui_copy_update_sql(self)
 
     def open_word_preview_in_browser(self) -> None:
         ui_open_word_preview_in_browser(self)
@@ -1584,6 +1662,9 @@ class App:
 
     def start_sql_render(self) -> None:
         ui_start_sql_render(self)
+
+    def start_update_sql_render(self) -> None:
+        ui_start_update_sql_render(self)
 
     def start_pack_run(self) -> None:
         ui_start_pack_run(self)

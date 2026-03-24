@@ -246,6 +246,14 @@ def load_saved_settings(app) -> None:
     app.match_target_key_var.set(settings.get("match_target_key", ""))
     app.match_source_key_var.set(settings.get("match_source_key", ""))
     app.match_output_var.set(settings.get("match_output", ""))
+    app.update_sql_mapping_var.set(settings.get("update_sql_mapping", ""))
+    app.update_sql_target_table_var.set(settings.get("update_sql_target_table", ""))
+    app.update_sql_source_table_var.set(settings.get("update_sql_source_table", ""))
+    app.update_sql_target_key_var.set(settings.get("update_sql_target_key", ""))
+    app.update_sql_source_key_var.set(settings.get("update_sql_source_key", ""))
+    app.update_sql_ignore_empty_var.set(
+        settings.get("update_sql_ignore_empty", app.update_sql_ignore_empty_var.get())
+    )
     app.exam_candidate_var.set(settings.get("exam_candidate", ""))
     app.exam_group_var.set(settings.get("exam_group", ""))
     app.exam_plan_var.set(settings.get("exam_plan", ""))
@@ -306,6 +314,12 @@ def save_settings(app) -> None:
         "match_target_key": app.match_target_key_var.get().strip(),
         "match_source_key": app.match_source_key_var.get().strip(),
         "match_output": app.match_output_var.get().strip(),
+        "update_sql_mapping": app.update_sql_mapping_var.get().strip(),
+        "update_sql_target_table": app.update_sql_target_table_var.get().strip(),
+        "update_sql_source_table": app.update_sql_source_table_var.get().strip(),
+        "update_sql_target_key": app.update_sql_target_key_var.get().strip(),
+        "update_sql_source_key": app.update_sql_source_key_var.get().strip(),
+        "update_sql_ignore_empty": app.update_sql_ignore_empty_var.get(),
         "exam_candidate": app.exam_candidate_var.get().strip(),
         "exam_group": app.exam_group_var.get().strip(),
         "exam_plan": app.exam_plan_var.get().strip(),

@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from typing import Optional
 
 from ..result_packer import PackSummary, pack_encrypted_folder, query_pack_history
@@ -19,7 +19,7 @@ def update_pack_summary_ui(app, summary: Optional[PackSummary]) -> None:
 
     app.pack_result_var.set(
         "打包完成：\n"
-        f"源目录：{summary.source_dir}\n"
+        f"来源对象：{summary.source_path}\n"
         f"压缩包：{summary.output_path}\n"
         f"文件数：{summary.file_count}\n"
         f"时间：{summary.created_at}\n"
@@ -58,7 +58,7 @@ def run_pack_history_query(app) -> None:
         app,
         (
             f"最近匹配记录：\n"
-            f"文件夹：{latest.get('source_name', '')}\n"
+            f"来源名称：{latest.get('source_name', '')}\n"
             f"压缩包：{latest.get('archive_name', '')}\n"
             f"时间：{latest.get('created_at', '')}\n"
             f"密码：{latest.get('password', '')}\n"
@@ -77,6 +77,28 @@ def copy_pack_password(app) -> None:
     app.pack_status_var.set("已复制密码")
 
 
+def choose_pack_source_file(app) -> None:
+    selected = filedialog.askopenfilename(
+        title="选择待打包文件",
+        initialdir=str(Path(app.pack_source_dir_var.get()).parent)
+        if app.pack_source_dir_var.get().strip()
+        else str(Path.cwd()),
+    )
+    if selected:
+        app.pack_source_dir_var.set(selected)
+
+
+def choose_pack_source_directory(app) -> None:
+    selected = filedialog.askdirectory(
+        title="选择待打包文件夹",
+        initialdir=str(Path(app.pack_source_dir_var.get()).parent)
+        if app.pack_source_dir_var.get().strip()
+        else str(Path.cwd()),
+    )
+    if selected:
+        app.pack_source_dir_var.set(selected)
+
+
 def open_pack_file(app) -> None:
     if app.last_pack_summary is None:
         return
@@ -90,12 +112,12 @@ def start_pack_run(app) -> None:
 
     source_value = app.pack_source_dir_var.get().strip()
     if not source_value:
-        messagebox.showerror("参数错误", "请选择待打包文件夹。")
+        messagebox.showerror("参数错误", "请选择待打包文件或文件夹。")
         return
 
     source_dir = Path(source_value)
-    if not source_dir.exists() or not source_dir.is_dir():
-        messagebox.showerror("参数错误", f"待打包文件夹不存在：{source_dir}")
+    if not source_dir.exists():
+        messagebox.showerror("参数错误", f"待打包文件或文件夹不存在：{source_dir}")
         return
 
     output_value = app.pack_output_dir_var.get().strip()
