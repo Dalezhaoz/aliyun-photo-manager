@@ -111,6 +111,46 @@ def _ordered_drivers(pyodbc) -> list[str]:
     return ordered
 
 
+def _probe_connection_string(connection_string: str) -> tuple[bool, str]:
+    """在子进程中测试连接串是否可用，避免 ODBC 驱动 access violation 崩溃主进程。"""
+    probe_code = (
+        "import sys, pyodbc\n"
+        "try:\n"
+        "    conn = pyodbc.connect(sys.argv[1], timeout=6)\n"
+        "    conn.close()\n"
+        "    print('OK')\n"
+        "except Exception as e:\n"
+        "    print('ERR:' + str(e))\n"
+        "    sys.exit(1)\n"
+    )
+    run_kwargs: dict = dict(
+        capture_output=True,
+        text=True,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        timeout=15,
+    )
+    if sys.platform == "win32":
+        run_kwargs["creationflags"] = getattr(
+            subprocess, "CREATE_NO_WINDOW", 0x08000000
+        )
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", probe_code, connection_string],
+            **run_kwargs,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "连接探测超时。"
+    except Exception as exc:
+        return False, str(exc)
+    if result.returncode == 0 and result.stdout.strip().startswith("OK"):
+        return True, ""
+    error = result.stdout.strip() or result.stderr.strip() or f"返回码 {result.returncode}"
+    if error.startswith("ERR:"):
+        error = error[4:]
+    return False, error
+
+
 def _connect_sql_server(options: PhoneDecryptOptions):
     pyodbc = _load_pyodbc()
     last_error: Exception | None = None
@@ -124,6 +164,10 @@ def _connect_sql_server(options: PhoneDecryptOptions):
                 "TrustServerCertificate=yes;"
                 f"Encrypt={encrypt_option};"
             )
+            ok, err = _probe_connection_string(connection_string)
+            if not ok:
+                last_error = RuntimeError(f"[{driver}] Encrypt={encrypt_option}: {err}")
+                continue
             try:
                 return pyodbc.connect(connection_string, timeout=8)
             except Exception as exc:  # pragma: no cover
