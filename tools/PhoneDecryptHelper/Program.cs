@@ -293,17 +293,27 @@ internal static class Program
             {
                 logs.Add($"正在回写 {updates.Count} 条解密电话...");
                 var sql = $"UPDATE [{signupDb}].[dbo].[{table}] SET [备用3]=@p WHERE CAST([主键编号] AS VARCHAR(50))=@k";
-                using var cmd = new SqlCommand(sql, conn);
-                cmd.Parameters.Add("@p", System.Data.SqlDbType.NVarChar, 50);
-                cmd.Parameters.Add("@k", System.Data.SqlDbType.NVarChar, 50);
-                foreach (var (phone, pk) in updates)
+                using var tx = conn.BeginTransaction();
+                try
                 {
-                    cmd.Parameters["@p"].Value = phone;
-                    cmd.Parameters["@k"].Value = pk;
-                    cmd.ExecuteNonQuery();
+                    using var cmd = new SqlCommand(sql, conn, tx);
+                    cmd.Parameters.Add("@p", System.Data.SqlDbType.NVarChar, 50);
+                    cmd.Parameters.Add("@k", System.Data.SqlDbType.NVarChar, 50);
+                    foreach (var (phone, pk) in updates)
+                    {
+                        cmd.Parameters["@p"].Value = phone;
+                        cmd.Parameters["@k"].Value = pk;
+                        cmd.ExecuteNonQuery();
+                    }
+                    tx.Commit();
+                    result.UpdatedRows = updates.Count;
+                    logs.Add($"已更新 {updates.Count} 条电话到备用3。");
                 }
-                result.UpdatedRows = updates.Count;
-                logs.Add($"已更新 {updates.Count} 条电话到备用3。");
+                catch
+                {
+                    tx.Rollback();
+                    throw;
+                }
             }
             else
             {
