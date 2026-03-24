@@ -103,11 +103,16 @@ def _ordered_drivers(pyodbc) -> list[str]:
     ]
     installed = list(pyodbc.drivers())
     ordered = [name for name in preferred if name in installed]
+    # 仅追加名称中包含 "SQL Server" 的驱动，过滤掉 Access/Excel 等无关驱动
     for name in installed:
-        if name not in ordered:
+        if name not in ordered and "sql server" in name.lower():
             ordered.append(name)
     if not ordered:
-        raise RuntimeError("未找到 SQL Server ODBC 驱动，请先安装对应驱动。")
+        raise RuntimeError(
+            "未找到 SQL Server ODBC 驱动。"
+            " 请先安装 Microsoft ODBC Driver 17 for SQL Server："
+            " https://learn.microsoft.com/zh-cn/sql/connect/odbc/download-odbc-driver-for-sql-server"
+        )
     return ordered
 
 
