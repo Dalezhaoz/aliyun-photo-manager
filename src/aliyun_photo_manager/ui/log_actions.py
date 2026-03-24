@@ -1,4 +1,5 @@
 import queue
+import traceback
 from pathlib import Path
 
 
@@ -19,7 +20,7 @@ def flush_logs(app) -> None:
             message = app.log_queue.get_nowait()
         except queue.Empty:
             break
-        else:
+        try:
             if isinstance(message, dict) and message.get("type") == "progress":
                 app.update_progress_ui(
                     stage=message.get("stage", ""),
@@ -168,6 +169,11 @@ def flush_logs(app) -> None:
                 app.write_log(message.split("::", 1)[1])
             else:
                 app.write_log(message)
+        except Exception:
+            try:
+                app.write_log(f"[flush_logs 异常] {traceback.format_exc()}")
+            except Exception:
+                pass
     app.root.after(150, app.flush_logs)
 
 

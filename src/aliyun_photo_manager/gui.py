@@ -1727,10 +1727,40 @@ class App:
         ui_start_exam_arrange_run(self)
 
 
+def _crash_log_path() -> Path:
+    return Path(os.environ.get("APPDATA", Path.home())) / "aliyun_photo_manager_crash.log"
+
+
 def main() -> None:
-    root = tk.Tk()
-    app = App(root)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+
+        def _on_tk_error(exc_type, exc_value, exc_tb):
+            import traceback
+            msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            log_path = _crash_log_path()
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"\n{'='*60}\nTkinter callback exception:\n{msg}\n")
+            try:
+                messagebox.showerror("程序异常", f"发生错误，已写入日志：\n{log_path}\n\n{msg[:500]}")
+            except Exception:
+                pass
+
+        root.report_callback_exception = _on_tk_error
+
+        app = App(root)
+        root.mainloop()
+    except Exception:
+        import traceback
+        msg = traceback.format_exc()
+        log_path = _crash_log_path()
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"\n{'='*60}\nTop-level crash:\n{msg}\n")
+        try:
+            messagebox.showerror("程序崩溃", f"发生严重错误，已写入日志：\n{log_path}\n\n{msg[:500]}")
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":

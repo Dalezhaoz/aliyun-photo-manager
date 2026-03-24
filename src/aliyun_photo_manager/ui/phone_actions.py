@@ -152,8 +152,10 @@ def start_phone_decrypt_run(app) -> None:
     def runner() -> None:
         try:
             summary = run_phone_decrypt(options, logger=app.make_logger())
-        except Exception as exc:
-            app.log_queue.put(f"__PHONE_FAILED__::{type(exc).__name__}: {exc}")
+        except BaseException as exc:
+            import traceback
+            tb = traceback.format_exc()
+            app.log_queue.put(f"__PHONE_FAILED__::{type(exc).__name__}: {exc}\n{tb}")
         else:
             app.log_queue.put({"type": "phone_summary", "summary": summary})
             app.log_queue.put("__PHONE_DONE__")
