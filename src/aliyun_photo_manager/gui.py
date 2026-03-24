@@ -215,6 +215,117 @@ class App:
         except tk.TclError:
             pass
 
+        style.configure("TFrame", background="#F6F4EF")
+        style.configure("TLabelframe", background="#F6F4EF", borderwidth=1, relief="solid", padding=10)
+        style.configure(
+            "TLabelframe.Label",
+            background="#F6F4EF",
+            foreground="#2F2A24",
+            font=("Helvetica", 11, "bold"),
+        )
+        style.configure(
+            "TLabel",
+            background="#F6F4EF",
+            foreground="#2F2A24",
+            padding=1,
+            font=("Helvetica", 11),
+        )
+        style.configure(
+            "TRadiobutton",
+            background="#F6F4EF",
+            foreground="#2F2A24",
+            font=("Helvetica", 11),
+        )
+        style.configure(
+            "TCheckbutton",
+            background="#F6F4EF",
+            foreground="#2F2A24",
+            font=("Helvetica", 11),
+        )
+        style.configure("TButton", padding=(14, 9), font=("Helvetica", 11), relief="flat")
+        style.map(
+            "TButton",
+            background=[
+                ("disabled", "#E2DED3"),
+                ("pressed", "#CFC8B8"),
+                ("active", "#E7E0D0"),
+                ("!disabled", "#DDD6C5"),
+            ],
+            foreground=[("disabled", "#9B9588"), ("!disabled", "#2F2A24")],
+        )
+        style.configure(
+            "Accent.TButton",
+            padding=(14, 9),
+            font=("Helvetica", 11, "bold"),
+            foreground="#FFFFFF",
+            background="#5D8C63",
+        )
+        style.map(
+            "Accent.TButton",
+            background=[
+                ("disabled", "#A5B9A8"),
+                ("pressed", "#4E7753"),
+                ("active", "#6A9971"),
+                ("!disabled", "#5D8C63"),
+            ],
+            foreground=[("disabled", "#F2F2F2"), ("!disabled", "#FFFFFF")],
+        )
+        style.configure("TCombobox", padding=(8, 6), arrowsize=16, font=("Helvetica", 11))
+        style.configure(
+            "TNotebook",
+            background="#F6F4EF",
+            borderwidth=0,
+            tabmargins=(0, 0, 0, 0),
+        )
+        style.configure(
+            "TNotebook.Tab",
+            padding=(20, 12),
+            background="#DDD6C5",
+            foreground="#6C6659",
+            font=("Helvetica", 12, "bold"),
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[
+                ("selected", "#F7F4EC"),
+                ("active", "#EAE3D3"),
+                ("!selected", "#DDD6C5"),
+            ],
+            foreground=[("selected", "#1F1B17"), ("!selected", "#6C6659")],
+            expand=[("selected", (0, 2, 0, 0))],
+        )
+        style.configure(
+            "Treeview",
+            rowheight=30,
+            fieldbackground="#FCFBF7",
+            background="#FCFBF7",
+            foreground="#2F2A24",
+            bordercolor="#D8D1C3",
+            lightcolor="#D8D1C3",
+            darkcolor="#D8D1C3",
+            font=("Helvetica", 11),
+        )
+        style.configure(
+            "Treeview.Heading",
+            padding=(8, 8),
+            font=("Helvetica", 11, "bold"),
+            background="#E7E0D0",
+            foreground="#2F2A24",
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", "#DCE8D7")],
+            foreground=[("selected", "#1F1B17")],
+        )
+        style.configure(
+            "Horizontal.TProgressbar",
+            troughcolor="#E7E0D0",
+            bordercolor="#D8D1C3",
+            background="#5D8C63",
+            lightcolor="#5D8C63",
+            darkcolor="#5D8C63",
+        )
+
         container = ttk.Frame(self.root, padding=16)
         container.pack(fill="both", expand=True)
         container.columnconfigure(0, weight=1)
@@ -223,7 +334,7 @@ class App:
         title = ttk.Label(
             container,
             text=f"报名系统工具箱 v{__version__}",
-            font=("Helvetica", 16, "bold"),
+            font=("Helvetica", 18, "bold"),
         )
         title.grid(row=0, column=0, sticky="w")
 
@@ -378,6 +489,8 @@ class App:
             action_frame,
             text="下载并生成模板",
             command=self.start_photo_download_run,
+            style="Accent.TButton",
+            width=16,
         )
         self.run_button.pack(side="left")
 
@@ -385,6 +498,8 @@ class App:
             action_frame,
             text="按模板分类",
             command=self.start_photo_classify_run,
+            style="Accent.TButton",
+            width=14,
         )
         self.photo_classify_button.pack(side="left", padx=(10, 0))
 
@@ -393,6 +508,7 @@ class App:
             text="取消下载",
             command=self.cancel_run,
             state="disabled",
+            width=12,
         )
         self.cancel_button.pack(side="left", padx=(10, 0))
 
@@ -686,6 +802,8 @@ class App:
             cert_action,
             text="下载证件资料",
             command=self.start_certificate_download_run,
+            style="Accent.TButton",
+            width=14,
         )
         self.certificate_download_button.pack(side="left")
 
@@ -693,6 +811,8 @@ class App:
             cert_action,
             text="开始筛选",
             command=self.start_certificate_run,
+            style="Accent.TButton",
+            width=12,
         )
         self.certificate_run_button.pack(side="left", padx=(10, 0))
 
@@ -701,6 +821,7 @@ class App:
             text="取消任务",
             command=self.cancel_run,
             state="disabled",
+            width=12,
         )
         self.certificate_cancel_button.pack(side="left", padx=(10, 0))
 
@@ -844,12 +965,16 @@ class App:
             word_action,
             text="Net版导出",
             command=lambda: self.start_word_export("net"),
+            style="Accent.TButton",
+            width=12,
         )
         self.word_net_button.pack(side="left")
         self.word_java_button = ttk.Button(
             word_action,
             text="Java版导出",
             command=lambda: self.start_word_export("java"),
+            style="Accent.TButton",
+            width=12,
         )
         self.word_java_button.pack(side="left", padx=(10, 0))
         self.word_copy_button = ttk.Button(
@@ -1049,7 +1174,13 @@ class App:
 
         match_action = ttk.Frame(match_frame)
         match_action.grid(row=2, column=0, sticky="ew", pady=(12, 0))
-        self.match_run_button = ttk.Button(match_action, text="开始匹配", command=self.start_match_run)
+        self.match_run_button = ttk.Button(
+            match_action,
+            text="开始匹配",
+            command=self.start_match_run,
+            style="Accent.TButton",
+            width=12,
+        )
         self.match_run_button.pack(side="left")
         self.match_open_button = ttk.Button(
             match_action,
@@ -1132,6 +1263,8 @@ class App:
             pack_action,
             text="一键打包并加密",
             command=self.start_pack_run,
+            style="Accent.TButton",
+            width=16,
         )
         self.pack_run_button.pack(side="left")
         self.pack_copy_password_button = ttk.Button(
@@ -1254,6 +1387,8 @@ class App:
             update_sql_action,
             text="生成 SQL",
             command=self.start_update_sql_render,
+            style="Accent.TButton",
+            width=12,
         )
         self.update_sql_run_button.pack(side="left")
         self.update_sql_copy_button = ttk.Button(
