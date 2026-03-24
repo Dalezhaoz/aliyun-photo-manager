@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence
@@ -211,13 +213,65 @@ class _DecryptorAdapter:
         return _normalize(self.inner.Decrypt(data, sort_code, exam_date, province))
 
 
+def _candidate_component_dirs() -> List[Path]:
+    dirs: List[Path] = []
+    raw_candidates = [
+        Path.cwd(),
+        Path(__file__).resolve().parent,
+        Path(sys.executable).resolve().parent,
+    ]
+    meipass = getattr(sys, "_MEIPASS", "")
+    if meipass:
+        raw_candidates.append(Path(meipass))
+    env_dir = os.environ.get("PHONE_DECRYPT_DLL_DIR", "").strip()
+    if env_dir:
+        raw_candidates.append(Path(env_dir))
+
+    seen = set()
+    for item in raw_candidates:
+        normalized = item.expanduser().resolve()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        dirs.append(normalized)
+    return dirs
+
+
+def _find_component_path(filename: str) -> Path | None:
+    for base_dir in _candidate_component_dirs():
+        candidate = base_dir / filename
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def _load_pythonnet_decryptor() -> _DecryptorAdapter:
     try:
         import clr  # type: ignore
     except ImportError as exc:
         raise RuntimeError("未安装 pythonnet，无法加载电话解密组件。") from exc
 
-    last_error: Exception | None = None
+    interop_path = _find_component_path("Interop.DeDll.dll")
+    core_dll_path = _find_component_path("DeDLL.dll")
+    errors: List[str] = []
+
+    if interop_path is not None:
+        try:
+            if core_dll_path is not None:
+                os.environ["PATH"] = str(core_dll_path.parent) + os.pathsep + os.environ.get("PATH", "")
+            clr.AddReference(str(interop_path))
+            import DeDll  # type: ignore
+
+            return _DecryptorAdapter(DeDll.DeAESClass(), f"pythonnet:{interop_path.name}")
+        except Exception as exc:  # pragma: no cover
+            errors.append(f"按文件路径加载 {interop_path} 失败：{exc}")
+    else:
+        searched = "，".join(str(item) for item in _candidate_component_dirs())
+        errors.append(
+            "未找到 Interop.DeDll.dll。"
+            f" 请把 `Interop.DeDll.dll` 和 `DeDLL.dll` 放到程序目录或设置环境变量 `PHONE_DECRYPT_DLL_DIR`。已搜索：{searched}"
+        )
+
     for assembly_name in ("Interop.DeDll", "DeDll"):
         try:
             clr.AddReference(assembly_name)
@@ -225,10 +279,8 @@ def _load_pythonnet_decryptor() -> _DecryptorAdapter:
 
             return _DecryptorAdapter(DeDll.DeAESClass(), f"pythonnet:{assembly_name}")
         except Exception as exc:  # pragma: no cover
-            last_error = exc
-    if last_error is not None:
-        raise RuntimeError(f"加载 Interop.DeDll 失败：{last_error}") from last_error
-    raise RuntimeError("加载 Interop.DeDll 失败。")
+            errors.append(f"按程序集名加载 {assembly_name} 失败：{exc}")
+    raise RuntimeError("；".join(errors))
 
 
 def _load_win32com_decryptor() -> _DecryptorAdapter:
@@ -237,31 +289,32 @@ def _load_win32com_decryptor() -> _DecryptorAdapter:
     except ImportError as exc:
         raise RuntimeError("未安装 pywin32，无法通过 COM 调用电话解密组件。") from exc
 
-    last_error: Exception | None = None
-    for prog_id in ("DeDll.DeAES", "DeDll.DeAESClass"):
+    errors: List[str] = []
+    for prog_id in (
+        "DeDll.DeAES",
+        "DeDll.DeAESClass",
+        "DeDLL.DeAES",
+        "DeDLL.DeAESClass",
+    ):
         try:
             return _DecryptorAdapter(win32com.client.Dispatch(prog_id), f"win32com:{prog_id}")
         except Exception as exc:  # pragma: no cover
-            last_error = exc
-    if last_error is not None:
-        raise RuntimeError(f"创建 DeDll 解密对象失败：{last_error}") from last_error
-    raise RuntimeError("创建 DeDll 解密对象失败。")
+            errors.append(f"{prog_id} -> {exc}")
+    raise RuntimeError("创建 DeDll 解密对象失败：" + "；".join(errors))
 
 
 def load_phone_decryptor() -> _DecryptorAdapter:
-    import os
-
     if os.name != "nt":
         raise RuntimeError("电话解密仅支持 Windows 环境。")
 
-    last_error: Exception | None = None
+    errors: List[str] = []
     for loader in (_load_pythonnet_decryptor, _load_win32com_decryptor):
         try:
             return loader()
         except Exception as exc:
-            last_error = exc
-    if last_error is not None:
-        raise RuntimeError(str(last_error)) from last_error
+            errors.append(str(exc))
+    if errors:
+        raise RuntimeError("；".join(errors))
     raise RuntimeError("未能加载电话解密组件。")
 
 
