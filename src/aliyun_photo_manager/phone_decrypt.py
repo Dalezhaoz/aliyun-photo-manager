@@ -209,41 +209,54 @@ def _connect_pymssql(options: PhoneDecryptOptions, logger: LogFn = None) -> _DbC
 
 
 def _connect_sql_server(options: PhoneDecryptOptions, logger: LogFn = None):
+    errors: List[str] = []
+
     # 优先尝试 pymssql（不依赖 ODBC，兼容性好）
     conn = _connect_pymssql(options, logger=logger)
     if conn is not None:
         return conn
 
     # 回退到 pyodbc
-    pyodbc = _load_pyodbc()
-    errors: List[str] = []
-    for driver in _ordered_drivers(pyodbc):
-        for encrypt_option in ("yes", "optional", "no"):
-            connection_string = (
-                f"DRIVER={{{driver}}};"
-                f"SERVER={options.server},{options.port};"
-                f"UID={options.username};"
-                f"PWD={options.password};"
-                "TrustServerCertificate=yes;"
-                f"Encrypt={encrypt_option};"
-            )
-            _log(logger, f"尝试连接：{driver}  Encrypt={encrypt_option}")
-            ok, err = _probe_connection_string(connection_string)
-            if not ok:
-                detail = f"[{driver}] Encrypt={encrypt_option}: {err}"
-                _log(logger, f"  探测失败：{err}")
-                errors.append(detail)
-                continue
-            _log(logger, f"  探测成功，正式连接...")
-            try:
-                return _DbConnection(pyodbc.connect(connection_string, timeout=8), "pyodbc")
-            except Exception as exc:  # pragma: no cover
-                detail = f"[{driver}] Encrypt={encrypt_option}: {exc}"
-                _log(logger, f"  连接失败：{exc}")
-                errors.append(detail)
+    try:
+        pyodbc = _load_pyodbc()
+    except RuntimeError as exc:
+        errors.append(str(exc))
+        pyodbc = None
+
+    if pyodbc is not None:
+        try:
+            drivers = _ordered_drivers(pyodbc)
+        except RuntimeError as exc:
+            errors.append(str(exc))
+            drivers = []
+        for driver in drivers:
+            for encrypt_option in ("yes", "optional", "no"):
+                connection_string = (
+                    f"DRIVER={{{driver}}};"
+                    f"SERVER={options.server},{options.port};"
+                    f"UID={options.username};"
+                    f"PWD={options.password};"
+                    "TrustServerCertificate=yes;"
+                    f"Encrypt={encrypt_option};"
+                )
+                _log(logger, f"尝试连接：{driver}  Encrypt={encrypt_option}")
+                ok, err = _probe_connection_string(connection_string)
+                if not ok:
+                    detail = f"[{driver}] Encrypt={encrypt_option}: {err}"
+                    _log(logger, f"  探测失败：{err}")
+                    errors.append(detail)
+                    continue
+                _log(logger, f"  探测成功，正式连接...")
+                try:
+                    return _DbConnection(pyodbc.connect(connection_string, timeout=8), "pyodbc")
+                except Exception as exc:  # pragma: no cover
+                    detail = f"[{driver}] Encrypt={encrypt_option}: {exc}"
+                    _log(logger, f"  连接失败：{exc}")
+                    errors.append(detail)
+
     raise RuntimeError(
-        "连接 SQL Server 失败，所有驱动均不可用。\n"
-        "建议执行 pip install pymssql 安装替代驱动。\n"
+        "连接 SQL Server 失败。\n"
+        "请确保已安装数据库驱动：pip install pymssql 或 pip install pyodbc\n"
         "详细错误：\n" + "\n".join(errors)
     )
 
