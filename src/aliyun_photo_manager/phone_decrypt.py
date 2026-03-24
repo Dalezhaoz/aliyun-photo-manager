@@ -136,7 +136,7 @@ def load_filter_id_cards(file_path: Path) -> List[str]:
     candidates = {"身份证号", "证件号码", "身份证", "sfzh"}
     target_index = next((index for index, header in enumerate(headers) if header.strip() in candidates), None)
     if target_index is None:
-        raise ValueError("名单文件缺少"身份证号"列。")
+        raise ValueError('名单文件缺少"身份证号"列。')
     id_cards: List[str] = []
     seen = set()
     width = len(headers)
