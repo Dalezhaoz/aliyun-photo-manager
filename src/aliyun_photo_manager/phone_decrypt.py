@@ -156,11 +156,11 @@ def _probe_connection_string(connection_string: str) -> tuple[bool, str]:
     return False, error
 
 
-def _connect_sql_server(options: PhoneDecryptOptions):
+def _connect_sql_server(options: PhoneDecryptOptions, logger: LogFn = None):
     pyodbc = _load_pyodbc()
-    last_error: Exception | None = None
+    errors: List[str] = []
     for driver in _ordered_drivers(pyodbc):
-        for encrypt_option in ("no", "optional"):
+        for encrypt_option in ("yes", "optional", "no"):
             connection_string = (
                 f"DRIVER={{{driver}}};"
                 f"SERVER={options.server},{options.port};"
@@ -169,17 +169,23 @@ def _connect_sql_server(options: PhoneDecryptOptions):
                 "TrustServerCertificate=yes;"
                 f"Encrypt={encrypt_option};"
             )
+            _log(logger, f"尝试连接：{driver}  Encrypt={encrypt_option}")
             ok, err = _probe_connection_string(connection_string)
             if not ok:
-                last_error = RuntimeError(f"[{driver}] Encrypt={encrypt_option}: {err}")
+                detail = f"[{driver}] Encrypt={encrypt_option}: {err}"
+                _log(logger, f"  探测失败：{err}")
+                errors.append(detail)
                 continue
+            _log(logger, f"  探测成功，正式连接...")
             try:
                 return pyodbc.connect(connection_string, timeout=8)
             except Exception as exc:  # pragma: no cover
-                last_error = exc
-    if last_error is not None:
-        raise RuntimeError(f"连接 SQL Server 失败：{last_error}") from last_error
-    raise RuntimeError("连接 SQL Server 失败。")
+                detail = f"[{driver}] Encrypt={encrypt_option}: {exc}"
+                _log(logger, f"  连接失败：{exc}")
+                errors.append(detail)
+    raise RuntimeError(
+        "连接 SQL Server 失败，所有驱动均不可用：\n" + "\n".join(errors)
+    )
 
 
 def _escape_identifier(name: str) -> str:
@@ -596,7 +602,7 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _log(logger, f"开始查询考生表：{options.signup_database}.{options.candidate_table}")
 
-    connection = _connect_sql_server(options)
+    connection = _connect_sql_server(options, logger=logger)
     try:
         cursor = connection.cursor()
         rows = _fetch_candidate_rows(cursor, options)
