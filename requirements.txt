@@ -12,3 +12,5 @@ tkinterweb>=3.24.8
 pyzipper>=0.3.6
 fastapi>=0.116.0
 uvicorn>=0.35.0
+pythonnet>=3.0.3; platform_system == "Windows"
+pywin32>=308; platform_system == "Windows"

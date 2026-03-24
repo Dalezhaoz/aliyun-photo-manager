@@ -268,6 +268,17 @@ def load_saved_settings(app) -> None:
         for item in settings.get("exam_rule_items", [])
         if isinstance(item, dict) and str(item.get("item_type", "")).strip()
     ]
+    app.phone_server_var.set(settings.get("phone_server", ""))
+    app.phone_port_var.set(settings.get("phone_port", app.phone_port_var.get()))
+    app.phone_username_var.set(settings.get("phone_username", ""))
+    app.phone_password_var.set(settings.get("phone_password", ""))
+    app.phone_signup_database_var.set(settings.get("phone_signup_database", ""))
+    app.phone_info_database_var.set(settings.get("phone_info_database", ""))
+    app.phone_exam_sort_var.set(settings.get("phone_exam_sort", ""))
+    app.phone_candidate_table_var.set(settings.get("phone_candidate_table", ""))
+    app.phone_mode_var.set(settings.get("phone_mode", app.phone_mode_var.get()))
+    app.phone_filter_file_var.set(settings.get("phone_filter_file", ""))
+    app.phone_output_path_var.set(settings.get("phone_output_path", ""))
     app.load_exam_group_headers()
 
 
@@ -333,6 +344,17 @@ def save_settings(app) -> None:
             {"item_type": item.item_type, "custom_text": item.custom_text}
             for item in app.exam_rule_items
         ],
+        "phone_server": app.phone_server_var.get().strip(),
+        "phone_port": app.phone_port_var.get().strip(),
+        "phone_username": app.phone_username_var.get().strip(),
+        "phone_password": app.phone_password_var.get().strip(),
+        "phone_signup_database": app.phone_signup_database_var.get().strip(),
+        "phone_info_database": app.phone_info_database_var.get().strip(),
+        "phone_exam_sort": app.phone_exam_sort_var.get().strip(),
+        "phone_candidate_table": app.phone_candidate_table_var.get().strip(),
+        "phone_mode": app.phone_mode_var.get().strip(),
+        "phone_filter_file": app.phone_filter_file_var.get().strip(),
+        "phone_output_path": app.phone_output_path_var.get().strip(),
     }
     app.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
     app.write_log(f"配置已保存到 {app.SETTINGS_FILE}")

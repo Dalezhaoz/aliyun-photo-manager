@@ -77,6 +77,7 @@ from .ui import (
     choose_match_target as ui_choose_match_target,
     choose_pack_source_directory as ui_choose_pack_source_directory,
     choose_pack_source_file as ui_choose_pack_source_file,
+    choose_phone_filter_file as ui_choose_phone_filter_file,
     choose_photo_template as ui_choose_photo_template,
     choose_sql_template as ui_choose_sql_template,
     choose_update_sql_mapping as ui_choose_update_sql_mapping,
@@ -88,6 +89,8 @@ from .ui import (
     export_update_sql_template_file as ui_export_update_sql_template_file,
     fill_exam_output_path as ui_fill_exam_output_path,
     fill_match_output_path as ui_fill_match_output_path,
+    fill_phone_output_path as ui_fill_phone_output_path,
+    fill_phone_table_name as ui_fill_phone_table_name,
     finish_count_refresh as ui_finish_count_refresh,
     finish_certificate_bucket_load as ui_finish_certificate_bucket_load,
     finish_certificate_folder_load as ui_finish_certificate_folder_load,
@@ -109,6 +112,7 @@ from .ui import (
     move_exam_rule_up as ui_move_exam_rule_up,
     add_extra_match_mapping as ui_add_extra_match_mapping,
     open_exam_result_file as ui_open_exam_result_file,
+    open_phone_report_file as ui_open_phone_report_file,
     open_photo_report_file as ui_open_photo_report_file,
     open_template_file as ui_open_template_file,
     remove_extra_match_mapping as ui_remove_extra_match_mapping,
@@ -141,6 +145,7 @@ from .ui import (
     update_summary_ui as ui_update_summary_ui,
     update_word_export_ui as ui_update_word_export_ui,
     set_match_result_text as ui_set_match_result_text,
+    set_phone_result_text as ui_set_phone_result_text,
     open_match_result_file as ui_open_match_result_file,
     open_word_preview_in_browser as ui_open_word_preview_in_browser,
     open_certificate_report_file as ui_open_certificate_report_file,
@@ -168,6 +173,7 @@ from .ui import (
     start_exam_arrange_run as ui_start_exam_arrange_run,
     start_match_run as ui_start_match_run,
     start_pack_run as ui_start_pack_run,
+    start_phone_decrypt_run as ui_start_phone_decrypt_run,
     start_photo_classify_run as ui_start_photo_classify_run,
     start_photo_download_run as ui_start_photo_download_run,
     start_sql_render as ui_start_sql_render,
@@ -176,6 +182,8 @@ from .ui import (
     update_update_sql_ui as ui_update_update_sql_ui,
     update_pack_password_mode_ui as ui_update_pack_password_mode_ui,
     update_pack_summary_ui as ui_update_pack_summary_ui,
+    update_phone_mode_ui as ui_update_phone_mode_ui,
+    update_phone_summary_ui as ui_update_phone_summary_ui,
     cancel_run as ui_cancel_run,
     clear_log as ui_clear_log,
     build_certificate_tab,
@@ -184,6 +192,7 @@ from .ui import (
     build_log_tab,
     build_match_tab,
     build_pack_tab,
+    build_phone_tab,
     build_photo_tab,
     build_sql_tab,
     build_template_tab,
@@ -290,6 +299,17 @@ class App:
         self.update_sql_target_key_var = tk.StringVar()
         self.update_sql_source_key_var = tk.StringVar()
         self.update_sql_ignore_empty_var = tk.BooleanVar(value=True)
+        self.phone_server_var = tk.StringVar()
+        self.phone_port_var = tk.StringVar(value="1433")
+        self.phone_username_var = tk.StringVar()
+        self.phone_password_var = tk.StringVar()
+        self.phone_signup_database_var = tk.StringVar()
+        self.phone_info_database_var = tk.StringVar()
+        self.phone_exam_sort_var = tk.StringVar()
+        self.phone_candidate_table_var = tk.StringVar()
+        self.phone_mode_var = tk.StringVar(value="all")
+        self.phone_filter_file_var = tk.StringVar()
+        self.phone_output_path_var = tk.StringVar()
         self.exam_candidate_var = tk.StringVar()
         self.exam_group_var = tk.StringVar()
         self.exam_plan_var = tk.StringVar()
@@ -336,6 +356,8 @@ class App:
         self.match_result_var = tk.StringVar(value="数据匹配结果会显示在这里")
         self.update_sql_status_var = tk.StringVar(value="未生成 SQL")
         self.update_sql_result_var = tk.StringVar(value="更新 SQL 会显示在这里")
+        self.phone_status_var = tk.StringVar(value="未开始解密")
+        self.phone_result_var = tk.StringVar(value="电话解密结果会显示在这里")
         self.exam_status_var = tk.StringVar(value="未开始编排")
         self.exam_result_var = tk.StringVar(value="考场编排结果会显示在这里")
         self.status_query_status_var = tk.StringVar(value="未开始查询")
@@ -354,6 +376,7 @@ class App:
         self.last_sql_result: Optional[SqlTemplateResult] = None
         self.last_match_summary: Optional[DataMatchSummary] = None
         self.last_update_sql_result: Optional[UpdateSqlResult] = None
+        self.last_phone_summary = None
         self.last_exam_summary: Optional[ExamArrangeSummary] = None
         self.last_exam_template_export: Optional[ExamTemplateExportSummary] = None
         self.last_status_summary: Optional[ProjectStageSummary] = None
@@ -363,6 +386,7 @@ class App:
         self.pack_query_result_text = None
         self.sql_result_text = None
         self.update_sql_result_text = None
+        self.phone_result_text = None
         self.exam_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []
@@ -571,6 +595,7 @@ class App:
         build_status_tab(self, notebook)
         build_match_tab(self, notebook)
         build_update_sql_tab(self, notebook)
+        build_phone_tab(self, notebook)
         build_exam_tab(self, notebook)
         build_pack_tab(self, notebook)
         build_help_tab(self, notebook)
@@ -590,6 +615,8 @@ class App:
         self.set_match_result_text(self.match_result_var.get())
         self.set_sql_result_text("")
         self.set_update_sql_result_text(self.update_sql_result_var.get())
+        self.update_phone_mode_ui()
+        self.set_phone_result_text(self.phone_result_var.get())
         self.load_exam_group_headers()
         self.refresh_exam_rule_tree()
         self.set_exam_result_text(self.exam_result_var.get())
@@ -1098,6 +1125,9 @@ class App:
     def choose_pack_source_directory(self) -> None:
         ui_choose_pack_source_directory(self)
 
+    def choose_phone_filter_file(self) -> None:
+        ui_choose_phone_filter_file(self)
+
     def clear_status_server_form(self) -> None:
         ui_clear_status_server_form(self)
 
@@ -1151,6 +1181,12 @@ class App:
 
     def fill_match_output_path(self) -> None:
         ui_fill_match_output_path(self)
+
+    def fill_phone_table_name(self) -> None:
+        ui_fill_phone_table_name(self)
+
+    def fill_phone_output_path(self) -> None:
+        ui_fill_phone_output_path(self)
 
     def load_match_headers(self) -> None:
         ui_load_match_headers(self)
@@ -1276,8 +1312,14 @@ class App:
     def update_match_summary_ui(self, summary: Optional[DataMatchSummary]) -> None:
         ui_update_match_summary_ui(self, summary)
 
+    def update_phone_summary_ui(self, summary) -> None:
+        ui_update_phone_summary_ui(self, summary)
+
     def set_match_result_text(self, content: str) -> None:
         ui_set_match_result_text(self, content)
+
+    def set_phone_result_text(self, content: str) -> None:
+        ui_set_phone_result_text(self, content)
 
     def set_pack_query_result_text(self, content: str) -> None:
         ui_set_pack_query_result_text(self, content)
@@ -1302,6 +1344,9 @@ class App:
 
     def update_pack_password_mode_ui(self) -> None:
         ui_update_pack_password_mode_ui(self)
+
+    def update_phone_mode_ui(self) -> None:
+        ui_update_phone_mode_ui(self)
 
     def run_pack_history_query(self) -> None:
         ui_run_pack_history_query(self)
@@ -1332,6 +1377,9 @@ class App:
 
     def open_match_result_file(self) -> None:
         ui_open_match_result_file(self)
+
+    def open_phone_report_file(self) -> None:
+        ui_open_phone_report_file(self)
 
     def open_exam_result_file(self) -> None:
         ui_open_exam_result_file(self)
@@ -1668,6 +1716,9 @@ class App:
 
     def start_pack_run(self) -> None:
         ui_start_pack_run(self)
+
+    def start_phone_decrypt_run(self) -> None:
+        ui_start_phone_decrypt_run(self)
 
     def start_match_run(self) -> None:
         ui_start_match_run(self)

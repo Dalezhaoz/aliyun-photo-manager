@@ -87,6 +87,8 @@ def flush_logs(app) -> None:
                 app.update_match_summary_ui(message.get("summary"))
             elif isinstance(message, dict) and message.get("type") == "update_sql_result":
                 app.update_update_sql_ui(message.get("result"))
+            elif isinstance(message, dict) and message.get("type") == "phone_summary":
+                app.update_phone_summary_ui(message.get("summary"))
             elif isinstance(message, dict) and message.get("type") == "exam_summary":
                 app.update_exam_summary_ui(message.get("summary"))
             elif isinstance(message, dict) and message.get("type") == "status_summary":
@@ -107,6 +109,9 @@ def flush_logs(app) -> None:
             elif message == "__UPDATE_SQL_DONE__":
                 app.update_sql_run_button.configure(state="normal")
                 app.update_sql_status_var.set("完成")
+            elif message == "__PHONE_DONE__":
+                app.phone_run_button.configure(state="normal")
+                app.phone_status_var.set("完成")
             elif message == "__STATUS_DONE__":
                 app.status_run_button.configure(state="normal")
             elif isinstance(message, str) and message.startswith("__WORD_EXPORT_FAILED__::"):
@@ -141,6 +146,14 @@ def flush_logs(app) -> None:
                 app.update_sql_status_var.set("失败")
                 app.update_sql_result_var.set(f"生成失败：\n{error_text}")
                 app.set_update_sql_result_text(app.update_sql_result_var.get())
+                app.write_log(error_text)
+            elif isinstance(message, str) and message.startswith("__PHONE_FAILED__::"):
+                error_text = message.split("::", 1)[1]
+                app.phone_run_button.configure(state="normal")
+                app.phone_open_button.configure(state="disabled")
+                app.phone_status_var.set("失败")
+                app.phone_result_var.set(f"电话解密失败：\n{error_text}")
+                app.set_phone_result_text(app.phone_result_var.get())
                 app.write_log(error_text)
             elif isinstance(message, str) and message.startswith("__EXAM_FAILED__::"):
                 app.exam_run_button.configure(state="normal")

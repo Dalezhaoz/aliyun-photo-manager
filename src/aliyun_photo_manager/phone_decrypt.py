@@ -1,0 +1,470 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Iterable, List, Optional, Sequence
+
+
+LogFn = Optional[Callable[[str], None]]
+
+
+@dataclass
+class PhoneDecryptOptions:
+    server: str
+    port: int
+    username: str
+    password: str
+    signup_database: str
+    phone_database: str
+    candidate_table: str
+    candidate_filter_mode: str = "all"
+    candidate_id_cards: Optional[Sequence[str]] = None
+    output_path: Optional[Path] = None
+
+
+@dataclass
+class PhoneDecryptRecord:
+    primary_key: str
+    id_card: str
+    province: str
+    encrypted_phone: str
+    decrypted_phone: str
+    status: str
+    note: str
+
+
+@dataclass
+class PhoneDecryptSummary:
+    signup_database: str
+    phone_database: str
+    candidate_table: str
+    output_path: Path
+    total_rows: int
+    matched_info_rows: int
+    decrypted_rows: int
+    updated_rows: int
+    skipped_rows: int
+    failed_rows: int
+    backend_name: str
+    records: List[PhoneDecryptRecord]
+
+
+def _log(logger: LogFn, message: str) -> None:
+    if logger is not None:
+        logger(message)
+
+
+def _normalize(value) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _load_pyodbc():
+    try:
+        import pyodbc  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError(
+            "未安装 pyodbc，无法连接 SQL Server。请先执行 `pip install -r requirements.txt`。"
+        ) from exc
+    return pyodbc
+
+
+def _ordered_drivers(pyodbc) -> list[str]:
+    preferred = [
+        "ODBC Driver 17 for SQL Server",
+        "ODBC Driver 18 for SQL Server",
+        "SQL Server",
+    ]
+    installed = list(pyodbc.drivers())
+    ordered = [name for name in preferred if name in installed]
+    for name in installed:
+        if name not in ordered:
+            ordered.append(name)
+    if not ordered:
+        raise RuntimeError("未找到 SQL Server ODBC 驱动，请先安装对应驱动。")
+    return ordered
+
+
+def _connect_sql_server(options: PhoneDecryptOptions):
+    pyodbc = _load_pyodbc()
+    last_error: Exception | None = None
+    for driver in _ordered_drivers(pyodbc):
+        for encrypt_option in ("no", "optional"):
+            connection_string = (
+                f"DRIVER={{{driver}}};"
+                f"SERVER={options.server},{options.port};"
+                f"UID={options.username};"
+                f"PWD={options.password};"
+                "TrustServerCertificate=yes;"
+                f"Encrypt={encrypt_option};"
+            )
+            try:
+                return pyodbc.connect(connection_string, timeout=8)
+            except Exception as exc:  # pragma: no cover
+                last_error = exc
+    if last_error is not None:
+        raise RuntimeError(f"连接 SQL Server 失败：{last_error}") from last_error
+    raise RuntimeError("连接 SQL Server 失败。")
+
+
+def _escape_identifier(name: str) -> str:
+    cleaned = name.strip()
+    if not cleaned:
+        raise ValueError("数据库名或表名不能为空。")
+    return cleaned.replace("]", "]]")
+
+
+def _load_openpyxl():
+    try:
+        from openpyxl import Workbook, load_workbook
+    except ImportError as exc:
+        raise ImportError("缺少依赖 openpyxl，请先执行 `pip install -r requirements.txt`。") from exc
+    return Workbook, load_workbook
+
+
+def _load_xlrd():
+    try:
+        import xlrd
+    except ImportError as exc:
+        raise ImportError("缺少依赖 xlrd，请先执行 `pip install -r requirements.txt`。") from exc
+    return xlrd
+
+
+def _read_sheet_matrix(file_path: Path) -> List[List[str]]:
+    suffix = file_path.suffix.lower()
+    if suffix == ".xlsx":
+        _, load_workbook = _load_openpyxl()
+        workbook = load_workbook(file_path, data_only=True)
+        worksheet = workbook.worksheets[0]
+        return [[_normalize(value) for value in row] for row in worksheet.iter_rows(values_only=True)]
+    if suffix == ".xls":
+        xlrd = _load_xlrd()
+        workbook = xlrd.open_workbook(file_path)
+        sheet = workbook.sheet_by_index(0)
+        return [
+            [_normalize(sheet.cell_value(row_index, col_index)) for col_index in range(sheet.ncols)]
+            for row_index in range(sheet.nrows)
+        ]
+    raise ValueError("名单文件仅支持 `.xlsx` 或 `.xls`。")
+
+
+def _trim_row(row: List[str]) -> List[str]:
+    trimmed = list(row)
+    while trimmed and trimmed[-1] == "":
+        trimmed.pop()
+    return trimmed
+
+
+def _detect_header_row(matrix: List[List[str]]) -> int:
+    best_index = 0
+    best_score = -1
+    for row_index in range(min(len(matrix), 10)):
+        row = _trim_row(matrix[row_index])
+        non_empty = [cell for cell in row if cell]
+        if not non_empty:
+            continue
+        score = len(non_empty) * 10 + len(set(non_empty))
+        if len(non_empty) == 1:
+            score -= 20
+        if score > best_score:
+            best_score = score
+            best_index = row_index
+    return best_index
+
+
+def load_filter_id_cards(file_path: Path) -> List[str]:
+    if not file_path.exists():
+        raise FileNotFoundError(f"未找到名单文件：{file_path}")
+    matrix = _read_sheet_matrix(file_path)
+    if not matrix:
+        raise ValueError("名单文件为空。")
+    header_index = _detect_header_row(matrix)
+    headers = [header or f"未命名列{index + 1}" for index, header in enumerate(_trim_row(matrix[header_index]))]
+    candidates = {"身份证号", "证件号码", "身份证", "sfzh"}
+    target_index = next((index for index, header in enumerate(headers) if header.strip() in candidates), None)
+    if target_index is None:
+        raise ValueError("名单文件缺少“身份证号”列。")
+    id_cards: List[str] = []
+    seen = set()
+    width = len(headers)
+    for raw_row in matrix[header_index + 1 :]:
+        row = list(raw_row[:width])
+        if len(row) < width:
+            row.extend([""] * (width - len(row)))
+        id_card = _normalize(row[target_index])
+        if id_card and id_card not in seen:
+            id_cards.append(id_card)
+            seen.add(id_card)
+    return id_cards
+
+
+class _DecryptorAdapter:
+    def __init__(self, inner, backend_name: str) -> None:
+        self.inner = inner
+        self.backend_name = backend_name
+
+    def check_encrypted(self, value: str) -> bool:
+        return bool(self.inner.CheckEncrypted(value))
+
+    def decrypt(self, data: str, sort_code: str, exam_date: str, province: str) -> str:
+        return _normalize(self.inner.Decrypt(data, sort_code, exam_date, province))
+
+
+def _load_pythonnet_decryptor() -> _DecryptorAdapter:
+    try:
+        import clr  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError("未安装 pythonnet，无法加载电话解密组件。") from exc
+
+    last_error: Exception | None = None
+    for assembly_name in ("Interop.DeDll", "DeDll"):
+        try:
+            clr.AddReference(assembly_name)
+            import DeDll  # type: ignore
+
+            return _DecryptorAdapter(DeDll.DeAESClass(), f"pythonnet:{assembly_name}")
+        except Exception as exc:  # pragma: no cover
+            last_error = exc
+    if last_error is not None:
+        raise RuntimeError(f"加载 Interop.DeDll 失败：{last_error}") from last_error
+    raise RuntimeError("加载 Interop.DeDll 失败。")
+
+
+def _load_win32com_decryptor() -> _DecryptorAdapter:
+    try:
+        import win32com.client  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError("未安装 pywin32，无法通过 COM 调用电话解密组件。") from exc
+
+    last_error: Exception | None = None
+    for prog_id in ("DeDll.DeAES", "DeDll.DeAESClass"):
+        try:
+            return _DecryptorAdapter(win32com.client.Dispatch(prog_id), f"win32com:{prog_id}")
+        except Exception as exc:  # pragma: no cover
+            last_error = exc
+    if last_error is not None:
+        raise RuntimeError(f"创建 DeDll 解密对象失败：{last_error}") from last_error
+    raise RuntimeError("创建 DeDll 解密对象失败。")
+
+
+def load_phone_decryptor() -> _DecryptorAdapter:
+    import os
+
+    if os.name != "nt":
+        raise RuntimeError("电话解密仅支持 Windows 环境。")
+
+    last_error: Exception | None = None
+    for loader in (_load_pythonnet_decryptor, _load_win32com_decryptor):
+        try:
+            return loader()
+        except Exception as exc:
+            last_error = exc
+    if last_error is not None:
+        raise RuntimeError(str(last_error)) from last_error
+    raise RuntimeError("未能加载电话解密组件。")
+
+
+def _normalize_province(raw_province: str, sort_code: str) -> str:
+    province = _normalize(raw_province)
+    if province.startswith("141") and sort_code == "96":
+        return "141"
+    return province
+
+
+def _split_primary_key(primary_key: str) -> tuple[str, str]:
+    normalized = _normalize(primary_key)
+    if len(normalized) < 8:
+        raise ValueError(f"主键编号长度不足，无法拆分考试代码和考试年月：{normalized}")
+    return normalized[:2], normalized[2:8]
+
+
+def _iter_chunked(items: Sequence[str], size: int = 500) -> Iterable[Sequence[str]]:
+    for index in range(0, len(items), size):
+        yield items[index : index + size]
+
+
+def _fetch_candidate_rows(cursor, options: PhoneDecryptOptions) -> List[tuple[str, str, str, str]]:
+    signup_db = _escape_identifier(options.signup_database)
+    phone_db = _escape_identifier(options.phone_database or options.signup_database)
+    candidate_table = _escape_identifier(options.candidate_table)
+    base_sql = f"""
+    SELECT
+        LTRIM(RTRIM(CAST(ks.[主键编号] AS VARCHAR(50)))) AS primary_key,
+        LTRIM(RTRIM(ISNULL(CAST(ks.[身份证号] AS VARCHAR(50)), ''))) AS id_card,
+        LTRIM(RTRIM(ISNULL(CAST(ks.[考区] AS VARCHAR(50)), ''))) AS province,
+        LTRIM(RTRIM(ISNULL(CAST(info.[info1] AS VARCHAR(255)), ''))) AS encrypted_phone
+    FROM [{signup_db}].[dbo].[{candidate_table}] ks
+    LEFT JOIN [{phone_db}].[dbo].[web_info] info
+        ON CAST(info.[zjbh] AS VARCHAR(50)) = CAST(ks.[主键编号] AS VARCHAR(50))
+       AND CAST(info.[examsort] AS VARCHAR(10)) = LEFT(CAST(ks.[主键编号] AS VARCHAR(50)), 2)
+    WHERE ks.[主键编号] IS NOT NULL
+    """
+
+    if options.candidate_filter_mode != "partial" or not options.candidate_id_cards:
+        cursor.execute(base_sql + " ORDER BY ks.[主键编号]")
+        return [(str(row[0]), str(row[1]), str(row[2]), str(row[3])) for row in cursor.fetchall()]
+
+    rows: List[tuple[str, str, str, str]] = []
+    for chunk in _iter_chunked(list(options.candidate_id_cards)):
+        placeholders = ",".join("?" for _ in chunk)
+        cursor.execute(
+            base_sql + f" AND CAST(ks.[身份证号] AS VARCHAR(50)) IN ({placeholders}) ORDER BY ks.[主键编号]",
+            list(chunk),
+        )
+        rows.extend((str(row[0]), str(row[1]), str(row[2]), str(row[3])) for row in cursor.fetchall())
+    return rows
+
+
+def _export_phone_report(records: List[PhoneDecryptRecord], output_path: Path) -> None:
+    Workbook, _ = _load_openpyxl()
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "电话解密结果"
+    sheet.append(["主键编号", "身份证号", "考区", "加密串", "解密后电话", "状态", "备注"])
+    for item in records:
+        sheet.append(
+            [
+                item.primary_key,
+                item.id_card,
+                item.province,
+                item.encrypted_phone,
+                item.decrypted_phone,
+                item.status,
+                item.note,
+            ]
+        )
+    workbook.save(output_path)
+
+
+def _build_output_path(options: PhoneDecryptOptions) -> Path:
+    if options.output_path is not None:
+        return options.output_path
+    return Path.cwd() / f"{options.candidate_table}_电话解密结果.xlsx"
+
+
+def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> PhoneDecryptSummary:
+    if not options.server.strip():
+        raise ValueError("请输入服务器地址。")
+    if not options.username.strip() or not options.password.strip():
+        raise ValueError("请输入数据库用户名和密码。")
+    if not options.signup_database.strip():
+        raise ValueError("请输入报名数据库名称。")
+    if not options.candidate_table.strip():
+        raise ValueError("请输入考生表名称。")
+
+    decryptor = load_phone_decryptor()
+    output_path = _build_output_path(options)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    _log(logger, f"已加载电话解密组件：{decryptor.backend_name}")
+    _log(logger, f"开始查询考生表：{options.signup_database}.{options.candidate_table}")
+
+    connection = _connect_sql_server(options)
+    try:
+        cursor = connection.cursor()
+        rows = _fetch_candidate_rows(cursor, options)
+        _log(logger, f"共读取到 {len(rows)} 条待处理记录。")
+
+        records: List[PhoneDecryptRecord] = []
+        updates: List[tuple[str, str]] = []
+        matched_info_rows = 0
+        decrypted_rows = 0
+        skipped_rows = 0
+        failed_rows = 0
+
+        for primary_key, id_card, province, encrypted_phone in rows:
+            encrypted_phone = _normalize(encrypted_phone)
+            if encrypted_phone:
+                matched_info_rows += 1
+            if not encrypted_phone:
+                skipped_rows += 1
+                records.append(
+                    PhoneDecryptRecord(
+                        primary_key=primary_key,
+                        id_card=id_card,
+                        province=province,
+                        encrypted_phone="",
+                        decrypted_phone="",
+                        status="跳过",
+                        note="未找到电话密文（web_info.info1 为空）。",
+                    )
+                )
+                continue
+
+            try:
+                sort_code, exam_date = _split_primary_key(primary_key)
+                province_value = _normalize_province(province, sort_code)
+                if not province_value:
+                    raise ValueError("考区代码为空。")
+                if decryptor.check_encrypted(encrypted_phone):
+                    decrypted_phone = decryptor.decrypt(encrypted_phone, sort_code, exam_date, province_value)
+                    note = "已调用 DLL 解密。"
+                else:
+                    decrypted_phone = encrypted_phone
+                    note = "原值未加密，直接写回。"
+                if not decrypted_phone:
+                    raise ValueError("解密结果为空。")
+            except Exception as exc:
+                failed_rows += 1
+                records.append(
+                    PhoneDecryptRecord(
+                        primary_key=primary_key,
+                        id_card=id_card,
+                        province=province,
+                        encrypted_phone=encrypted_phone,
+                        decrypted_phone="",
+                        status="失败",
+                        note=str(exc),
+                    )
+                )
+                continue
+
+            decrypted_rows += 1
+            updates.append((decrypted_phone, primary_key))
+            records.append(
+                PhoneDecryptRecord(
+                    primary_key=primary_key,
+                    id_card=id_card,
+                    province=province,
+                    encrypted_phone=encrypted_phone,
+                    decrypted_phone=decrypted_phone,
+                    status="成功",
+                    note=note,
+                )
+            )
+
+        if updates:
+            signup_db = _escape_identifier(options.signup_database)
+            candidate_table = _escape_identifier(options.candidate_table)
+            update_sql = f"""
+            UPDATE [{signup_db}].[dbo].[{candidate_table}]
+            SET [备用3] = ?
+            WHERE CAST([主键编号] AS VARCHAR(50)) = ?
+            """
+            cursor.fast_executemany = True
+            cursor.executemany(update_sql, updates)
+            connection.commit()
+            _log(logger, f"已更新 {len(updates)} 条电话到备用3。")
+        else:
+            _log(logger, "没有可回写的电话记录。")
+
+        _export_phone_report(records, output_path)
+        _log(logger, f"已导出电话解密结果清单：{output_path}")
+
+        return PhoneDecryptSummary(
+            signup_database=options.signup_database,
+            phone_database=options.phone_database or options.signup_database,
+            candidate_table=options.candidate_table,
+            output_path=output_path,
+            total_rows=len(rows),
+            matched_info_rows=matched_info_rows,
+            decrypted_rows=decrypted_rows,
+            updated_rows=len(updates),
+            skipped_rows=skipped_rows,
+            failed_rows=failed_rows,
+            backend_name=decryptor.backend_name,
+            records=records,
+        )
+    finally:
+        connection.close()
