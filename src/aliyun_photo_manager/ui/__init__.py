@@ -109,9 +109,7 @@ from .pack_actions import (
 from .pack_tab import build_pack_tab
 from .phone_actions import (
     choose_phone_filter_file,
-    fill_phone_output_path,
     fill_phone_table_name,
-    open_phone_report_file,
     set_phone_result_text,
     start_phone_decrypt_run,
     update_phone_mode_ui,
@@ -225,10 +223,8 @@ __all__ = [
     "build_phone_tab",
     "choose_phone_filter_file",
     "fill_phone_table_name",
-    "fill_phone_output_path",
     "update_phone_mode_ui",
     "set_phone_result_text",
-    "open_phone_report_file",
     "start_phone_decrypt_run",
     "update_phone_summary_ui",
     "choose_word_source",

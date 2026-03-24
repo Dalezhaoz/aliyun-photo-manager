@@ -151,7 +151,6 @@ def flush_logs(app) -> None:
             elif isinstance(message, str) and message.startswith("__PHONE_FAILED__::"):
                 error_text = message.split("::", 1)[1]
                 app.phone_run_button.configure(state="normal")
-                app.phone_open_button.configure(state="disabled")
                 app.phone_status_var.set("失败")
                 app.phone_result_var.set(f"电话解密失败：\n{error_text}")
                 app.set_phone_result_text(app.phone_result_var.get())

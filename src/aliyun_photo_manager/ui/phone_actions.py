@@ -25,14 +25,6 @@ def fill_phone_table_name(app) -> None:
     exam_sort = app.phone_exam_sort_var.get().strip()
     if exam_sort:
         app.phone_candidate_table_var.set(f"考生表{exam_sort}")
-        fill_phone_output_path(app)
-
-
-def fill_phone_output_path(app) -> None:
-    table_name = app.phone_candidate_table_var.get().strip()
-    if not table_name:
-        return
-    app.phone_output_path_var.set(str(Path.cwd() / f"{table_name}_电话解密结果.xlsx"))
 
 
 def update_phone_mode_ui(app) -> None:
@@ -55,7 +47,6 @@ def update_phone_summary_ui(app, summary: Optional[PhoneDecryptSummary]) -> None
     if summary is None:
         app.phone_result_var.set("电话解密结果会显示在这里")
         set_phone_result_text(app, app.phone_result_var.get())
-        app.phone_open_button.configure(state="disabled")
         return
 
     app.phone_result_var.set(
@@ -63,23 +54,15 @@ def update_phone_summary_ui(app, summary: Optional[PhoneDecryptSummary]) -> None
         f"报名库：{summary.signup_database}\n"
         f"电话库：{summary.phone_database}\n"
         f"考生表：{summary.candidate_table}\n"
-        f"结果文件：{summary.output_path}\n"
         f"解密组件：{summary.backend_name}\n"
         f"总记录：{summary.total_rows}\n"
         f"命中密文：{summary.matched_info_rows}\n"
         f"解密成功：{summary.decrypted_rows}\n"
-        f"回写成功：{summary.updated_rows}\n"
+        f"回写备用3：{summary.updated_rows}\n"
         f"跳过：{summary.skipped_rows}\n"
         f"失败：{summary.failed_rows}"
     )
     set_phone_result_text(app, app.phone_result_var.get())
-    app.phone_open_button.configure(state="normal")
-
-
-def open_phone_report_file(app) -> None:
-    if app.last_phone_summary is None:
-        return
-    app.open_local_file(app.last_phone_summary.output_path, "未找到电话解密结果文件")
 
 
 def start_phone_decrypt_run(app) -> None:
@@ -122,15 +105,10 @@ def start_phone_decrypt_run(app) -> None:
             messagebox.showerror("名单文件错误", "名单文件中没有可用的身份证号。")
             return
 
-    output_value = app.phone_output_path_var.get().strip()
-    output_path = Path(output_value) if output_value else Path.cwd() / f"{candidate_table}_电话解密结果.xlsx"
-    app.phone_output_path_var.set(str(output_path))
     app.save_settings()
-
     app.phone_run_button.configure(state="disabled")
-    app.phone_open_button.configure(state="disabled")
     app.phone_status_var.set("解密中")
-    app.phone_result_var.set("正在查询、解密并回写电话，请稍候...")
+    app.phone_result_var.set("正在查询、解密并回写电话到备用3，请稍候...")
     set_phone_result_text(app, app.phone_result_var.get())
     app.write_log(
         f"启动电话解密任务：{signup_database}.{candidate_table} -> {phone_database}.web_info"
@@ -146,7 +124,6 @@ def start_phone_decrypt_run(app) -> None:
         candidate_table=candidate_table,
         candidate_filter_mode=app.phone_mode_var.get().strip(),
         candidate_id_cards=candidate_id_cards,
-        output_path=output_path,
     )
 
     def runner() -> None:

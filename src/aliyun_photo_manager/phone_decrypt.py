@@ -24,7 +24,6 @@ class PhoneDecryptOptions:
     candidate_table: str
     candidate_filter_mode: str = "all"
     candidate_id_cards: Optional[Sequence[str]] = None
-    output_path: Optional[Path] = None
 
 
 @dataclass
@@ -43,7 +42,6 @@ class PhoneDecryptSummary:
     signup_database: str
     phone_database: str
     candidate_table: str
-    output_path: Path
     total_rows: int
     matched_info_rows: int
     decrypted_rows: int
@@ -237,35 +235,6 @@ def _call_helper(payload: dict, logger: LogFn = None) -> dict:
         return json.loads(output_path.read_text(encoding="utf-8"))
 
 
-# ── Excel export ─────────────────────────────────────────────────────────
-
-def _export_phone_report(records: List[PhoneDecryptRecord], output_path: Path) -> None:
-    Workbook, _ = _load_openpyxl()
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "电话解密结果"
-    sheet.append(["主键编号", "身份证号", "考区", "加密串", "解密后电话", "状态", "备注"])
-    for item in records:
-        sheet.append(
-            [
-                item.primary_key,
-                item.id_card,
-                item.province,
-                item.encrypted_phone,
-                item.decrypted_phone,
-                item.status,
-                item.note,
-            ]
-        )
-    workbook.save(output_path)
-
-
-def _build_output_path(options: PhoneDecryptOptions) -> Path:
-    if options.output_path is not None:
-        return options.output_path
-    return Path.cwd() / f"{options.candidate_table}_电话解密结果.xlsx"
-
-
 # ── Main entry point ─────────────────────────────────────────────────────
 
 def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> PhoneDecryptSummary:
@@ -278,8 +247,6 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
     if not options.candidate_table.strip():
         raise ValueError("请输入考生表名称。")
 
-    output_path = _build_output_path(options)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     _log(logger, f"开始电话解密：{options.signup_database}.{options.candidate_table}")
 
     payload: dict = {
@@ -322,14 +289,10 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
             )
         )
 
-    _export_phone_report(records, output_path)
-    _log(logger, f"已导出电话解密结果清单：{output_path}")
-
     return PhoneDecryptSummary(
         signup_database=options.signup_database,
         phone_database=options.phone_database or options.signup_database,
         candidate_table=options.candidate_table,
-        output_path=output_path,
         total_rows=int(data.get("totalRows", 0)),
         matched_info_rows=int(data.get("matchedInfoRows", 0)),
         decrypted_rows=int(data.get("decryptedRows", 0)),

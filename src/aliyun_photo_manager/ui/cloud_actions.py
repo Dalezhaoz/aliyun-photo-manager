@@ -278,7 +278,6 @@ def load_saved_settings(app) -> None:
     app.phone_candidate_table_var.set(settings.get("phone_candidate_table", ""))
     app.phone_mode_var.set(settings.get("phone_mode", app.phone_mode_var.get()))
     app.phone_filter_file_var.set(settings.get("phone_filter_file", ""))
-    app.phone_output_path_var.set(settings.get("phone_output_path", ""))
     app.load_exam_group_headers()
 
 
@@ -354,7 +353,6 @@ def save_settings(app) -> None:
         "phone_candidate_table": app.phone_candidate_table_var.get().strip(),
         "phone_mode": app.phone_mode_var.get().strip(),
         "phone_filter_file": app.phone_filter_file_var.get().strip(),
-        "phone_output_path": app.phone_output_path_var.get().strip(),
     }
     app.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
     app.write_log(f"配置已保存到 {app.SETTINGS_FILE}")

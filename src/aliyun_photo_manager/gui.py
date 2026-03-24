@@ -89,7 +89,6 @@ from .ui import (
     export_update_sql_template_file as ui_export_update_sql_template_file,
     fill_exam_output_path as ui_fill_exam_output_path,
     fill_match_output_path as ui_fill_match_output_path,
-    fill_phone_output_path as ui_fill_phone_output_path,
     fill_phone_table_name as ui_fill_phone_table_name,
     finish_count_refresh as ui_finish_count_refresh,
     finish_certificate_bucket_load as ui_finish_certificate_bucket_load,
@@ -112,7 +111,6 @@ from .ui import (
     move_exam_rule_up as ui_move_exam_rule_up,
     add_extra_match_mapping as ui_add_extra_match_mapping,
     open_exam_result_file as ui_open_exam_result_file,
-    open_phone_report_file as ui_open_phone_report_file,
     open_photo_report_file as ui_open_photo_report_file,
     open_template_file as ui_open_template_file,
     remove_extra_match_mapping as ui_remove_extra_match_mapping,
@@ -309,7 +307,7 @@ class App:
         self.phone_candidate_table_var = tk.StringVar()
         self.phone_mode_var = tk.StringVar(value="all")
         self.phone_filter_file_var = tk.StringVar()
-        self.phone_output_path_var = tk.StringVar()
+
         self.exam_candidate_var = tk.StringVar()
         self.exam_group_var = tk.StringVar()
         self.exam_plan_var = tk.StringVar()
@@ -1185,9 +1183,6 @@ class App:
     def fill_phone_table_name(self) -> None:
         ui_fill_phone_table_name(self)
 
-    def fill_phone_output_path(self) -> None:
-        ui_fill_phone_output_path(self)
-
     def load_match_headers(self) -> None:
         ui_load_match_headers(self)
 
@@ -1377,9 +1372,6 @@ class App:
 
     def open_match_result_file(self) -> None:
         ui_open_match_result_file(self)
-
-    def open_phone_report_file(self) -> None:
-        ui_open_phone_report_file(self)
 
     def open_exam_result_file(self) -> None:
         ui_open_exam_result_file(self)

@@ -79,11 +79,6 @@ def build_phone_tab(app, notebook: ttk.Notebook) -> None:
     )
     app.phone_filter_button.grid(row=3, column=3, sticky="w", pady=6)
 
-    app.add_entry_row(options_frame, 4, "结果文件", app.phone_output_path_var)
-    ttk.Button(options_frame, text="自动生成", command=app.fill_phone_output_path, width=12).grid(
-        row=4, column=2, padx=(10, 0), pady=6
-    )
-
     action_frame = ttk.Frame(phone_frame)
     action_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
     app.phone_run_button = ttk.Button(
@@ -94,14 +89,6 @@ def build_phone_tab(app, notebook: ttk.Notebook) -> None:
         width=12,
     )
     app.phone_run_button.pack(side="left")
-    app.phone_open_button = ttk.Button(
-        action_frame,
-        text="打开结果文件",
-        command=app.open_phone_report_file,
-        state="disabled",
-        width=14,
-    )
-    app.phone_open_button.pack(side="left", padx=(10, 0))
     ttk.Label(action_frame, textvariable=app.phone_status_var).pack(side="right")
 
     result_frame = ttk.LabelFrame(phone_frame, text="解密结果", padding=12)
