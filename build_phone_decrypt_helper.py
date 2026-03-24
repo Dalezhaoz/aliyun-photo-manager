@@ -23,7 +23,7 @@ def main() -> None:
         "-r",
         "win-x86",
         "--self-contained",
-        "false",
+        "true",
     ]
     completed = subprocess.run(command, check=False)
     if completed.returncode != 0:
