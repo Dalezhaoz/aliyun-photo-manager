@@ -278,6 +278,13 @@ def load_saved_settings(app) -> None:
     app.phone_candidate_table_var.set(settings.get("phone_candidate_table", ""))
     app.phone_mode_var.set(settings.get("phone_mode", app.phone_mode_var.get()))
     app.phone_filter_file_var.set(settings.get("phone_filter_file", ""))
+    app.id_input_var.set(settings.get("id_input", ""))
+    app.id_region_var.set(settings.get("id_region", app.id_region_var.get()))
+    app.id_custom_region_code_var.set(settings.get("id_custom_region_code", ""))
+    app.id_birth_year_var.set(settings.get("id_birth_year", app.id_birth_year_var.get()))
+    app.id_birth_month_var.set(settings.get("id_birth_month", app.id_birth_month_var.get()))
+    app.id_birth_day_var.set(settings.get("id_birth_day", app.id_birth_day_var.get()))
+    app.id_gender_var.set(settings.get("id_gender", app.id_gender_var.get()))
     app.load_exam_group_headers()
 
 
@@ -353,6 +360,13 @@ def save_settings(app) -> None:
         "phone_candidate_table": app.phone_candidate_table_var.get().strip(),
         "phone_mode": app.phone_mode_var.get().strip(),
         "phone_filter_file": app.phone_filter_file_var.get().strip(),
+        "id_input": app.id_input_var.get().strip(),
+        "id_region": app.id_region_var.get().strip(),
+        "id_custom_region_code": app.id_custom_region_code_var.get().strip(),
+        "id_birth_year": app.id_birth_year_var.get().strip(),
+        "id_birth_month": app.id_birth_month_var.get().strip(),
+        "id_birth_day": app.id_birth_day_var.get().strip(),
+        "id_gender": app.id_gender_var.get().strip(),
     }
     app.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
     app.write_log(f"配置已保存到 {app.SETTINGS_FILE}")

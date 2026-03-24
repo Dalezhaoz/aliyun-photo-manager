@@ -142,6 +142,7 @@ from .ui import (
     update_photo_source_mode_ui as ui_update_photo_source_mode_ui,
     update_summary_ui as ui_update_summary_ui,
     update_word_export_ui as ui_update_word_export_ui,
+    set_id_result_text as ui_set_id_result_text,
     set_match_result_text as ui_set_match_result_text,
     set_phone_result_text as ui_set_phone_result_text,
     open_match_result_file as ui_open_match_result_file,
@@ -150,6 +151,7 @@ from .ui import (
     open_local_file as ui_open_local_file,
     open_pack_file as ui_open_pack_file,
     copy_pack_password as ui_copy_pack_password,
+    copy_generated_id_card as ui_copy_generated_id_card,
     build_status_tab,
     clear_status_server_form as ui_clear_status_server_form,
     delete_status_server as ui_delete_status_server,
@@ -171,6 +173,8 @@ from .ui import (
     start_exam_arrange_run as ui_start_exam_arrange_run,
     start_match_run as ui_start_match_run,
     start_pack_run as ui_start_pack_run,
+    run_id_card_generate as ui_run_id_card_generate,
+    run_id_card_validate as ui_run_id_card_validate,
     start_phone_decrypt_run as ui_start_phone_decrypt_run,
     start_photo_classify_run as ui_start_photo_classify_run,
     start_photo_download_run as ui_start_photo_download_run,
@@ -180,6 +184,8 @@ from .ui import (
     update_update_sql_ui as ui_update_update_sql_ui,
     update_pack_password_mode_ui as ui_update_pack_password_mode_ui,
     update_pack_summary_ui as ui_update_pack_summary_ui,
+    update_id_day_values as ui_update_id_day_values,
+    update_id_region_hint as ui_update_id_region_hint,
     update_phone_mode_ui as ui_update_phone_mode_ui,
     update_phone_summary_ui as ui_update_phone_summary_ui,
     cancel_run as ui_cancel_run,
@@ -187,6 +193,7 @@ from .ui import (
     build_certificate_tab,
     build_exam_tab,
     build_help_tab,
+    build_id_card_tab,
     build_log_tab,
     build_match_tab,
     build_pack_tab,
@@ -307,6 +314,15 @@ class App:
         self.phone_candidate_table_var = tk.StringVar()
         self.phone_mode_var = tk.StringVar(value="all")
         self.phone_filter_file_var = tk.StringVar()
+        self.id_input_var = tk.StringVar()
+        self.id_region_var = tk.StringVar(value="110101 北京市 东城区")
+        self.id_custom_region_code_var = tk.StringVar()
+        self.id_birth_year_var = tk.StringVar(value="1990")
+        self.id_birth_month_var = tk.StringVar(value="01")
+        self.id_birth_day_var = tk.StringVar(value="01")
+        self.id_gender_var = tk.StringVar(value="男")
+        self.id_generated_var = tk.StringVar()
+        self.id_region_hint_var = tk.StringVar(value="北京市 东城区（110101）")
 
         self.exam_candidate_var = tk.StringVar()
         self.exam_group_var = tk.StringVar()
@@ -356,6 +372,7 @@ class App:
         self.update_sql_result_var = tk.StringVar(value="更新 SQL 会显示在这里")
         self.phone_status_var = tk.StringVar(value="未开始解密")
         self.phone_result_var = tk.StringVar(value="电话解密结果会显示在这里")
+        self.id_result_var = tk.StringVar(value="身份证工具结果会显示在这里")
         self.exam_status_var = tk.StringVar(value="未开始编排")
         self.exam_result_var = tk.StringVar(value="考场编排结果会显示在这里")
         self.status_query_status_var = tk.StringVar(value="未开始查询")
@@ -385,6 +402,7 @@ class App:
         self.sql_result_text = None
         self.update_sql_result_text = None
         self.phone_result_text = None
+        self.id_result_text = None
         self.exam_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []
@@ -594,6 +612,7 @@ class App:
         build_match_tab(self, notebook)
         build_update_sql_tab(self, notebook)
         build_phone_tab(self, notebook)
+        build_id_card_tab(self, notebook)
         build_exam_tab(self, notebook)
         build_pack_tab(self, notebook)
         build_help_tab(self, notebook)
@@ -615,6 +634,9 @@ class App:
         self.set_update_sql_result_text(self.update_sql_result_var.get())
         self.update_phone_mode_ui()
         self.set_phone_result_text(self.phone_result_var.get())
+        self.update_id_day_values()
+        self.update_id_region_hint()
+        self.set_id_result_text(self.id_result_var.get())
         self.load_exam_group_headers()
         self.refresh_exam_rule_tree()
         self.set_exam_result_text(self.exam_result_var.get())
@@ -744,7 +766,25 @@ class App:
 - 只更新模板中“是否更新”为“是”的字段
 - 可直接在结果区查看完整 SQL
 
-六、项目阶段汇总
+六、身份证工具
+
+适用场景：
+- 校验 18 位大陆居民身份证是否合法
+- 解析出生日期、性别、所在地
+- 按出生日期、所在地、性别生成合法身份证号
+
+操作步骤：
+1. 在“输入校验”中输入身份证号，点击“校验并解析”。
+2. 在“身份证生成”中选择预设所在地，或手工填写 6 位区划码。
+3. 选择出生日期和性别。
+4. 点击“生成身份证”。
+
+结果说明：
+- 校验会检查格式、出生日期、行政区划前缀和校验位
+- 生成结果会自动计算最后一位校验码
+- 当前内置全国省级映射和一组常用合法区划码
+
+七、项目阶段汇总
 
 适用场景：
 - 一次查看多台 SQL Server 上所有报名项目阶段的状态
@@ -1316,6 +1356,9 @@ class App:
     def set_phone_result_text(self, content: str) -> None:
         ui_set_phone_result_text(self, content)
 
+    def set_id_result_text(self, content: str) -> None:
+        ui_set_id_result_text(self, content)
+
     def set_pack_query_result_text(self, content: str) -> None:
         ui_set_pack_query_result_text(self, content)
 
@@ -1342,6 +1385,24 @@ class App:
 
     def update_phone_mode_ui(self) -> None:
         ui_update_phone_mode_ui(self)
+
+    def update_id_day_values(self) -> None:
+        ui_update_id_day_values(self)
+
+    def update_id_region_hint(self) -> None:
+        ui_update_id_region_hint(self)
+
+    def run_id_card_validate(self) -> None:
+        ui_run_id_card_validate(self)
+
+    def run_id_card_generate(self) -> None:
+        try:
+            ui_run_id_card_generate(self)
+        except Exception as exc:
+            messagebox.showerror("身份证生成失败", str(exc))
+
+    def copy_generated_id_card(self) -> None:
+        ui_copy_generated_id_card(self)
 
     def run_pack_history_query(self) -> None:
         ui_run_pack_history_query(self)

@@ -70,6 +70,15 @@ from .exam_actions import (
     update_exam_summary_ui,
 )
 from .help_tab import build_help_tab
+from .id_card_actions import (
+    copy_generated_id_card,
+    run_id_card_generate,
+    run_id_card_validate,
+    set_id_result_text,
+    update_id_day_values,
+    update_id_region_hint,
+)
+from .id_card_tab import build_id_card_tab
 from .log_tab import build_log_tab
 from .log_actions import (
     cancel_run,
@@ -289,6 +298,13 @@ __all__ = [
     "build_sql_tab",
     "build_update_sql_tab",
     "build_help_tab",
+    "build_id_card_tab",
+    "run_id_card_validate",
+    "run_id_card_generate",
+    "copy_generated_id_card",
+    "update_id_day_values",
+    "update_id_region_hint",
+    "set_id_result_text",
     "build_log_tab",
     "clear_log",
     "write_log",
