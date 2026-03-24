@@ -8,6 +8,16 @@ ENTRY_FILE = PROJECT_ROOT / "app_launcher.py"
 DIST_DIR = PROJECT_ROOT / "dist"
 BUILD_DIR = PROJECT_ROOT / "build"
 ICON_PATH = PROJECT_ROOT / "assets" / "app_icon.ico"
+HELPER_PUBLISH_DIR = (
+    PROJECT_ROOT
+    / "tools"
+    / "PhoneDecryptHelper"
+    / "bin"
+    / "Release"
+    / "net8.0-windows"
+    / "win-x86"
+    / "publish"
+)
 
 
 def main() -> None:
@@ -34,6 +44,10 @@ def main() -> None:
     ]
     if ICON_PATH.exists():
         args.append(f"--icon={ICON_PATH}")
+    if HELPER_PUBLISH_DIR.exists():
+        for helper_file in HELPER_PUBLISH_DIR.iterdir():
+            if helper_file.is_file():
+                args.append(f"--add-binary={helper_file};.")
     PyInstaller.__main__.run(args)
 
 

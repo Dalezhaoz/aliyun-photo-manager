@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import json
+import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence
@@ -49,6 +52,25 @@ class PhoneDecryptSummary:
     failed_rows: int
     backend_name: str
     records: List[PhoneDecryptRecord]
+
+
+@dataclass
+class _PhoneDecryptRequest:
+    primary_key: str
+    encrypted_phone: str
+    sort_code: str
+    exam_date: str
+    province: str
+
+
+@dataclass
+class _PhoneDecryptResponse:
+    primary_key: str
+    encrypted_phone: str
+    decrypted_phone: str
+    was_encrypted: bool
+    success: bool
+    error: str
 
 
 def _log(logger: LogFn, message: str) -> None:
@@ -245,6 +267,99 @@ def _find_component_path(filename: str) -> Path | None:
     return None
 
 
+def _candidate_helper_paths() -> List[Path]:
+    candidates: List[Path] = []
+    env_path = os.environ.get("PHONE_DECRYPT_HELPER", "").strip()
+    if env_path:
+        candidates.append(Path(env_path))
+
+    project_root = Path(__file__).resolve().parents[2]
+    candidates.extend(
+        [
+            project_root / "PhoneDecryptHelper.exe",
+            project_root / "tools" / "PhoneDecryptHelper" / "bin" / "Release" / "net8.0-windows" / "win-x86" / "publish" / "PhoneDecryptHelper.exe",
+            project_root / "tools" / "PhoneDecryptHelper" / "bin" / "Release" / "net8.0-windows" / "PhoneDecryptHelper.exe",
+            Path.cwd() / "PhoneDecryptHelper.exe",
+        ]
+    )
+    seen = set()
+    result: List[Path] = []
+    for item in candidates:
+        resolved = item.expanduser().resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        result.append(resolved)
+    return result
+
+
+def _find_helper_path() -> Path | None:
+    for candidate in _candidate_helper_paths():
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _run_helper_batch(requests: Sequence[_PhoneDecryptRequest], logger: LogFn = None) -> tuple[str, dict[str, _PhoneDecryptResponse]]:
+    helper_path = _find_helper_path()
+    if helper_path is None:
+        searched = "，".join(str(item) for item in _candidate_helper_paths())
+        raise RuntimeError(
+            "未找到 PhoneDecryptHelper.exe。"
+            " 请先在 Windows 上编译 32 位 helper，或设置环境变量 PHONE_DECRYPT_HELPER。"
+            f" 已搜索：{searched}"
+        )
+
+    payload = {
+        "requests": [
+            {
+                "primaryKey": item.primary_key,
+                "encryptedPhone": item.encrypted_phone,
+                "sortCode": item.sort_code,
+                "examDate": item.exam_date,
+                "province": item.province,
+            }
+            for item in requests
+        ]
+    }
+    with tempfile.TemporaryDirectory(prefix="phone_decrypt_") as temp_dir:
+        temp_path = Path(temp_dir)
+        input_path = temp_path / "input.json"
+        output_path = temp_path / "output.json"
+        input_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _log(logger, f"调用 32 位电话解密 helper：{helper_path}")
+        result = subprocess.run(
+            [str(helper_path), str(input_path), str(output_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            details = [f"helper 返回码: {result.returncode}"]
+            if result.stderr.strip():
+                details.append(f"stderr: {result.stderr.strip()}")
+            if result.stdout.strip():
+                details.append(f"stdout: {result.stdout.strip()}")
+            raise RuntimeError("电话解密 helper 执行失败\n" + "\n".join(details))
+        if not output_path.exists():
+            raise RuntimeError("电话解密 helper 未生成输出文件。")
+        data = json.loads(output_path.read_text(encoding="utf-8"))
+    responses = {
+        str(item.get("primaryKey", "")): _PhoneDecryptResponse(
+            primary_key=str(item.get("primaryKey", "")),
+            encrypted_phone=str(item.get("encryptedPhone", "")),
+            decrypted_phone=str(item.get("decryptedPhone", "")),
+            was_encrypted=bool(item.get("wasEncrypted", False)),
+            success=bool(item.get("success", False)),
+            error=str(item.get("error", "")),
+        )
+        for item in data.get("responses", [])
+        if isinstance(item, dict)
+    }
+    backend_name = str(data.get("backendName", helper_path.name)).strip() or helper_path.name
+    return backend_name, responses
+
+
 def _load_pythonnet_decryptor() -> _DecryptorAdapter:
     try:
         import clr  # type: ignore
@@ -406,11 +521,8 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
     if not options.candidate_table.strip():
         raise ValueError("请输入考生表名称。")
 
-    decryptor = load_phone_decryptor()
     output_path = _build_output_path(options)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    _log(logger, f"已加载电话解密组件：{decryptor.backend_name}")
     _log(logger, f"开始查询考生表：{options.signup_database}.{options.candidate_table}")
 
     connection = _connect_sql_server(options)
@@ -425,6 +537,9 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
         decrypted_rows = 0
         skipped_rows = 0
         failed_rows = 0
+        backend_name = ""
+        pending_requests: List[_PhoneDecryptRequest] = []
+        pending_rows: dict[str, tuple[str, str, str]] = {}
 
         for primary_key, id_card, province, encrypted_phone in rows:
             encrypted_phone = _normalize(encrypted_phone)
@@ -450,14 +565,6 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
                 province_value = _normalize_province(province, sort_code)
                 if not province_value:
                     raise ValueError("考区代码为空。")
-                if decryptor.check_encrypted(encrypted_phone):
-                    decrypted_phone = decryptor.decrypt(encrypted_phone, sort_code, exam_date, province_value)
-                    note = "已调用 DLL 解密。"
-                else:
-                    decrypted_phone = encrypted_phone
-                    note = "原值未加密，直接写回。"
-                if not decrypted_phone:
-                    raise ValueError("解密结果为空。")
             except Exception as exc:
                 failed_rows += 1
                 records.append(
@@ -472,18 +579,102 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
                     )
                 )
                 continue
+            pending_requests.append(
+                _PhoneDecryptRequest(
+                    primary_key=primary_key,
+                    encrypted_phone=encrypted_phone,
+                    sort_code=sort_code,
+                    exam_date=exam_date,
+                    province=province_value,
+                )
+            )
+            pending_rows[primary_key] = (id_card, province, encrypted_phone)
 
+        responses: dict[str, _PhoneDecryptResponse] = {}
+        if pending_requests:
+            try:
+                backend_name, responses = _run_helper_batch(pending_requests, logger=logger)
+            except Exception as helper_exc:
+                _log(logger, f"32 位 helper 不可用，尝试进程内加载：{helper_exc}")
+                decryptor = load_phone_decryptor()
+                backend_name = decryptor.backend_name
+                _log(logger, f"已加载电话解密组件：{backend_name}")
+                for request in pending_requests:
+                    try:
+                        if decryptor.check_encrypted(request.encrypted_phone):
+                            decrypted_phone = decryptor.decrypt(
+                                request.encrypted_phone,
+                                request.sort_code,
+                                request.exam_date,
+                                request.province,
+                            )
+                            was_encrypted = True
+                        else:
+                            decrypted_phone = request.encrypted_phone
+                            was_encrypted = False
+                        responses[request.primary_key] = _PhoneDecryptResponse(
+                            primary_key=request.primary_key,
+                            encrypted_phone=request.encrypted_phone,
+                            decrypted_phone=decrypted_phone,
+                            was_encrypted=was_encrypted,
+                            success=bool(decrypted_phone),
+                            error="" if decrypted_phone else "解密结果为空。",
+                        )
+                    except Exception as exc:
+                        responses[request.primary_key] = _PhoneDecryptResponse(
+                            primary_key=request.primary_key,
+                            encrypted_phone=request.encrypted_phone,
+                            decrypted_phone="",
+                            was_encrypted=True,
+                            success=False,
+                            error=str(exc),
+                        )
+            else:
+                _log(logger, f"已加载电话解密组件：{backend_name}")
+
+        for request in pending_requests:
+            id_card, province, encrypted_phone = pending_rows[request.primary_key]
+            response = responses.get(request.primary_key)
+            if response is None:
+                failed_rows += 1
+                records.append(
+                    PhoneDecryptRecord(
+                        primary_key=request.primary_key,
+                        id_card=id_card,
+                        province=province,
+                        encrypted_phone=encrypted_phone,
+                        decrypted_phone="",
+                        status="失败",
+                        note="未收到解密结果。",
+                    )
+                )
+                continue
+            if not response.success:
+                failed_rows += 1
+                records.append(
+                    PhoneDecryptRecord(
+                        primary_key=request.primary_key,
+                        id_card=id_card,
+                        province=province,
+                        encrypted_phone=encrypted_phone,
+                        decrypted_phone="",
+                        status="失败",
+                        note=response.error or "解密失败。",
+                    )
+                )
+                continue
+            decrypted_phone = _normalize(response.decrypted_phone)
             decrypted_rows += 1
-            updates.append((decrypted_phone, primary_key))
+            updates.append((decrypted_phone, request.primary_key))
             records.append(
                 PhoneDecryptRecord(
-                    primary_key=primary_key,
+                    primary_key=request.primary_key,
                     id_card=id_card,
                     province=province,
                     encrypted_phone=encrypted_phone,
                     decrypted_phone=decrypted_phone,
                     status="成功",
-                    note=note,
+                    note="已调用 DLL 解密。" if response.was_encrypted else "原值未加密，直接写回。",
                 )
             )
 
@@ -516,7 +707,7 @@ def run_phone_decrypt(options: PhoneDecryptOptions, logger: LogFn = None) -> Pho
             updated_rows=len(updates),
             skipped_rows=skipped_rows,
             failed_rows=failed_rows,
-            backend_name=decryptor.backend_name,
+            backend_name=backend_name or "unknown",
             records=records,
         )
     finally:

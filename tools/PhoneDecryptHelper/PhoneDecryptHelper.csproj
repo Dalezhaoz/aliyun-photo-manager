@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x86</PlatformTarget>
+    <Platforms>x86</Platforms>
+    <UseAppHost>true</UseAppHost>
+    <AssemblyName>PhoneDecryptHelper</AssemblyName>
+    <RootNamespace>PhoneDecryptHelper</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Interop.DeDll">
+      <HintPath>..\..\Interop.DeDll.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\DeDLL.dll" Link="DeDLL.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\Interop.DeDll.dll" Link="Interop.DeDll.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>
