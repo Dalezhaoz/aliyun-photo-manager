@@ -28,13 +28,6 @@ from .certificate_filter import (
     run_certificate_filter,
 )
 from .config import OssConfig, validate_oss_config, validate_oss_credentials
-from .data_matcher import (
-    ColumnMapping,
-    DataMatchOptions,
-    DataMatchSummary,
-    list_headers as list_match_headers,
-    run_data_match,
-)
 from .downloader import (
     BrowserEntry,
     count_photos_in_prefix,
@@ -46,17 +39,249 @@ from .downloader import (
 )
 from .excel_classifier import generate_template
 from .result_packer import PackSummary, pack_encrypted_folder, query_pack_history
-from .update_sql_generator import (
-    UpdateSqlResult,
-    export_update_sql_template,
-    load_update_field_mappings,
-    render_update_sql,
+from .update_sql_generator import UpdateSqlResult
+from .data_matcher import (
+    ColumnMapping,
+    DataMatchOptions,
+    DataMatchSummary,
+    list_headers as list_match_headers,
+    run_data_match,
 )
 from .word_to_html import WordExportResult, export_word_to_html
+from .ui import (
+    add_entry_row as ui_add_entry_row,
+    add_file_row as ui_add_file_row,
+    add_path_row as ui_add_path_row,
+    add_tick_checkbutton as ui_add_tick_checkbutton,
+    apply_cloud_profile as ui_apply_cloud_profile,
+    bind_mousewheel_to_canvas as ui_bind_mousewheel_to_canvas,
+    build_credentials as ui_build_credentials,
+    check_endpoint_reachable as ui_check_endpoint_reachable,
+    choose_certificate_template as ui_choose_certificate_template,
+    choose_match_source as ui_choose_match_source,
+    choose_match_target as ui_choose_match_target,
+    choose_pack_source_directory as ui_choose_pack_source_directory,
+    choose_pack_source_file as ui_choose_pack_source_file,
+    choose_phone_filter_file as ui_choose_phone_filter_file,
+    choose_photo_template as ui_choose_photo_template,
+    choose_update_sql_mapping as ui_choose_update_sql_mapping,
+    choose_word_source as ui_choose_word_source,
+    copy_update_sql as ui_copy_update_sql,
+    copy_word_html as ui_copy_word_html,
+    export_update_sql_template_file as ui_export_update_sql_template_file,
+    fill_match_output_path as ui_fill_match_output_path,
+    fill_phone_table_name as ui_fill_phone_table_name,
+    finish_count_refresh as ui_finish_count_refresh,
+    finish_certificate_bucket_load as ui_finish_certificate_bucket_load,
+    finish_certificate_folder_load as ui_finish_certificate_folder_load,
+    finish_certificate_search as ui_finish_certificate_search,
+    finish_folder_load as ui_finish_folder_load,
+    finish_search as ui_finish_search,
+    filter_folder_entries as ui_filter_folder_entries,
+    go_to_certificate_parent_prefix as ui_go_to_certificate_parent_prefix,
+    handle_certificate_bucket_load_timeout as ui_handle_certificate_bucket_load_timeout,
+    load_certificate_buckets as ui_load_certificate_buckets,
+    load_certificate_folders as ui_load_certificate_folders,
+    load_certificate_headers as ui_load_certificate_headers,
+    load_match_headers as ui_load_match_headers,
+    load_photo_headers as ui_load_photo_headers,
+    load_update_sql_headers as ui_load_update_sql_headers,
+    load_bucket_folders as ui_load_bucket_folders,
+    add_extra_match_mapping as ui_add_extra_match_mapping,
+    open_photo_report_file as ui_open_photo_report_file,
+    open_template_file as ui_open_template_file,
+    remove_extra_match_mapping as ui_remove_extra_match_mapping,
+    on_certificate_search_double_click as ui_on_certificate_search_double_click,
+    on_certificate_tree_double_click as ui_on_certificate_tree_double_click,
+    on_certificate_tree_select as ui_on_certificate_tree_select,
+    on_search_double_click as ui_on_search_double_click,
+    on_tree_double_click as ui_on_tree_double_click,
+    on_tree_select as ui_on_tree_select,
+    refresh_selected_folder_count as ui_refresh_selected_folder_count,
+    render_certificate_folder_tree as ui_render_certificate_folder_tree,
+    render_certificate_search_tree as ui_render_certificate_search_tree,
+    render_folder_tree as ui_render_folder_tree,
+    add_transfer_mapping as ui_add_transfer_mapping,
+    remove_transfer_mapping as ui_remove_transfer_mapping,
+    render_word_preview as ui_render_word_preview,
+    search_certificate_files as ui_search_certificate_files,
+    search_bucket_files as ui_search_bucket_files,
+    set_certificate_headers as ui_set_certificate_headers,
+    set_photo_headers as ui_set_photo_headers,
+    set_word_code as ui_set_word_code,
+    update_certificate_summary_ui as ui_update_certificate_summary_ui,
+    update_match_summary_ui as ui_update_match_summary_ui,
+    update_photo_source_mode_ui as ui_update_photo_source_mode_ui,
+    update_summary_ui as ui_update_summary_ui,
+    update_word_export_ui as ui_update_word_export_ui,
+    set_id_result_text as ui_set_id_result_text,
+    set_match_result_text as ui_set_match_result_text,
+    set_phone_result_text as ui_set_phone_result_text,
+    open_match_result_file as ui_open_match_result_file,
+    open_word_preview_in_browser as ui_open_word_preview_in_browser,
+    open_certificate_report_file as ui_open_certificate_report_file,
+    open_local_file as ui_open_local_file,
+    open_pack_file as ui_open_pack_file,
+    copy_pack_password as ui_copy_pack_password,
+    copy_generated_id_card as ui_copy_generated_id_card,
+    run_pack_history_query as ui_run_pack_history_query,
+    set_pack_query_result_text as ui_set_pack_query_result_text,
+    set_update_sql_result_text as ui_set_update_sql_result_text,
+    start_certificate_download_run as ui_start_certificate_download_run,
+    start_certificate_run as ui_start_certificate_run,
+    start_match_run as ui_start_match_run,
+    start_pack_run as ui_start_pack_run,
+    run_id_card_generate as ui_run_id_card_generate,
+    run_id_card_validate as ui_run_id_card_validate,
+    start_phone_decrypt_run as ui_start_phone_decrypt_run,
+    start_photo_classify_run as ui_start_photo_classify_run,
+    start_photo_download_run as ui_start_photo_download_run,
+    start_update_sql_render as ui_start_update_sql_render,
+    start_word_export as ui_start_word_export,
+    update_update_sql_ui as ui_update_update_sql_ui,
+    update_pack_password_mode_ui as ui_update_pack_password_mode_ui,
+    update_pack_summary_ui as ui_update_pack_summary_ui,
+    update_id_city_values as ui_update_id_city_values,
+    update_id_county_values as ui_update_id_county_values,
+    update_id_day_values as ui_update_id_day_values,
+    update_id_region_hint as ui_update_id_region_hint,
+    update_phone_mode_ui as ui_update_phone_mode_ui,
+    update_phone_summary_ui as ui_update_phone_summary_ui,
+    cancel_run as ui_cancel_run,
+    clear_log as ui_clear_log,
+    build_certificate_tab,
+    build_help_tab,
+    build_home_tab,
+    build_home_settings_tab,
+    build_id_card_tab,
+    build_log_tab,
+    build_match_tab,
+    build_pack_tab,
+    build_phone_tab,
+    build_photo_tab,
+    build_template_tab,
+    build_update_sql_tab,
+    create_text_entry as ui_create_text_entry,
+    default_cloud_profile as ui_default_cloud_profile,
+    finish_bucket_load as ui_finish_bucket_load,
+    flush_logs as ui_flush_logs,
+    format_cloud_error as ui_format_cloud_error,
+    go_to_parent_prefix as ui_go_to_parent_prefix,
+    handle_bucket_load_timeout as ui_handle_bucket_load_timeout,
+    load_buckets as ui_load_buckets,
+    load_saved_settings as ui_load_saved_settings,
+    make_logger as ui_make_logger,
+    make_progress_callback as ui_make_progress_callback,
+    on_cloud_type_changed as ui_on_cloud_type_changed,
+    save_settings as ui_save_settings,
+    set_bucket_values as ui_set_bucket_values,
+    set_certificate_bucket_values as ui_set_certificate_bucket_values,
+    set_certificate_folder_values as ui_set_certificate_folder_values,
+    set_folder_values as ui_set_folder_values,
+    snapshot_current_cloud_profile as ui_snapshot_current_cloud_profile,
+    update_progress_ui as ui_update_progress_ui,
+    sync_bucket_values as ui_sync_bucket_values,
+    update_certificate_mode_ui as ui_update_certificate_mode_ui,
+    validate_cloud_endpoint as ui_validate_cloud_endpoint,
+    write_log as ui_write_log,
+)
+
+try:
+    from .sql_template_executor import SqlTemplateResult
+except Exception:
+    class SqlTemplateResult:
+        pass
+
+try:
+    from .exam_arranger import ExamArrangeSummary, ExamRuleItem, ExamTemplateExportSummary
+except Exception:
+    class ExamArrangeSummary:
+        pass
+
+    class ExamRuleItem:
+        def __init__(self, item_type: str = "", custom_text: str = "") -> None:
+            self.item_type = item_type
+            self.custom_text = custom_text
+
+    class ExamTemplateExportSummary:
+        pass
+
+try:
+    from .project_stage_report import ProjectStageSummary, StageServerConfig
+except Exception:
+    class ProjectStageSummary:
+        pass
+
+    class StageServerConfig:
+        pass
 
 
 class App:
     SETTINGS_FILE = Path(__file__).resolve().parents[2] / ".gui_settings.json"
+    HOME_SHORTCUT_DEFAULTS = [
+        "照片下载与分类",
+        "证件资料筛选",
+        "电话解密",
+        "更新SQL生成",
+        "身份证工具",
+        "运行日志",
+    ]
+    HOME_SHORTCUT_OPTIONS = [
+        "照片下载与分类",
+        "证件资料筛选",
+        "表样转换",
+        "结果打包",
+        "数据匹配",
+        "更新SQL生成",
+        "电话解密",
+        "身份证工具",
+        "使用说明",
+        "运行日志",
+    ]
+    NAV_GROUPS = [
+        (
+            "开始使用",
+            [
+                ("首页", "首页"),
+                ("首页设置", "首页设置"),
+            ],
+        ),
+        (
+            "文件处理",
+            [
+                ("照片下载与分类", "照片下载与分类"),
+                ("证件资料筛选", "证件资料筛选"),
+                ("表样转换", "表样转换"),
+                ("结果打包", "结果打包"),
+            ],
+        ),
+        (
+            "数据处理",
+            [
+                ("数据匹配", "数据匹配"),
+            ],
+        ),
+        (
+            "数据库工具",
+            [
+                ("更新 SQL 生成", "更新SQL生成"),
+                ("电话解密", "电话解密"),
+            ],
+        ),
+        (
+            "查询与辅助",
+            [
+                ("身份证工具", "身份证工具"),
+            ],
+        ),
+        (
+            "说明与日志",
+            [
+                ("使用说明", "使用说明"),
+                ("运行日志", "运行日志"),
+            ],
+        ),
+    ]
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -67,6 +292,12 @@ class App:
         self.log_queue: "queue.Queue[object]" = queue.Queue()
         self.worker: Optional[threading.Thread] = None
         self.cancel_event = threading.Event()
+        self.tab_ids_by_text: Dict[str, str] = {}
+        self.nav_item_buttons: Dict[str, tk.Button] = {}
+        self.nav_group_frames: Dict[str, tk.Frame] = {}
+        self.nav_group_indicators: Dict[str, ttk.Label] = {}
+        self.nav_group_expanded: Dict[str, bool] = {}
+        self.nav_selected_text = ""
 
         self.prefix_var = tk.StringVar()
         self.photo_source_mode_var = tk.StringVar(value="oss")
@@ -109,6 +340,13 @@ class App:
         self.pack_use_custom_password_var = tk.BooleanVar(value=False)
         self.pack_password_var = tk.StringVar()
         self.pack_query_var = tk.StringVar()
+        self.sql_template_path_var = tk.StringVar()
+        self.sql_exam_code_var = tk.StringVar()
+        self.sql_exam_date_var = tk.StringVar()
+        self.sql_signup_start_var = tk.StringVar()
+        self.sql_signup_end_var = tk.StringVar()
+        self.sql_audit_start_var = tk.StringVar()
+        self.sql_audit_end_var = tk.StringVar()
         self.match_target_var = tk.StringVar()
         self.match_source_var = tk.StringVar()
         self.match_target_key_var = tk.StringVar()
@@ -124,6 +362,51 @@ class App:
         self.update_sql_target_key_var = tk.StringVar()
         self.update_sql_source_key_var = tk.StringVar()
         self.update_sql_ignore_empty_var = tk.BooleanVar(value=True)
+        self.phone_server_var = tk.StringVar()
+        self.phone_port_var = tk.StringVar(value="1433")
+        self.phone_username_var = tk.StringVar()
+        self.phone_password_var = tk.StringVar()
+        self.phone_signup_database_var = tk.StringVar()
+        self.phone_info_database_var = tk.StringVar()
+        self.phone_exam_sort_var = tk.StringVar()
+        self.phone_candidate_table_var = tk.StringVar()
+        self.phone_mode_var = tk.StringVar(value="all")
+        self.phone_filter_file_var = tk.StringVar()
+        self.id_input_var = tk.StringVar()
+        self.id_province_var = tk.StringVar(value="北京市")
+        self.id_city_var = tk.StringVar(value="北京市")
+        self.id_county_var = tk.StringVar(value="东城区")
+        self.id_custom_region_code_var = tk.StringVar()
+        self.id_birth_year_var = tk.StringVar(value="1990")
+        self.id_birth_month_var = tk.StringVar(value="01")
+        self.id_birth_day_var = tk.StringVar(value="01")
+        self.id_gender_var = tk.StringVar(value="男")
+        self.id_generated_var = tk.StringVar()
+        self.id_region_hint_var = tk.StringVar(value="北京市 东城区（110101）")
+        self.home_shortcut_vars = [
+            tk.StringVar(value=value) for value in self.HOME_SHORTCUT_DEFAULTS
+        ]
+
+        self.exam_candidate_var = tk.StringVar()
+        self.exam_group_var = tk.StringVar()
+        self.exam_plan_var = tk.StringVar()
+        self.exam_output_var = tk.StringVar()
+        self.exam_point_digits_var = tk.StringVar(value="2")
+        self.exam_room_digits_var = tk.StringVar(value="3")
+        self.exam_seat_digits_var = tk.StringVar(value="2")
+        self.exam_serial_digits_var = tk.StringVar(value="4")
+        self.exam_sort_mode_var = tk.StringVar(value="random")
+        self.exam_rule_type_var = tk.StringVar(value="自定义")
+        self.exam_rule_custom_var = tk.StringVar()
+        self.status_server_name_var = tk.StringVar()
+        self.status_server_host_var = tk.StringVar()
+        self.status_server_port_var = tk.StringVar(value="1433")
+        self.status_server_user_var = tk.StringVar()
+        self.status_server_password_var = tk.StringVar()
+        self.status_server_enabled_var = tk.BooleanVar(value=True)
+        self.status_filter_var = tk.StringVar(value="正在进行 + 即将开始")
+        self.status_stage_keyword_var = tk.StringVar()
+        self.status_project_keyword_var = tk.StringVar()
 
         self.status_var = tk.StringVar(value="就绪")
         self.progress_text_var = tk.StringVar(value="未开始")
@@ -144,10 +427,18 @@ class App:
         self.word_preview_status_var = tk.StringVar(value="未生成预览")
         self.pack_status_var = tk.StringVar(value="未开始打包")
         self.pack_result_var = tk.StringVar(value="结果打包信息会显示在这里")
+        self.sql_status_var = tk.StringVar(value="未开始生成")
+        self.sql_result_var = tk.StringVar(value="SQL 生成结果会显示在这里")
         self.match_status_var = tk.StringVar(value="未开始匹配")
         self.match_result_var = tk.StringVar(value="数据匹配结果会显示在这里")
         self.update_sql_status_var = tk.StringVar(value="未生成 SQL")
         self.update_sql_result_var = tk.StringVar(value="更新 SQL 会显示在这里")
+        self.phone_status_var = tk.StringVar(value="未开始解密")
+        self.phone_result_var = tk.StringVar(value="电话解密结果会显示在这里")
+        self.id_result_var = tk.StringVar(value="身份证工具结果会显示在这里")
+        self.exam_status_var = tk.StringVar(value="未开始编排")
+        self.exam_result_var = tk.StringVar(value="考场编排结果会显示在这里")
+        self.status_query_status_var = tk.StringVar(value="未开始查询")
         self.folder_tree: Optional[ttk.Treeview] = None
         self.certificate_folder_tree: Optional[ttk.Treeview] = None
         self.folder_nodes: Dict[str, BrowserEntry] = {}
@@ -160,13 +451,22 @@ class App:
         self.last_certificate_summary: Optional[CertificateFilterSummary] = None
         self.last_word_export: Optional[WordExportResult] = None
         self.last_pack_summary: Optional[PackSummary] = None
+        self.last_sql_result: Optional[SqlTemplateResult] = None
         self.last_match_summary: Optional[DataMatchSummary] = None
         self.last_update_sql_result: Optional[UpdateSqlResult] = None
+        self.last_phone_summary = None
+        self.last_exam_summary: Optional[ExamArrangeSummary] = None
+        self.last_exam_template_export: Optional[ExamTemplateExportSummary] = None
+        self.last_status_summary: Optional[ProjectStageSummary] = None
         self.word_code_text = None
         self.word_preview_widget = None
         self.match_result_text = None
         self.pack_query_result_text = None
+        self.sql_result_text = None
         self.update_sql_result_text = None
+        self.phone_result_text = None
+        self.id_result_text = None
+        self.exam_result_text = None
         self.certificate_headers: List[str] = []
         self.photo_headers: List[str] = []
         self.match_target_headers: List[str] = []
@@ -175,6 +475,11 @@ class App:
         self.update_sql_source_headers: List[str] = []
         self.match_extra_mappings: List[ColumnMapping] = []
         self.match_transfer_mappings: List[ColumnMapping] = []
+        self.exam_rule_items: List[ExamRuleItem] = []
+        self.exam_group_headers: List[str] = []
+        self.exam_rule_base_types = ["自定义", "考点", "考场", "座号", "流水号"]
+        self.status_server_configs: List[StageServerConfig] = []
+        self.status_server_selected_index: Optional[int] = None
         self.certificate_bucket_values: List[str] = []
         self.certificate_folder_values: List[str] = [""]
         self.default_sash_pending = {"photo": True, "certificate": True}
@@ -214,1434 +519,275 @@ class App:
             style.theme_use("clam")
         except tk.TclError:
             pass
+        self.root.configure(background="#EAF0F6")
 
-        style.configure("TFrame", background="#F6F4EF")
-        style.configure("TLabelframe", background="#F6F4EF", borderwidth=1, relief="solid", padding=10)
+        base_font = ("Microsoft YaHei UI", 11)
+        bold_font = ("Microsoft YaHei UI", 11, "bold")
+        title_font = ("Microsoft YaHei UI", 18, "bold")
+
+        style.configure("TFrame", background="#F4F7FB")
+        style.configure(
+            "TLabelframe",
+            background="#F4F7FB",
+            borderwidth=1,
+            relief="solid",
+            padding=12,
+            bordercolor="#D7E1EC",
+            lightcolor="#D7E1EC",
+            darkcolor="#D7E1EC",
+        )
         style.configure(
             "TLabelframe.Label",
-            background="#F6F4EF",
-            foreground="#2F2A24",
-            font=("Helvetica", 11, "bold"),
+            background="#F4F7FB",
+            foreground="#162033",
+            font=bold_font,
         )
         style.configure(
             "TLabel",
-            background="#F6F4EF",
-            foreground="#2F2A24",
+            background="#F4F7FB",
+            foreground="#243247",
             padding=1,
-            font=("Helvetica", 11),
+            font=base_font,
         )
         style.configure(
             "TRadiobutton",
-            background="#F6F4EF",
-            foreground="#2F2A24",
-            font=("Helvetica", 11),
+            background="#F4F7FB",
+            foreground="#243247",
+            font=base_font,
         )
         style.configure(
             "TCheckbutton",
-            background="#F6F4EF",
-            foreground="#2F2A24",
-            font=("Helvetica", 11),
+            background="#F4F7FB",
+            foreground="#243247",
+            font=base_font,
         )
-        style.configure("TButton", padding=(14, 9), font=("Helvetica", 11), relief="flat")
+        style.configure(
+            "TButton",
+            padding=(14, 10),
+            font=base_font,
+            relief="flat",
+            borderwidth=0,
+            background="#FFFFFF",
+            foreground="#1F3147",
+        )
         style.map(
             "TButton",
             background=[
-                ("disabled", "#E2DED3"),
-                ("pressed", "#CFC8B8"),
-                ("active", "#E7E0D0"),
-                ("!disabled", "#DDD6C5"),
+                ("disabled", "#E9EEF4"),
+                ("pressed", "#D8E5F6"),
+                ("active", "#EDF4FC"),
+                ("!disabled", "#FFFFFF"),
             ],
-            foreground=[("disabled", "#9B9588"), ("!disabled", "#2F2A24")],
+            foreground=[
+                ("disabled", "#90A0B3"),
+                ("!disabled", "#1F3147"),
+            ],
         )
         style.configure(
             "Accent.TButton",
-            padding=(14, 9),
-            font=("Helvetica", 11, "bold"),
+            padding=(14, 10),
+            font=bold_font,
             foreground="#FFFFFF",
-            background="#5D8C63",
+            background="#3E7BFA",
+        )
+        style.configure(
+            "TCombobox",
+            padding=(10, 7),
+            arrowsize=16,
+            font=base_font,
+            fieldbackground="#FFFFFF",
+            background="#FFFFFF",
+            foreground="#162033",
+            bordercolor="#D7E1EC",
+            lightcolor="#D7E1EC",
+            darkcolor="#D7E1EC",
         )
         style.map(
             "Accent.TButton",
             background=[
-                ("disabled", "#A5B9A8"),
-                ("pressed", "#4E7753"),
-                ("active", "#6A9971"),
-                ("!disabled", "#5D8C63"),
+                ("disabled", "#A9C4FB"),
+                ("pressed", "#2D66D4"),
+                ("active", "#5A92FA"),
+                ("!disabled", "#3E7BFA"),
             ],
-            foreground=[("disabled", "#F2F2F2"), ("!disabled", "#FFFFFF")],
+            foreground=[
+                ("disabled", "#F2F2F2"),
+                ("!disabled", "#FFFFFF"),
+            ],
         )
-        style.configure("TCombobox", padding=(8, 6), arrowsize=16, font=("Helvetica", 11))
         style.configure(
             "TNotebook",
-            background="#F6F4EF",
+            background="#F4F7FB",
             borderwidth=0,
             tabmargins=(0, 0, 0, 0),
         )
+        style.layout("Navless.TNotebook.Tab", [])
         style.configure(
             "TNotebook.Tab",
             padding=(20, 12),
-            background="#DDD6C5",
-            foreground="#6C6659",
-            font=("Helvetica", 12, "bold"),
+            background="#EEF3F8",
+            foreground="#5A6D83",
+            font=("Microsoft YaHei UI", 12, "bold"),
         )
         style.map(
             "TNotebook.Tab",
             background=[
-                ("selected", "#F7F4EC"),
-                ("active", "#EAE3D3"),
-                ("!selected", "#DDD6C5"),
+                ("selected", "#FFFFFF"),
+                ("active", "#F6F9FD"),
+                ("!selected", "#EEF3F8"),
             ],
-            foreground=[("selected", "#1F1B17"), ("!selected", "#6C6659")],
+            foreground=[
+                ("selected", "#1A2940"),
+                ("!selected", "#5A6D83"),
+            ],
             expand=[("selected", (0, 2, 0, 0))],
         )
         style.configure(
             "Treeview",
-            rowheight=30,
-            fieldbackground="#FCFBF7",
-            background="#FCFBF7",
-            foreground="#2F2A24",
-            bordercolor="#D8D1C3",
-            lightcolor="#D8D1C3",
-            darkcolor="#D8D1C3",
-            font=("Helvetica", 11),
+            rowheight=32,
+            fieldbackground="#FFFFFF",
+            background="#FFFFFF",
+            foreground="#243247",
+            bordercolor="#D7E1EC",
+            lightcolor="#D7E1EC",
+            darkcolor="#D7E1EC",
+            font=base_font,
         )
         style.configure(
             "Treeview.Heading",
             padding=(8, 8),
-            font=("Helvetica", 11, "bold"),
-            background="#E7E0D0",
-            foreground="#2F2A24",
+            font=bold_font,
+            background="#EEF3F8",
+            foreground="#1F3147",
         )
         style.map(
             "Treeview",
-            background=[("selected", "#DCE8D7")],
-            foreground=[("selected", "#1F1B17")],
+            background=[("selected", "#DCE8FF")],
+            foreground=[("selected", "#162033")],
         )
         style.configure(
             "Horizontal.TProgressbar",
-            troughcolor="#E7E0D0",
-            bordercolor="#D8D1C3",
-            background="#5D8C63",
-            lightcolor="#5D8C63",
-            darkcolor="#5D8C63",
+            troughcolor="#E7EEF8",
+            bordercolor="#D7E1EC",
+            background="#3E7BFA",
+            lightcolor="#3E7BFA",
+            darkcolor="#3E7BFA",
         )
 
-        container = ttk.Frame(self.root, padding=16)
+        container = ttk.Frame(self.root, padding=18)
         container.pack(fill="both", expand=True)
-        container.columnconfigure(0, weight=1)
+        container.columnconfigure(0, weight=0)
+        container.columnconfigure(1, weight=1)
         container.rowconfigure(1, weight=1)
 
-        title = ttk.Label(
-            container,
-            text=f"报名系统工具箱 v{__version__}",
-            font=("Helvetica", 18, "bold"),
-        )
-        title.grid(row=0, column=0, sticky="w")
+        title_bar = tk.Frame(container, bg="#F4F7FB")
+        title_bar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 14))
+        title_bar.grid_columnconfigure(0, weight=1)
+        tk.Label(
+            title_bar,
+            text=f"报名系统工具箱  v{__version__}",
+            font=title_font,
+            bg="#F4F7FB",
+            fg="#162033",
+        ).grid(row=0, column=0, sticky="w")
+        sidebar = tk.Frame(container, bg="#F8FBFF", width=252, highlightthickness=1, highlightbackground="#D7E1EC")
+        sidebar.grid(row=1, column=0, sticky="nsw", pady=(12, 0))
+        sidebar.grid_propagate(False)
+        self.sidebar = sidebar
 
-        notebook = ttk.Notebook(container)
-        notebook.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        content_frame = ttk.Frame(container)
+        content_frame.grid(row=1, column=1, sticky="nsew", pady=(12, 0), padx=(12, 0))
+        content_frame.columnconfigure(0, weight=1)
+        content_frame.rowconfigure(0, weight=1)
+
+        notebook = ttk.Notebook(content_frame, style="Navless.TNotebook")
+        notebook.grid(row=0, column=0, sticky="nsew")
         self.notebook = notebook
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
-        settings_frame = ttk.Frame(notebook, padding=14)
-        settings_frame.columnconfigure(0, weight=1)
-        settings_frame.rowconfigure(0, weight=1)
-        notebook.add(settings_frame, text="照片下载与分类")
-
-        photo_paned = ttk.Panedwindow(settings_frame, orient="horizontal")
-        photo_paned.grid(row=0, column=0, sticky="nsew")
-        self.photo_paned = photo_paned
-
-        left_outer = ttk.Frame(photo_paned)
-        left_outer.columnconfigure(0, weight=1)
-        left_outer.rowconfigure(0, weight=1)
-
-        left_canvas = tk.Canvas(left_outer, highlightthickness=0)
-        left_canvas.grid(row=0, column=0, sticky="nsew")
-
-        left_scrollbar = ttk.Scrollbar(left_outer, orient="vertical", command=left_canvas.yview)
-        left_scrollbar.grid(row=0, column=1, sticky="ns")
-        left_canvas.configure(yscrollcommand=left_scrollbar.set)
-
-        left_frame = ttk.Frame(left_canvas)
-        left_frame.columnconfigure(0, weight=1)
-
-        left_window = left_canvas.create_window((0, 0), window=left_frame, anchor="nw")
-
-        def sync_left_scroll(_event=None) -> None:
-            left_canvas.configure(scrollregion=left_canvas.bbox("all"))
-
-        def sync_left_width(event) -> None:
-            left_canvas.itemconfigure(left_window, width=event.width)
-
-        left_frame.bind("<Configure>", sync_left_scroll)
-        left_canvas.bind("<Configure>", sync_left_width)
-        self.bind_mousewheel_to_canvas(left_canvas, left_frame)
-
-        self.photo_right_frame = ttk.Frame(settings_frame)
-        self.photo_right_frame.columnconfigure(0, weight=1)
-        self.photo_right_frame.rowconfigure(0, weight=1)
-        photo_paned.add(left_outer, weight=1)
-        photo_paned.add(self.photo_right_frame, weight=1)
-
-        photo_source_frame = ttk.LabelFrame(left_frame, text="数据来源", padding=12)
-        photo_source_frame.grid(row=0, column=0, sticky="ew")
-        ttk.Radiobutton(
-            photo_source_frame,
-            text="从云存储下载后处理",
-            variable=self.photo_source_mode_var,
-            value="oss",
-            command=self.update_photo_source_mode_ui,
-        ).pack(side="left")
-        ttk.Radiobutton(
-            photo_source_frame,
-            text="直接处理本地目录",
-            variable=self.photo_source_mode_var,
-            value="local",
-            command=self.update_photo_source_mode_ui,
-        ).pack(side="left", padx=(10, 0))
-
-        paths_frame = ttk.LabelFrame(left_frame, text="目录", padding=12)
-        paths_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        paths_frame.columnconfigure(1, weight=1)
-
-        self.add_path_row(
-            paths_frame,
-            row=0,
-            label="下载目录",
-            variable=self.download_dir_var,
-        )
-        self.add_path_row(
-            paths_frame,
-            row=1,
-            label="分类目录",
-            variable=self.sorted_dir_var,
-        )
-
-        photo_template_frame = ttk.LabelFrame(left_frame, text="名单下载", padding=12)
-        photo_template_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
-        photo_template_frame.columnconfigure(1, weight=1)
-        self.add_file_row(
-            photo_template_frame,
-            row=0,
-            label="人员模板",
-            variable=self.photo_template_var,
-            command=self.choose_photo_template,
-            button_text="选择文件",
-        )
-        ttk.Label(photo_template_frame, text="匹配列", width=16).grid(row=1, column=0, sticky="w", pady=4)
-        photo_match_row = ttk.Frame(photo_template_frame)
-        photo_match_row.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
-        photo_match_row.columnconfigure(0, weight=1)
-        self.photo_match_combo = ttk.Combobox(
-            photo_match_row,
-            textvariable=self.photo_match_column_var,
-            values=self.photo_headers,
-            state="readonly",
-        )
-        self.photo_match_combo.grid(row=0, column=0, sticky="ew")
-        ttk.Button(photo_match_row, text="加载模板列", command=self.load_photo_headers).grid(
-            row=0, column=1, padx=(8, 0)
-        )
-        self.add_tick_checkbutton(
-            photo_template_frame,
-            text="只下载模板中的人员",
-            variable=self.photo_filter_by_template_var,
-        ).grid(row=2, column=1, sticky="w", pady=(6, 0))
-
-        self.photo_oss_frame = ttk.LabelFrame(left_frame, text="OSS 配置", padding=12)
-        self.photo_oss_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
-        self.photo_oss_frame.columnconfigure(1, weight=1)
-
-        self.add_cloud_type_row(self.photo_oss_frame, 0)
-        self.add_entry_row(self.photo_oss_frame, 1, "Endpoint / Region", self.endpoint_var)
-        self.add_entry_row(self.photo_oss_frame, 2, "AccessKey ID", self.access_key_id_var)
-        self.add_entry_row(
-            self.photo_oss_frame,
-            3,
-            "AccessKey Secret",
-            self.access_key_secret_var,
-            show="*",
-        )
-        self.add_bucket_picker(self.photo_oss_frame, 4)
-        self.add_prefix_picker(self.photo_oss_frame, 5)
-
-        options_frame = ttk.LabelFrame(left_frame, text="选项", padding=12)
-        options_frame.grid(row=4, column=0, sticky="ew", pady=(12, 0))
-
-        option_specs = [
-            ("仅预览，不实际执行", self.dry_run_var),
-            ("下载时跳过已存在文件", self.skip_existing_var),
-        ]
-        for row, (label, variable) in enumerate(option_specs):
-            self.add_tick_checkbutton(options_frame, text=label, variable=variable).grid(
-                row=row // 2,
-                column=row % 2,
-                sticky="w",
-                padx=(0, 18),
-                pady=4,
-            )
-
-        action_frame = ttk.Frame(left_frame)
-        action_frame.grid(row=5, column=0, sticky="ew", pady=(14, 0))
-
-        self.run_button = ttk.Button(
-            action_frame,
-            text="下载并生成模板",
-            command=self.start_photo_download_run,
-            style="Accent.TButton",
-            width=16,
-        )
-        self.run_button.pack(side="left")
-
-        self.photo_classify_button = ttk.Button(
-            action_frame,
-            text="按模板分类",
-            command=self.start_photo_classify_run,
-            style="Accent.TButton",
-            width=14,
-        )
-        self.photo_classify_button.pack(side="left", padx=(10, 0))
-
-        self.cancel_button = ttk.Button(
-            action_frame,
-            text="取消下载",
-            command=self.cancel_run,
-            state="disabled",
-            width=12,
-        )
-        self.cancel_button.pack(side="left", padx=(10, 0))
-
-        ttk.Label(action_frame, textvariable=self.status_var).pack(side="right")
-
-        progress_frame = ttk.LabelFrame(left_frame, text="执行进度", padding=12)
-        progress_frame.grid(row=6, column=0, sticky="ew", pady=(12, 0))
-        progress_frame.columnconfigure(0, weight=1)
-
-        self.progress_bar = ttk.Progressbar(
-            progress_frame,
-            orient="horizontal",
-            mode="determinate",
-            maximum=100,
-        )
-        self.progress_bar.grid(row=0, column=0, sticky="ew")
-        ttk.Label(progress_frame, textvariable=self.progress_text_var).grid(
-            row=1, column=0, sticky="w", pady=(8, 0)
-        )
-
-        summary_frame = ttk.LabelFrame(left_frame, text="任务结果", padding=12)
-        summary_frame.grid(row=7, column=0, sticky="ew", pady=(12, 0))
-        summary_frame.columnconfigure(0, weight=1)
-
-        ttk.Label(
-            summary_frame,
-            textvariable=self.summary_text_var,
-            justify="left",
-            wraplength=320,
-        ).grid(row=0, column=0, sticky="w")
-
-        self.open_template_button = ttk.Button(
-            summary_frame,
-            text="打开 Excel 模板",
-            command=self.open_template_file,
-            state="disabled",
-        )
-        self.open_template_button.grid(row=1, column=0, sticky="w", pady=(8, 0))
-
-        self.open_photo_report_button = ttk.Button(
-            summary_frame,
-            text="打开结果清单",
-            command=self.open_photo_report_file,
-            state="disabled",
-        )
-        self.open_photo_report_button.grid(row=2, column=0, sticky="w", pady=(8, 0))
-
-        self.photo_browser_frame = ttk.LabelFrame(self.photo_right_frame, text="Bucket 文件夹浏览", padding=12)
-        self.photo_browser_frame.grid(row=0, column=0, sticky="nsew")
-        self.photo_browser_frame.columnconfigure(0, weight=1)
-        self.photo_browser_frame.rowconfigure(2, weight=1)
-
-        browser_toolbar = ttk.Frame(self.photo_browser_frame)
-        browser_toolbar.grid(row=0, column=0, sticky="ew")
-
-        ttk.Button(
-            browser_toolbar,
-            text="加载当前层级",
-            command=self.load_bucket_folders,
-        ).grid(row=0, column=0, sticky="w")
-        ttk.Button(
-            browser_toolbar,
-            text="刷新已选文件夹数量",
-            command=self.refresh_selected_folder_count,
-        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
-        ttk.Button(
-            browser_toolbar,
-            text="上一级",
-            command=self.go_to_parent_prefix,
-        ).grid(row=0, column=2, sticky="w", padx=(8, 0))
-
-        search_toolbar = ttk.Frame(self.photo_browser_frame)
-        search_toolbar.grid(row=1, column=0, sticky="ew", pady=(10, 0))
-        search_toolbar.columnconfigure(0, weight=1)
-
-        search_entry = self.create_text_entry(search_toolbar, textvariable=self.search_keyword_var)
-        search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-
-        ttk.Button(
-            search_toolbar,
-            text="搜索当前层级文件夹",
-            command=self.search_bucket_files,
-        ).grid(row=0, column=1, sticky="e")
-
-        tree_frame = ttk.Frame(self.photo_browser_frame)
-        tree_frame.grid(row=2, column=0, sticky="nsew", pady=(10, 10))
-        tree_frame.columnconfigure(0, weight=1)
-        tree_frame.rowconfigure(0, weight=1)
-
-        self.folder_tree = ttk.Treeview(
-            tree_frame,
-            columns=("meta",),
-            show="tree headings",
-            selectmode="browse",
-            height=10,
-        )
-        self.folder_tree.heading("#0", text="名称")
-        self.folder_tree.heading("meta", text="信息")
-        self.folder_tree.column("#0", width=280, anchor="w")
-        self.folder_tree.column("meta", width=140, anchor="center")
-        self.folder_tree.grid(row=0, column=0, sticky="nsew")
-        self.folder_tree.bind("<<TreeviewSelect>>", self.on_tree_select)
-        self.folder_tree.bind("<Double-1>", self.on_tree_double_click)
-
-        tree_scrollbar = ttk.Scrollbar(
-            tree_frame,
-            orient="vertical",
-            command=self.folder_tree.yview,
-        )
-        tree_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.folder_tree.configure(yscrollcommand=tree_scrollbar.set)
-
-        ttk.Label(self.photo_browser_frame, textvariable=self.folder_status_var).grid(
-            row=3, column=0, sticky="w"
-        )
-        ttk.Label(self.photo_browser_frame, textvariable=self.selected_folder_info_var).grid(
-            row=4, column=0, sticky="w", pady=(6, 0)
-        )
-        ttk.Label(self.photo_browser_frame, textvariable=self.search_status_var).grid(
-            row=5, column=0, sticky="w", pady=(10, 0)
-        )
-
-        certificate_frame = ttk.Frame(notebook, padding=14)
-        certificate_frame.columnconfigure(0, weight=1)
-        certificate_frame.rowconfigure(0, weight=1)
-        notebook.add(certificate_frame, text="证件资料筛选")
-
-        cert_paned = ttk.Panedwindow(certificate_frame, orient="horizontal")
-        cert_paned.grid(row=0, column=0, sticky="nsew")
-        self.certificate_paned = cert_paned
-
-        cert_left_outer = ttk.Frame(cert_paned)
-        cert_left_outer.columnconfigure(0, weight=1)
-        cert_left_outer.rowconfigure(0, weight=1)
-
-        cert_left_canvas = tk.Canvas(cert_left_outer, highlightthickness=0)
-        cert_left_canvas.grid(row=0, column=0, sticky="nsew")
-        cert_left_scrollbar = ttk.Scrollbar(
-            cert_left_outer,
-            orient="vertical",
-            command=cert_left_canvas.yview,
-        )
-        cert_left_scrollbar.grid(row=0, column=1, sticky="ns")
-        cert_left_canvas.configure(yscrollcommand=cert_left_scrollbar.set)
-
-        cert_left_frame = ttk.Frame(cert_left_canvas)
-        cert_left_frame.columnconfigure(0, weight=1)
-        cert_left_window = cert_left_canvas.create_window((0, 0), window=cert_left_frame, anchor="nw")
-
-        def sync_cert_left_scroll(_event=None) -> None:
-            cert_left_canvas.configure(scrollregion=cert_left_canvas.bbox("all"))
-
-        def sync_cert_left_width(event) -> None:
-            cert_left_canvas.itemconfigure(cert_left_window, width=event.width)
-
-        cert_left_frame.bind("<Configure>", sync_cert_left_scroll)
-        cert_left_canvas.bind("<Configure>", sync_cert_left_width)
-        self.bind_mousewheel_to_canvas(cert_left_canvas, cert_left_frame)
-
-        cert_right_frame = ttk.Frame(cert_paned)
-        cert_right_frame.columnconfigure(0, weight=1)
-        cert_right_frame.rowconfigure(0, weight=1)
-        cert_paned.add(cert_left_outer, weight=1)
-        cert_paned.add(cert_right_frame, weight=1)
-
-        cert_source_frame = ttk.LabelFrame(cert_left_frame, text="数据来源", padding=12)
-        cert_source_frame.grid(row=0, column=0, sticky="ew")
-        ttk.Radiobutton(
-            cert_source_frame,
-            text="从云存储下载后处理",
-            variable=self.certificate_source_mode_var,
-            value="oss",
-            command=self.update_certificate_source_mode_ui,
-        ).pack(side="left", padx=(10, 0))
-        ttk.Radiobutton(
-            cert_source_frame,
-            text="直接处理本地目录",
-            variable=self.certificate_source_mode_var,
-            value="local",
-            command=self.update_certificate_source_mode_ui,
-        ).pack(side="left")
-
-        self.certificate_oss_frame = ttk.LabelFrame(cert_left_frame, text="证件资料 OSS 配置", padding=12)
-        self.certificate_oss_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        self.certificate_oss_frame.columnconfigure(1, weight=1)
-        self.add_cloud_type_row(self.certificate_oss_frame, 0)
-        self.add_entry_row(self.certificate_oss_frame, 1, "Endpoint / Region", self.endpoint_var)
-        self.add_entry_row(self.certificate_oss_frame, 2, "AccessKey ID", self.access_key_id_var)
-        self.add_entry_row(self.certificate_oss_frame, 3, "AccessKey Secret", self.access_key_secret_var, show="*")
-        self.add_certificate_bucket_picker(self.certificate_oss_frame, 4)
-        self.add_certificate_prefix_picker(self.certificate_oss_frame, 5)
-
-        cert_form = ttk.LabelFrame(cert_left_frame, text="筛选设置", padding=12)
-        cert_form.grid(row=2, column=0, sticky="ew", pady=(12, 0))
-        cert_form.columnconfigure(1, weight=1)
-
-        self.add_file_row(
-            cert_form,
-            row=0,
-            label="人员模板",
-            variable=self.certificate_template_var,
-            command=self.choose_certificate_template,
-            button_text="选择文件",
-        )
-        self.add_path_row(
-            cert_form,
-            row=1,
-            label="本地证件资料目录",
-            variable=self.certificate_source_dir_var,
-        )
-        self.add_path_row(
-            cert_form,
-            row=2,
-            label="输出目录",
-            variable=self.certificate_output_dir_var,
-        )
-
-        ttk.Label(cert_form, text="匹配列", width=16).grid(row=3, column=0, sticky="w", pady=4)
-        match_row = ttk.Frame(cert_form)
-        match_row.grid(row=3, column=1, columnspan=2, sticky="ew", pady=4)
-        match_row.columnconfigure(0, weight=1)
-        self.certificate_match_combo = ttk.Combobox(
-            match_row,
-            textvariable=self.certificate_match_column_var,
-            values=self.certificate_headers,
-            state="readonly",
-        )
-        self.certificate_match_combo.grid(row=0, column=0, sticky="ew")
-        ttk.Button(match_row, text="加载模板列", command=self.load_certificate_headers).grid(
-            row=0, column=1, padx=(8, 0)
-        )
-
-        rename_row = ttk.Frame(cert_form)
-        rename_row.grid(row=4, column=1, columnspan=2, sticky="ew", pady=4)
-        rename_row.columnconfigure(1, weight=1)
-        self.add_tick_checkbutton(
-            rename_row,
-            text="导出后文件夹重命名",
-            variable=self.certificate_rename_folder_var,
-            command=self.update_certificate_mode_ui,
-        ).grid(row=0, column=0, sticky="w")
-        self.certificate_folder_name_combo = ttk.Combobox(
-            rename_row,
-            textvariable=self.certificate_folder_name_column_var,
-            values=self.certificate_headers,
-            state="readonly",
-        )
-        self.certificate_folder_name_combo.grid(row=0, column=1, sticky="ew", padx=(8, 0))
-
-        ttk.Label(cert_form, text="筛选模式", width=16).grid(row=5, column=0, sticky="w", pady=4)
-        mode_row = ttk.Frame(cert_form)
-        mode_row.grid(row=5, column=1, columnspan=2, sticky="w", pady=4)
-        ttk.Radiobutton(
-            mode_row,
-            text="复制整个人员文件夹",
-            variable=self.certificate_mode_var,
-            value="folder",
-            command=self.update_certificate_mode_ui,
-        ).pack(side="left")
-        ttk.Radiobutton(
-            mode_row,
-            text="只复制关键词文件",
-            variable=self.certificate_mode_var,
-            value="keyword",
-            command=self.update_certificate_mode_ui,
-        ).pack(side="left", padx=(10, 0))
-
-        ttk.Label(cert_form, text="文件关键词", width=16).grid(row=6, column=0, sticky="w", pady=4)
-        self.certificate_keyword_entry = self.create_text_entry(
-            cert_form,
-            textvariable=self.certificate_keyword_var,
-        )
-        self.certificate_keyword_entry.grid(row=6, column=1, sticky="ew", pady=4)
-
-        self.add_tick_checkbutton(
-            cert_form,
-            text="按分类一/分类二/分类三建立目录",
-            variable=self.certificate_classify_var,
-        ).grid(row=7, column=1, sticky="w", pady=(6, 0))
-
-        self.add_tick_checkbutton(
-            cert_form,
-            text="仅预览，不实际执行",
-            variable=self.certificate_dry_run_var,
-        ).grid(row=8, column=1, sticky="w", pady=(6, 0))
-
-        cert_action = ttk.Frame(cert_left_frame)
-        cert_action.grid(row=3, column=0, sticky="ew", pady=(12, 0))
-
-        self.certificate_download_button = ttk.Button(
-            cert_action,
-            text="下载证件资料",
-            command=self.start_certificate_download_run,
-            style="Accent.TButton",
-            width=14,
-        )
-        self.certificate_download_button.pack(side="left")
-
-        self.certificate_run_button = ttk.Button(
-            cert_action,
-            text="开始筛选",
-            command=self.start_certificate_run,
-            style="Accent.TButton",
-            width=12,
-        )
-        self.certificate_run_button.pack(side="left", padx=(10, 0))
-
-        self.certificate_cancel_button = ttk.Button(
-            cert_action,
-            text="取消任务",
-            command=self.cancel_run,
-            state="disabled",
-            width=12,
-        )
-        self.certificate_cancel_button.pack(side="left", padx=(10, 0))
-
-        ttk.Label(cert_action, textvariable=self.certificate_status_var).pack(side="right")
-
-        cert_progress_frame = ttk.LabelFrame(cert_left_frame, text="筛选进度", padding=12)
-        cert_progress_frame.grid(row=4, column=0, sticky="ew", pady=(12, 0))
-        cert_progress_frame.columnconfigure(0, weight=1)
-
-        self.certificate_progress_bar = ttk.Progressbar(
-            cert_progress_frame,
-            orient="horizontal",
-            mode="determinate",
-            maximum=100,
-        )
-        self.certificate_progress_bar.grid(row=0, column=0, sticky="ew")
-        ttk.Label(
-            cert_progress_frame,
-            textvariable=self.certificate_progress_text_var,
-        ).grid(row=1, column=0, sticky="w", pady=(8, 0))
-
-        cert_summary_frame = ttk.LabelFrame(cert_left_frame, text="筛选结果", padding=12)
-        cert_summary_frame.grid(row=5, column=0, sticky="ew", pady=(12, 0))
-        cert_summary_frame.columnconfigure(0, weight=1)
-        ttk.Label(
-            cert_summary_frame,
-            textvariable=self.certificate_summary_text_var,
-            justify="left",
-            wraplength=320,
-        ).grid(row=0, column=0, sticky="w")
-
-        self.open_certificate_report_button = ttk.Button(
-            cert_summary_frame,
-            text="打开结果清单",
-            command=self.open_certificate_report_file,
-            state="disabled",
-        )
-        self.open_certificate_report_button.grid(row=1, column=0, sticky="w", pady=(8, 0))
-
-        self.certificate_browser_frame = ttk.LabelFrame(
-            cert_right_frame,
-            text="Bucket 文件夹浏览",
-            padding=12,
-        )
-        self.certificate_browser_frame.grid(row=0, column=0, sticky="nsew")
-        self.certificate_browser_frame.columnconfigure(0, weight=1)
-        self.certificate_browser_frame.rowconfigure(2, weight=1)
-
-        cert_browser_toolbar = ttk.Frame(self.certificate_browser_frame)
-        cert_browser_toolbar.grid(row=0, column=0, sticky="ew")
-        ttk.Button(
-            cert_browser_toolbar,
-            text="加载当前层级",
-            command=self.load_certificate_folders,
-        ).grid(row=0, column=0, sticky="w")
-        ttk.Button(
-            cert_browser_toolbar,
-            text="上一级",
-            command=self.go_to_certificate_parent_prefix,
-        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
-
-        cert_search_toolbar = ttk.Frame(self.certificate_browser_frame)
-        cert_search_toolbar.grid(row=1, column=0, sticky="ew", pady=(10, 0))
-        cert_search_toolbar.columnconfigure(0, weight=1)
-
-        self.certificate_search_keyword_var = tk.StringVar()
-        cert_search_entry = self.create_text_entry(
-            cert_search_toolbar,
-            textvariable=self.certificate_search_keyword_var,
-        )
-        cert_search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-
-        ttk.Button(
-            cert_search_toolbar,
-            text="搜索当前层级文件夹",
-            command=self.search_certificate_files,
-        ).grid(row=0, column=1, sticky="e")
-
-        cert_tree_frame = ttk.Frame(self.certificate_browser_frame)
-        cert_tree_frame.grid(row=2, column=0, sticky="nsew", pady=(10, 10))
-        cert_tree_frame.columnconfigure(0, weight=1)
-        cert_tree_frame.rowconfigure(0, weight=1)
-
-        self.certificate_folder_tree = ttk.Treeview(
-            cert_tree_frame,
-            columns=("meta",),
-            show="tree headings",
-            selectmode="browse",
-            height=10,
-        )
-        self.certificate_folder_tree.heading("#0", text="名称")
-        self.certificate_folder_tree.heading("meta", text="信息")
-        self.certificate_folder_tree.column("#0", width=280, anchor="w")
-        self.certificate_folder_tree.column("meta", width=140, anchor="center")
-        self.certificate_folder_tree.grid(row=0, column=0, sticky="nsew")
-        self.certificate_folder_tree.bind("<<TreeviewSelect>>", self.on_certificate_tree_select)
-        self.certificate_folder_tree.bind("<Double-1>", self.on_certificate_tree_double_click)
-
-        cert_tree_scrollbar = ttk.Scrollbar(
-            cert_tree_frame,
-            orient="vertical",
-            command=self.certificate_folder_tree.yview,
-        )
-        cert_tree_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.certificate_folder_tree.configure(yscrollcommand=cert_tree_scrollbar.set)
-
-        ttk.Label(self.certificate_browser_frame, textvariable=self.certificate_folder_status_var).grid(
-            row=3, column=0, sticky="w"
-        )
-        ttk.Label(
-            self.certificate_browser_frame,
-            textvariable=self.certificate_selected_folder_info_var,
-        ).grid(row=4, column=0, sticky="w", pady=(6, 0))
-
-        ttk.Label(
-            self.certificate_browser_frame,
-            textvariable=self.certificate_search_status_var,
-        ).grid(row=5, column=0, sticky="w", pady=(10, 0))
-
-        word_frame = ttk.Frame(notebook, padding=14)
-        word_frame.columnconfigure(0, weight=1)
-        word_frame.rowconfigure(2, weight=1)
-        notebook.add(word_frame, text="表样转换")
-
-        word_form = ttk.LabelFrame(word_frame, text="模板转换", padding=12)
-        word_form.grid(row=0, column=0, sticky="ew")
-        word_form.columnconfigure(1, weight=1)
-
-        self.add_file_row(
-            word_form,
-            row=0,
-            label="表样文件",
-            variable=self.word_source_var,
-            command=self.choose_word_source,
-            button_text="选择文件",
-        )
-
-        word_action = ttk.Frame(word_frame)
-        word_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        self.word_net_button = ttk.Button(
-            word_action,
-            text="Net版导出",
-            command=lambda: self.start_word_export("net"),
-            style="Accent.TButton",
-            width=12,
-        )
-        self.word_net_button.pack(side="left")
-        self.word_java_button = ttk.Button(
-            word_action,
-            text="Java版导出",
-            command=lambda: self.start_word_export("java"),
-            style="Accent.TButton",
-            width=12,
-        )
-        self.word_java_button.pack(side="left", padx=(10, 0))
-        self.word_copy_button = ttk.Button(
-            word_action,
-            text="复制 HTML",
-            command=self.copy_word_html,
-            state="disabled",
-        )
-        self.word_copy_button.pack(side="left", padx=(10, 0))
-        self.word_open_browser_button = ttk.Button(
-            word_action,
-            text="浏览器预览",
-            command=self.open_word_preview_in_browser,
-            state="disabled",
-        )
-        self.word_open_browser_button.pack(side="left", padx=(10, 0))
-        ttk.Label(word_action, textvariable=self.word_status_var).pack(side="right")
-
-        word_result_frame = ttk.LabelFrame(word_frame, text="导出结果", padding=12)
-        word_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
-        word_result_frame.columnconfigure(0, weight=1)
-        word_result_frame.rowconfigure(1, weight=1)
-        ttk.Label(
-            word_result_frame,
-            textvariable=self.word_result_var,
-            justify="left",
-            wraplength=860,
-        ).grid(row=0, column=0, sticky="w")
-
-        word_view_notebook = ttk.Notebook(word_result_frame)
-        word_view_notebook.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
-
-        word_code_frame = ttk.Frame(word_view_notebook, padding=8)
-        word_code_frame.columnconfigure(0, weight=1)
-        word_code_frame.rowconfigure(0, weight=1)
-        word_view_notebook.add(word_code_frame, text="代码")
-
-        self.word_code_text = tk.Text(
-            word_code_frame,
-            wrap="none",
-            font=("Menlo", 11),
-            relief="solid",
-            height=18,
-        )
-        self.word_code_text.grid(row=0, column=0, sticky="nsew")
-        self.word_code_text.configure(state="disabled")
-
-        word_code_scroll_y = ttk.Scrollbar(
-            word_code_frame,
-            orient="vertical",
-            command=self.word_code_text.yview,
-        )
-        word_code_scroll_y.grid(row=0, column=1, sticky="ns")
-        self.word_code_text.configure(yscrollcommand=word_code_scroll_y.set)
-
-        word_preview_frame = ttk.Frame(word_view_notebook, padding=8)
-        word_preview_frame.columnconfigure(0, weight=1)
-        word_preview_frame.rowconfigure(1, weight=1)
-        word_view_notebook.add(word_preview_frame, text="预览")
-
-        ttk.Label(
-            word_preview_frame,
-            textvariable=self.word_preview_status_var,
-        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
-
-        self.word_preview_container = ttk.Frame(word_preview_frame)
-        self.word_preview_container.grid(row=1, column=0, sticky="nsew")
-        self.word_preview_container.columnconfigure(0, weight=1)
-        self.word_preview_container.rowconfigure(0, weight=1)
-
-        match_frame = ttk.Frame(notebook, padding=14)
-        match_frame.columnconfigure(0, weight=1)
-        match_frame.rowconfigure(3, weight=1)
-        notebook.add(match_frame, text="数据匹配")
-
-        match_form = ttk.LabelFrame(match_frame, text="表格匹配补列", padding=12)
-        match_form.grid(row=0, column=0, sticky="ew")
-        match_form.columnconfigure(1, weight=1)
-        self.add_file_row(
-            match_form,
-            row=0,
-            label="目标表",
-            variable=self.match_target_var,
-            command=self.choose_match_target,
-            button_text="选择文件",
-        )
-        self.add_file_row(
-            match_form,
-            row=1,
-            label="来源表",
-            variable=self.match_source_var,
-            command=self.choose_match_source,
-            button_text="选择文件",
-        )
-        self.add_entry_row(match_form, 2, "输出文件", self.match_output_var)
-        ttk.Button(match_form, text="自动生成", command=self.fill_match_output_path).grid(
-            row=2, column=2, padx=(8, 0), pady=4
-        )
-        ttk.Label(match_form, text="目标表匹配列", width=16).grid(row=3, column=0, sticky="w", pady=4)
-        self.match_target_key_combo = ttk.Combobox(
-            match_form,
-            textvariable=self.match_target_key_var,
-            values=self.match_target_headers,
-            state="readonly",
-        )
-        self.match_target_key_combo.grid(row=3, column=1, sticky="ew", pady=4)
-        ttk.Label(match_form, text="来源表匹配列", width=16).grid(row=4, column=0, sticky="w", pady=4)
-        self.match_source_key_combo = ttk.Combobox(
-            match_form,
-            textvariable=self.match_source_key_var,
-            values=self.match_source_headers,
-            state="readonly",
-        )
-        self.match_source_key_combo.grid(row=4, column=1, sticky="ew", pady=4)
-        ttk.Button(match_form, text="加载表头", command=self.load_match_headers).grid(
-            row=4, column=2, padx=(8, 0), pady=4
-        )
-
-        match_lists = ttk.Frame(match_frame)
-        match_lists.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        match_lists.columnconfigure(0, weight=1)
-        match_lists.columnconfigure(1, weight=1)
-
-        extra_frame = ttk.LabelFrame(match_lists, text="附加匹配列映射", padding=12)
-        extra_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        extra_frame.columnconfigure(0, weight=1)
-        ttk.Label(extra_frame, text="目标表列").grid(row=0, column=0, sticky="w")
-        ttk.Label(extra_frame, text="来源表列").grid(row=0, column=1, sticky="w", padx=(8, 0))
-        self.match_extra_target_combo = ttk.Combobox(
-            extra_frame,
-            textvariable=self.match_extra_target_var,
-            values=self.match_target_headers,
-            state="readonly",
-        )
-        self.match_extra_target_combo.grid(row=1, column=0, sticky="ew", pady=(4, 0))
-        self.match_extra_source_combo = ttk.Combobox(
-            extra_frame,
-            textvariable=self.match_extra_source_var,
-            values=self.match_source_headers,
-            state="readonly",
-        )
-        self.match_extra_source_combo.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(4, 0))
-        ttk.Button(extra_frame, text="添加映射", command=self.add_extra_match_mapping).grid(
-            row=1, column=2, padx=(8, 0), pady=(4, 0)
-        )
-        self.match_extra_tree = ttk.Treeview(
-            extra_frame,
-            columns=("target", "source"),
-            show="headings",
-            height=5,
-        )
-        self.match_extra_tree.heading("target", text="目标表列")
-        self.match_extra_tree.heading("source", text="来源表列")
-        self.match_extra_tree.column("target", width=160, anchor="w")
-        self.match_extra_tree.column("source", width=160, anchor="w")
-        self.match_extra_tree.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
-        extra_frame.rowconfigure(2, weight=1)
-        ttk.Button(extra_frame, text="删除所选", command=self.remove_extra_match_mapping).grid(
-            row=2, column=2, padx=(8, 0), sticky="n"
-        )
-
-        transfer_frame = ttk.LabelFrame(match_lists, text="补充列映射", padding=12)
-        transfer_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
-        transfer_frame.columnconfigure(0, weight=1)
-        ttk.Label(transfer_frame, text="结果列名").grid(row=0, column=0, sticky="w")
-        ttk.Label(transfer_frame, text="来源表列").grid(row=0, column=1, sticky="w", padx=(8, 0))
-        self.match_transfer_target_entry = self.create_text_entry(
-            transfer_frame,
-            textvariable=self.match_transfer_target_var,
-        )
-        self.match_transfer_target_entry.grid(row=1, column=0, sticky="ew", pady=(4, 0))
-        self.match_transfer_source_combo = ttk.Combobox(
-            transfer_frame,
-            textvariable=self.match_transfer_source_var,
-            values=self.match_source_headers,
-            state="readonly",
-        )
-        self.match_transfer_source_combo.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(4, 0))
-        ttk.Button(transfer_frame, text="添加补充列", command=self.add_transfer_mapping).grid(
-            row=1, column=2, padx=(8, 0), pady=(4, 0)
-        )
-        self.match_transfer_tree = ttk.Treeview(
-            transfer_frame,
-            columns=("target", "source"),
-            show="headings",
-            height=5,
-        )
-        self.match_transfer_tree.heading("target", text="结果列名")
-        self.match_transfer_tree.heading("source", text="来源表列")
-        self.match_transfer_tree.column("target", width=160, anchor="w")
-        self.match_transfer_tree.column("source", width=160, anchor="w")
-        self.match_transfer_tree.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
-        transfer_frame.rowconfigure(2, weight=1)
-        ttk.Button(transfer_frame, text="删除所选", command=self.remove_transfer_mapping).grid(
-            row=2, column=2, padx=(8, 0), sticky="n"
-        )
-
-        match_action = ttk.Frame(match_frame)
-        match_action.grid(row=2, column=0, sticky="ew", pady=(12, 0))
-        self.match_run_button = ttk.Button(
-            match_action,
-            text="开始匹配",
-            command=self.start_match_run,
-            style="Accent.TButton",
-            width=12,
-        )
-        self.match_run_button.pack(side="left")
-        self.match_open_button = ttk.Button(
-            match_action,
-            text="打开结果文件",
-            command=self.open_match_result_file,
-            state="disabled",
-        )
-        self.match_open_button.pack(side="left", padx=(10, 0))
-        ttk.Label(match_action, textvariable=self.match_status_var).pack(side="right")
-
-        match_result_frame = ttk.LabelFrame(match_frame, text="匹配结果", padding=12)
-        match_result_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
-        match_result_frame.columnconfigure(0, weight=1)
-        match_result_frame.rowconfigure(0, weight=1)
-        self.match_result_text = tk.Text(
-            match_result_frame,
-            wrap="word",
-            height=8,
-            relief="solid",
-            bd=1,
-            bg="#FCFCFC",
-            fg="#222222",
-            insertbackground="#1677FF",
-            padx=10,
-            pady=10,
-        )
-        self.match_result_text.grid(row=0, column=0, sticky="nsew")
-        self.match_result_text.configure(state="disabled")
-        match_result_scroll = ttk.Scrollbar(
-            match_result_frame,
-            orient="vertical",
-            command=self.match_result_text.yview,
-        )
-        match_result_scroll.grid(row=0, column=1, sticky="ns")
-        self.match_result_text.configure(yscrollcommand=match_result_scroll.set)
-
-        pack_frame = ttk.Frame(notebook, padding=14)
-        pack_frame.columnconfigure(0, weight=1)
-        pack_frame.rowconfigure(2, weight=1)
-        notebook.add(pack_frame, text="结果打包")
-
-        pack_form = ttk.LabelFrame(pack_frame, text="压缩加密", padding=12)
-        pack_form.grid(row=0, column=0, sticky="ew")
-        pack_form.columnconfigure(1, weight=1)
-
-        ttk.Label(pack_form, text="待打包文件/文件夹", width=16).grid(row=0, column=0, sticky="w", pady=4)
-        pack_source_entry = self.create_text_entry(pack_form, textvariable=self.pack_source_dir_var)
-        pack_source_entry.grid(row=0, column=1, sticky="ew", pady=4)
-        pack_source_action = ttk.Frame(pack_form)
-        pack_source_action.grid(row=0, column=2, sticky="w", padx=(8, 0), pady=4)
-        ttk.Button(pack_source_action, text="选文件", command=self.choose_pack_file).pack(side="left")
-        ttk.Button(
-            pack_source_action,
-            text="选文件夹",
-            command=lambda: self.choose_directory(self.pack_source_dir_var),
-        ).pack(side="left", padx=(8, 0))
-        self.add_path_row(
-            pack_form,
-            row=1,
-            label="输出目录",
-            variable=self.pack_output_dir_var,
-        )
-        self.add_tick_checkbutton(
-            pack_form,
-            row=2,
-            text="手动设置密码",
-            variable=self.pack_use_custom_password_var,
-            command=self.update_pack_password_mode_ui,
-        )
-        self.pack_password_entry = self.add_entry_row(
-            pack_form,
-            row=3,
-            label="打包密码",
-            variable=self.pack_password_var,
-        )
-
-        pack_action = ttk.Frame(pack_frame)
-        pack_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        self.pack_run_button = ttk.Button(
-            pack_action,
-            text="一键打包并加密",
-            command=self.start_pack_run,
-            style="Accent.TButton",
-            width=16,
-        )
-        self.pack_run_button.pack(side="left")
-        self.pack_copy_password_button = ttk.Button(
-            pack_action,
-            text="复制密码",
-            command=self.copy_pack_password,
-            state="disabled",
-        )
-        self.pack_copy_password_button.pack(side="left", padx=(10, 0))
-        self.pack_open_button = ttk.Button(
-            pack_action,
-            text="打开压缩包",
-            command=self.open_pack_file,
-            state="disabled",
-        )
-        self.pack_open_button.pack(side="left", padx=(10, 0))
-        ttk.Label(pack_action, textvariable=self.pack_status_var).pack(side="right")
-
-        pack_result_frame = ttk.LabelFrame(pack_frame, text="打包结果", padding=12)
-        pack_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
-        pack_result_frame.columnconfigure(0, weight=1)
-        ttk.Label(
-            pack_result_frame,
-            textvariable=self.pack_result_var,
-            justify="left",
-            wraplength=860,
-        ).grid(row=0, column=0, sticky="w")
-
-        pack_query_frame = ttk.LabelFrame(pack_frame, text="密码查询", padding=12)
-        pack_query_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
-        pack_query_frame.columnconfigure(0, weight=1)
-        pack_query_frame.rowconfigure(1, weight=1)
-        self.pack_query_entry = self.create_text_entry(
-            pack_query_frame,
-            textvariable=self.pack_query_var,
-        )
-        self.pack_query_entry.grid(row=0, column=0, sticky="ew")
-        ttk.Button(
-            pack_query_frame,
-            text="查询密码",
-            command=self.run_pack_history_query,
-        ).grid(row=0, column=1, padx=(8, 0))
-        self.pack_query_result_text = tk.Text(
-            pack_query_frame,
-            wrap="word",
-            height=6,
-            relief="solid",
-            bd=1,
-            bg="#FCFCFC",
-            fg="#222222",
-            padx=10,
-            pady=10,
-        )
-        self.pack_query_result_text.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
-        self.pack_query_result_text.configure(state="disabled")
-        pack_query_scroll = ttk.Scrollbar(
-            pack_query_frame,
-            orient="vertical",
-            command=self.pack_query_result_text.yview,
-        )
-        pack_query_scroll.grid(row=1, column=2, sticky="ns", pady=(8, 0))
-        self.pack_query_result_text.configure(yscrollcommand=pack_query_scroll.set)
-
-        update_sql_frame = ttk.Frame(notebook, padding=14)
-        update_sql_frame.columnconfigure(0, weight=1)
-        update_sql_frame.rowconfigure(2, weight=1)
-        notebook.add(update_sql_frame, text="更新SQL生成")
-
-        update_sql_form = ttk.LabelFrame(update_sql_frame, text="字段映射更新", padding=12)
-        update_sql_form.grid(row=0, column=0, sticky="ew")
-        update_sql_form.columnconfigure(1, weight=1)
-        self.add_file_row(
-            update_sql_form,
-            row=0,
-            label="映射模板",
-            variable=self.update_sql_mapping_var,
-            command=self.choose_update_sql_mapping,
-            button_text="选择文件",
-        )
-        update_sql_template_action = ttk.Frame(update_sql_form)
-        update_sql_template_action.grid(row=1, column=1, sticky="w", pady=(0, 4))
-        ttk.Button(
-            update_sql_template_action,
-            text="加载字段",
-            command=self.load_update_sql_headers,
-        ).pack(side="left")
-        ttk.Button(
-            update_sql_template_action,
-            text="导出模板",
-            command=self.export_update_sql_template_file,
-        ).pack(side="left", padx=(8, 0))
-        self.add_entry_row(update_sql_form, 2, "考生表名称", self.update_sql_target_table_var)
-        self.add_entry_row(update_sql_form, 3, "临时表名称", self.update_sql_source_table_var)
-        ttk.Label(update_sql_form, text="考生表关联字段", width=16).grid(row=4, column=0, sticky="w", pady=4)
-        self.update_sql_target_key_combo = ttk.Combobox(
-            update_sql_form,
-            textvariable=self.update_sql_target_key_var,
-            values=self.update_sql_target_headers,
-            state="readonly",
-        )
-        self.update_sql_target_key_combo.grid(row=4, column=1, sticky="ew", pady=4)
-        ttk.Label(update_sql_form, text="临时表关联字段", width=16).grid(row=5, column=0, sticky="w", pady=4)
-        self.update_sql_source_key_combo = ttk.Combobox(
-            update_sql_form,
-            textvariable=self.update_sql_source_key_var,
-            values=self.update_sql_source_headers,
-            state="readonly",
-        )
-        self.update_sql_source_key_combo.grid(row=5, column=1, sticky="ew", pady=4)
-        self.add_tick_checkbutton(
-            update_sql_form,
-            row=6,
-            text="忽略空值，不覆盖正式表",
-            variable=self.update_sql_ignore_empty_var,
-        )
-
-        update_sql_action = ttk.Frame(update_sql_frame)
-        update_sql_action.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        self.update_sql_run_button = ttk.Button(
-            update_sql_action,
-            text="生成 SQL",
-            command=self.start_update_sql_render,
-            style="Accent.TButton",
-            width=12,
-        )
-        self.update_sql_run_button.pack(side="left")
-        self.update_sql_copy_button = ttk.Button(
-            update_sql_action,
-            text="复制 SQL",
-            command=self.copy_update_sql,
-            state="disabled",
-        )
-        self.update_sql_copy_button.pack(side="left", padx=(10, 0))
-        ttk.Label(update_sql_action, textvariable=self.update_sql_status_var).pack(side="right")
-
-        update_sql_result_frame = ttk.LabelFrame(update_sql_frame, text="生成结果", padding=12)
-        update_sql_result_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
-        update_sql_result_frame.columnconfigure(0, weight=1)
-        update_sql_result_frame.rowconfigure(0, weight=1)
-        self.update_sql_result_text = tk.Text(
-            update_sql_result_frame,
-            wrap="word",
-            height=10,
-            relief="solid",
-            bd=1,
-            bg="#FCFCFC",
-            fg="#222222",
-            insertbackground="#1677FF",
-            font=("Menlo", 11),
-            padx=10,
-            pady=10,
-        )
-        self.update_sql_result_text.grid(row=0, column=0, sticky="nsew")
-        self.update_sql_result_text.configure(state="disabled")
-        update_sql_result_scroll = ttk.Scrollbar(
-            update_sql_result_frame,
-            orient="vertical",
-            command=self.update_sql_result_text.yview,
-        )
-        update_sql_result_scroll.grid(row=0, column=1, sticky="ns")
-        self.update_sql_result_text.configure(yscrollcommand=update_sql_result_scroll.set)
-
-        help_frame = ttk.Frame(notebook, padding=14)
-        notebook.add(help_frame, text="使用说明")
-        help_frame.columnconfigure(0, weight=1)
-        help_frame.rowconfigure(0, weight=1)
-
-        self.help_text = tk.Text(
-            help_frame,
-            wrap="word",
-            font=("Helvetica", 13),
-            relief="solid",
-            padx=14,
-            pady=14,
-        )
-        self.help_text.grid(row=0, column=0, sticky="nsew")
-
-        help_scrollbar = ttk.Scrollbar(help_frame, orient="vertical", command=self.help_text.yview)
-        help_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.help_text.configure(yscrollcommand=help_scrollbar.set)
-        self.set_help_content()
-
-        log_frame = ttk.Frame(notebook, padding=14)
-        notebook.add(log_frame, text="运行日志")
-        log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(1, weight=1)
-
-        log_toolbar = ttk.Frame(log_frame)
-        log_toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        ttk.Button(log_toolbar, text="清空日志", command=self.clear_log).pack(side="left")
-
-        self.log_text = tk.Text(
-            log_frame,
-            wrap="word",
-            bg="#101826",
-            fg="#E5EEF7",
-            insertbackground="#E5EEF7",
-            font=("Menlo", 12),
-            relief="flat",
-            padx=12,
-            pady=12,
-        )
-        self.log_text.grid(row=1, column=0, sticky="nsew")
-
-        scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
-        scrollbar.grid(row=1, column=1, sticky="ns")
-        self.log_text.configure(yscrollcommand=scrollbar.set)
+        build_home_tab(self, notebook)
+        build_home_settings_tab(self, notebook)
+        build_photo_tab(self, notebook)
+        build_certificate_tab(self, notebook)
+        build_template_tab(self, notebook)
+        build_match_tab(self, notebook)
+        build_update_sql_tab(self, notebook)
+        build_phone_tab(self, notebook)
+        build_id_card_tab(self, notebook)
+        build_pack_tab(self, notebook)
+        build_help_tab(self, notebook)
+        build_log_tab(self, notebook)
+        self.tab_ids_by_text = {
+            self.notebook.tab(tab_id, "text"): tab_id for tab_id in self.notebook.tabs()
+        }
+        self.build_sidebar_navigation(sidebar)
+        self.show_tab_by_text("首页")
 
         self.write_log("桌面工具已启动。")
         self.write_log("建议先勾选“仅预览”，确认下载与分类路径后再正式执行。")
         self.write_log("可以在右侧浏览 bucket 文件夹，双击进入子目录。")
         self.write_log("也可以在右侧按文件夹名称筛选当前层级目录。")
         self.render_word_preview("")
-        self.set_match_result_text(self.match_result_var.get())
-        self.set_update_sql_result_text(self.update_sql_result_var.get())
-        self.update_pack_password_mode_ui()
-        self.set_pack_query_result_text("可按文件夹名、压缩包名或密码查询最近打包记录。")
         self.update_photo_source_mode_ui()
         self.update_certificate_mode_ui()
         self.update_certificate_source_mode_ui()
+        self.update_pack_password_mode_ui()
+        self.set_match_result_text(self.match_result_var.get())
+        self.set_update_sql_result_text(self.update_sql_result_var.get())
+        self.update_phone_mode_ui()
+        self.set_phone_result_text(self.phone_result_var.get())
+        self.update_id_day_values()
+        self.update_id_city_values()
+        self.update_id_county_values()
+        self.update_id_region_hint()
+        self.set_id_result_text(self.id_result_var.get())
+        self.set_pack_query_result_text("可按文件夹名、压缩包名或密码查询最近打包记录。")
         self.root.after(120, lambda: self.reset_split_default("photo"))
 
     def set_help_content(self) -> None:
         help_content = f"""报名系统工具箱 使用说明
 版本：v{__version__}
 
-一、照片下载与分类
+当前版本已提供以下稳定功能：
 
-适用场景：
-- 批量下载考生照片
-- 只下载模板中的人员照片
-- 按模板中的分类信息整理照片
+1. 照片下载与分类
+- 支持阿里云 OSS、腾讯云 COS 和本地目录。
+- 可按模板名单下载照片，并按分类一 / 分类二 / 分类三 / 修改名称整理。
 
-操作步骤：
-1. 选择数据来源：
-   - 从云存储下载后处理
-   - 直接处理本地目录
-2. 如果使用云存储，填写云类型、Endpoint / Region、AccessKey，并点击“加载 Bucket”。
-3. 选择 bucket 后，点击右侧“加载当前层级”，找到照片所在目录。
-4. 选择下载目录和分类目录。
-5. 如需按名单下载，选择人员模板，点击“加载模板列”，选择匹配列，再勾选“只下载模板中的人员”。
-6. 点击“下载并生成模板”。
-7. 打开生成的 Excel 模板，填写“分类一 / 分类二 / 分类三 / 修改名称”。
-8. 回到程序，点击“按模板分类”。
+2. 证件资料筛选
+- 支持云端目录和本地目录。
+- 可按身份证号、报名序号等模板列筛选人员资料。
+- 支持复制整个人员文件夹，或只导出关键词文件。
 
-结果说明：
-- 会生成“照片分类模板.xlsx”
-- 会生成“照片分类结果清单.xlsx”
-- 云端下载默认使用可控并发，速度会比单线程更快
-- 如果勾选“仅预览，不实际执行”，只显示计划，不真正下载和分类
+3. 表样转换
+- 支持 .doc / .docx / .xlsx 转 HTML。
+- 提供 Net 版和 Java 版占位符导出。
 
-二、证件资料筛选
+4. 数据匹配
+- 支持两张 Excel 按主键和附加列匹配补列。
+- 会输出匹配结果和匹配结果清单。
 
-适用场景：
-- 按模板筛选部分人员的证件资料
-- 按分类一、分类二、分类三整理资料
-- 只导出某类证件，例如“学历证书”
+5. 更新 SQL 生成
+- 支持根据字段映射模板生成标准 UPDATE SQL。
+- 生成前会备份两张表，并支持忽略空值。
 
-操作步骤：
-1. 选择数据来源：
-   - 从云存储下载后处理
-   - 直接处理本地目录
-2. 选择人员模板，点击“加载模板列”，选择匹配列。
-3. 如果需要，勾选“导出后文件夹重命名”，再选择“导出后文件夹名称列”。
-4. 如果使用云存储，填写云类型、Endpoint / Region、AccessKey，并点击“加载 Bucket”。
-5. 选择 bucket 后，点击右侧“加载当前层级”，找到证件资料目录。
-6. 选择证件资料目录。
-7. 如果需要先下载资料，可以点击“下载证件资料”。
-8. 选择输出目录。
-9. 选择筛选模式：
-   - 复制整个人员文件夹
-   - 只复制关键词文件
-10. 如果是关键词模式，填写关键词，例如“学历证书”。
-11. 根据需要勾选“按分类一 / 分类二 / 分类三建立目录”或“仅预览，不实际执行”。
-12. 点击“开始筛选”。
+6. 电话解密
+- 通过 32 位 PhoneDecryptHelper 调用 DLL 解密 `web_info.info1`。
+- 按主键编号关联电话密文，解密后回写到考生表 `备用3`。
+- Windows 发版前请先执行 `python build_phone_decrypt_helper.py` 构建 helper。
 
-结果说明：
-- 会生成“证件资料筛选结果清单.xlsx”
-- 云端下载默认使用可控并发，速度会比单线程更快
-- 如果模板中有分类信息，可以按分类目录导出
-- 如果勾选“导出后文件夹重命名”，输出目录中的人员文件夹名称会按你选择的列来命名
+7. 身份证工具
+- 可输入 18 位身份证号校验格式、出生日期、性别、所在地和校验位。
+- 可按省 / 市 / 县、出生日期、性别生成合法身份证号。
 
-三、表样转换
+8. 结果打包
+- 支持对文件或文件夹一键压缩并 AES 加密。
+- 支持自动密码和历史密码查询。
 
-适用场景：
-- 把 Word / Excel 表样模板转换成 HTML 代码
-- 生成 Net 版或 Java 版占位符模板
-
-操作步骤：
-1. 选择表样文件（.doc、.docx 或 .xlsx）。
-2. 点击“Net版导出”或“Java版导出”。
-3. 在“代码”页查看并复制 HTML。
-4. 如需查看页面效果，可以使用“浏览器预览”。
-
-结果说明：
-- Net 版占位符示例：{{[#考生表视图.姓名#]}}
-- Java 版占位符示例：${{考生.姓名}}
-- Windows 下建议使用“浏览器预览”
-
-四、数据匹配
-
-适用场景：
-- 两张 Excel 通过共同字段补列
-- 替代手工写 VLOOKUP / XLOOKUP
-- 支持 `.xlsx` 和 `.xls`
-
-操作步骤：
-1. 选择目标表和来源表。
-2. 点击“加载表头”。
-3. 选择目标表匹配列和来源表匹配列。
-4. 如果重名较多，可添加附加匹配列映射，例如：
-   - 目标表“单位” -> 来源表“报考单位”
-   - 目标表“岗位” -> 来源表“报考岗位”
-5. 添加需要从来源表补回来的列。
-6. 点击“开始匹配”。
-
-结果说明：
-- 会生成一个新的 Excel 结果文件
-- 结果文件包含：
-  - 匹配结果
-  - 匹配结果清单
-- 可查看未匹配、来源重复键等情况
-
-五、结果打包
-
-适用场景：
-- 把照片结果、证件资料结果或其他交付目录打包发给客户
-
-操作步骤：
-1. 选择待打包文件或文件夹。
-2. 选择输出目录。
-3. 如需客户指定密码，可勾选“手动设置密码”并输入密码。
-4. 点击“一键打包并加密”。
-5. 使用“复制密码”或“打开压缩包”完成交付。
-6. 如需回查历史密码，可在下方输入文件夹名、压缩包名或密码查询。
-
-结果说明：
-- 压缩包默认使用原文件或文件夹名称
-- 自动密码格式：当天日期 + 4位随机字符，例如 `260313A7KQ`
-- 每次打包都会把压缩包路径、密码和时间写入本地 `.pack_history.json`
-
-六、更新SQL生成
-
-适用场景：
-- 考生表先导入主要字段，补充信息先导入临时表
-- 通过字段映射模板生成 UPDATE SQL
-- 先备份两张表，再更新正式表
-
-操作步骤：
-1. 点击“导出模板”，生成“更新SQL字段映射模板.xlsx”。
-2. 在模板里填写：
-   - 考生表字段名
-   - 临时表字段名
-   - 是否更新
-3. 选择映射模板并点击“加载字段”。
-4. 输入考生表名称和临时表名称。
-5. 选择考生表关联字段和临时表关联字段。
-6. 如需避免空值覆盖正式表，可勾选“忽略空值，不覆盖正式表”。
-7. 点击“生成 SQL”，下方会显示完整脚本。
-8. 点击“复制 SQL”，再到数据库工具中执行。
-
-结果说明：
-- 生成的脚本会先备份考生表和临时表
-- 备份表名会自动附加时间戳
-- 只更新模板中“是否更新”为“是”的字段
-
-七、使用建议
-
-- 第一次处理大批量文件时，建议先用少量数据测试。
-- 使用模板前，建议先确认匹配列和分类列填写正确。
-- 处理完成后，可以直接点击“打开结果清单”核对结果。
-- 切换阿里云 / 腾讯云时，程序会分别记住两套配置。
-
-八、运行日志
-
-运行日志用于查看下载、筛选、分类和导出的详细过程。
-如果需要回看处理步骤，可以打开“运行日志”页查看。
+9. 使用建议
+- 第一次处理批量数据时，建议先用少量数据测试。
+- 涉及下载、筛选、分类时，建议优先勾选“仅预览”。
+- 运行细节和错误会写入“运行日志”页。
 """
         self.help_text.configure(state="normal")
         self.help_text.delete("1.0", tk.END)
@@ -1651,10 +797,130 @@ class App:
     def on_tab_changed(self, _event=None) -> None:
         current_tab = self.notebook.select()
         tab_text = self.notebook.tab(current_tab, "text")
+        self.sync_sidebar_selection(tab_text)
         if tab_text == "照片下载与分类":
             self.reset_split_default("photo")
         elif tab_text == "证件资料筛选":
             self.reset_split_default("certificate")
+
+    def build_sidebar_navigation(self, parent: tk.Frame) -> None:
+        header = tk.Label(
+            parent,
+            text="功能导航",
+            bg="#F8FBFF",
+            fg="#162033",
+            font=("Microsoft YaHei UI", 13, "bold"),
+            anchor="w",
+            padx=16,
+            pady=16,
+        )
+        header.pack(fill="x")
+
+        for group_name, items in self.NAV_GROUPS:
+            self.nav_group_expanded[group_name] = True
+            group_frame = tk.Frame(parent, bg="#F8FBFF")
+            group_frame.pack(fill="x", pady=(0, 6))
+
+            header_row = tk.Frame(group_frame, bg="#F8FBFF")
+            header_row.pack(fill="x")
+            button = tk.Button(
+                header_row,
+                text=group_name,
+                command=lambda name=group_name: self.toggle_nav_group(name),
+                anchor="w",
+                relief="flat",
+                bd=0,
+                bg="#F8FBFF",
+                activebackground="#EEF5FF",
+                fg="#213349",
+                activeforeground="#213349",
+                font=("Microsoft YaHei UI", 12, "bold"),
+                padx=16,
+                pady=10,
+                cursor="hand2",
+            )
+            button.pack(side="left", fill="x", expand=True)
+            indicator = ttk.Label(
+                header_row,
+                text="▾",
+                background="#F8FBFF",
+                foreground="#678099",
+                font=("Microsoft YaHei UI", 12, "bold"),
+            )
+            indicator.pack(side="right", padx=(0, 16))
+            self.nav_group_indicators[group_name] = indicator
+
+            items_frame = tk.Frame(group_frame, bg="#F8FBFF")
+            items_frame.pack(fill="x")
+            self.nav_group_frames[group_name] = items_frame
+            for label, tab_text in items:
+                item_button = tk.Button(
+                    items_frame,
+                    text=label,
+                    command=lambda name=tab_text: self.show_tab_by_text(name),
+                    anchor="w",
+                    relief="flat",
+                    bd=0,
+                    bg="#F8FBFF",
+                    activebackground="#EAF2FF",
+                    fg="#40546A",
+                    activeforeground="#162033",
+                    font=("Microsoft YaHei UI", 11),
+                    padx=32,
+                    pady=9,
+                    cursor="hand2",
+                )
+                item_button.pack(fill="x")
+                self.nav_item_buttons[tab_text] = item_button
+
+        for group_name in list(self.nav_group_frames.keys())[1:]:
+            self.toggle_nav_group(group_name, expanded=False)
+
+    def toggle_nav_group(self, group_name: str, expanded: Optional[bool] = None) -> None:
+        current = self.nav_group_expanded.get(group_name, True)
+        target = (not current) if expanded is None else expanded
+        self.nav_group_expanded[group_name] = target
+        frame = self.nav_group_frames[group_name]
+        indicator = self.nav_group_indicators[group_name]
+        if target:
+            frame.pack(fill="x")
+            indicator.configure(text="▾")
+        else:
+            frame.pack_forget()
+            indicator.configure(text="▸")
+
+    def show_tab_by_text(self, tab_text: str) -> None:
+        tab_id = self.tab_ids_by_text.get(tab_text)
+        if not tab_id:
+            return
+        self.notebook.select(tab_id)
+        self.sync_sidebar_selection(tab_text)
+
+    def open_home_shortcut(self, index: int) -> None:
+        if index < 0 or index >= len(self.home_shortcut_vars):
+            return
+        tab_text = self.home_shortcut_vars[index].get().strip()
+        if tab_text:
+            self.show_tab_by_text(tab_text)
+
+    def save_home_shortcuts(self) -> None:
+        self.save_settings()
+        self.write_log("首页快捷入口配置已保存。")
+
+    def sync_sidebar_selection(self, tab_text: str) -> None:
+        self.nav_selected_text = tab_text
+        for text, button in self.nav_item_buttons.items():
+            is_selected = text == tab_text
+            button.configure(
+                bg="#DCE8FF" if is_selected else "#F8FBFF",
+                fg="#173052" if is_selected else "#40546A",
+                font=("Microsoft YaHei UI", 11, "bold") if is_selected else ("Microsoft YaHei UI", 11),
+            )
+        for group_name, items in self.NAV_GROUPS:
+            if any(item_tab_text == tab_text for _, item_tab_text in items):
+                if not self.nav_group_expanded.get(group_name, True):
+                    self.toggle_nav_group(group_name, expanded=True)
+                break
 
     def reset_split_default(self, pane_name: str) -> None:
         if not self.default_sash_pending.get(pane_name):
@@ -1679,10 +945,7 @@ class App:
         variable: tk.StringVar,
         show: Optional[str] = None,
     ):
-        ttk.Label(parent, text=label, width=16).grid(row=row, column=0, sticky="w", pady=4)
-        entry = self.create_text_entry(parent, textvariable=variable, show=show or "")
-        entry.grid(row=row, column=1, sticky="ew", pady=4)
-        return entry
+        return ui_add_entry_row(self, parent, row, label, variable, show)
 
     def add_tick_checkbutton(
         self,
@@ -1696,37 +959,24 @@ class App:
         pady=4,
         sticky: str = "w",
     ):
-        background = "#f5f5f5"
-        try:
-            background = parent.cget("background")
-        except tk.TclError:
-            try:
-                style = ttk.Style()
-                background = style.lookup("TFrame", "background") or background
-            except tk.TclError:
-                pass
-        widget = tk.Checkbutton(
-            parent,
+        return ui_add_tick_checkbutton(
+            parent=parent,
             text=text,
             variable=variable,
-            onvalue=True,
-            offvalue=False,
             command=command,
-            anchor="w",
-            highlightthickness=0,
-            relief="flat",
-            borderwidth=0,
-            background=background,
-            activebackground=background,
-            selectcolor="#ffffff",
+            row=row,
+            column=column,
+            padx=padx,
+            pady=pady,
+            sticky=sticky,
         )
-        widget.grid(row=row, column=column, sticky=sticky, padx=padx, pady=pady)
-        return widget
 
     def add_cloud_type_row(self, parent: ttk.Frame, row: int) -> None:
-        ttk.Label(parent, text="云类型", width=16).grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Label(parent, text="云类型", width=16).grid(
+            row=row, column=0, sticky="w", pady=6, padx=(0, 10)
+        )
         row_frame = ttk.Frame(parent)
-        row_frame.grid(row=row, column=1, sticky="w", pady=4)
+        row_frame.grid(row=row, column=1, sticky="w", pady=6)
         ttk.Radiobutton(
             row_frame,
             text="阿里云 OSS",
@@ -1743,7 +993,9 @@ class App:
         ).pack(side="left", padx=(10, 0))
 
     def add_bucket_picker(self, parent: ttk.Frame, row: int) -> None:
-        ttk.Label(parent, text="Bucket", width=16).grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Label(parent, text="Bucket", width=16).grid(
+            row=row, column=0, sticky="w", pady=6, padx=(0, 10)
+        )
 
         picker_frame = ttk.Frame(parent)
         picker_frame.grid(row=row, column=1, sticky="ew", pady=4)
@@ -1763,11 +1015,13 @@ class App:
         ttk.Button(
             action_frame,
             text="加载 Bucket",
+            width=12,
             command=self.load_buckets,
         ).pack(side="left")
         ttk.Button(
             action_frame,
             text="保存配置",
+            width=12,
             command=self.save_settings,
         ).pack(side="left", padx=(8, 0))
 
@@ -1777,7 +1031,9 @@ class App:
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
 
     def add_prefix_picker(self, parent: ttk.Frame, row: int) -> None:
-        ttk.Label(parent, text="下载文件夹", width=16).grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Label(parent, text="下载文件夹", width=16).grid(
+            row=row, column=0, sticky="w", pady=6, padx=(0, 10)
+        )
 
         picker_frame = ttk.Frame(parent)
         picker_frame.grid(row=row, column=1, sticky="ew", pady=4)
@@ -1796,12 +1052,14 @@ class App:
         ttk.Button(
             action_frame,
             text="加载文件夹",
+            width=12,
             command=self.load_bucket_folders,
         ).pack(side="left")
 
         ttk.Button(
             action_frame,
             text="上一级",
+            width=12,
             command=self.go_to_parent_prefix,
         ).pack(side="left", padx=(8, 0))
 
@@ -1811,7 +1069,9 @@ class App:
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
 
     def add_certificate_bucket_picker(self, parent: ttk.Frame, row: int) -> None:
-        ttk.Label(parent, text="Bucket", width=16).grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Label(parent, text="Bucket", width=16).grid(
+            row=row, column=0, sticky="w", pady=6, padx=(0, 10)
+        )
         picker_frame = ttk.Frame(parent)
         picker_frame.grid(row=row, column=1, sticky="ew", pady=4)
         picker_frame.columnconfigure(0, weight=1)
@@ -1827,11 +1087,13 @@ class App:
         ttk.Button(
             action_frame,
             text="加载 Bucket",
+            width=12,
             command=self.load_certificate_buckets,
         ).pack(side="left")
         ttk.Button(
             action_frame,
             text="保存配置",
+            width=12,
             command=self.save_settings,
         ).pack(side="left", padx=(8, 0))
         ttk.Label(
@@ -1840,7 +1102,9 @@ class App:
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
 
     def add_certificate_prefix_picker(self, parent: ttk.Frame, row: int) -> None:
-        ttk.Label(parent, text="证件资料前缀", width=16).grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Label(parent, text="证件资料前缀", width=16).grid(
+            row=row, column=0, sticky="w", pady=6, padx=(0, 10)
+        )
         picker_frame = ttk.Frame(parent)
         picker_frame.grid(row=row, column=1, sticky="ew", pady=4)
         picker_frame.columnconfigure(0, weight=1)
@@ -1855,11 +1119,13 @@ class App:
         ttk.Button(
             action_frame,
             text="加载文件夹",
+            width=12,
             command=self.load_certificate_folders,
         ).pack(side="left")
         ttk.Button(
             action_frame,
             text="上一级",
+            width=12,
             command=self.go_to_certificate_parent_prefix,
         ).pack(side="left", padx=(8, 0))
         ttk.Label(
@@ -1874,14 +1140,7 @@ class App:
         label: str,
         variable: tk.StringVar,
     ) -> None:
-        ttk.Label(parent, text=label, width=16).grid(row=row, column=0, sticky="w", pady=4)
-        entry = self.create_text_entry(parent, textvariable=variable)
-        entry.grid(row=row, column=1, sticky="ew", pady=4)
-        ttk.Button(
-            parent,
-            text="选择",
-            command=lambda: self.choose_directory(variable),
-        ).grid(row=row, column=2, padx=(8, 0), pady=4)
+        ui_add_path_row(self, parent, row, label, variable)
 
     def add_file_row(
         self,
@@ -1892,14 +1151,7 @@ class App:
         command,
         button_text: str = "选择",
     ) -> None:
-        ttk.Label(parent, text=label, width=16).grid(row=row, column=0, sticky="w", pady=4)
-        entry = self.create_text_entry(parent, textvariable=variable)
-        entry.grid(row=row, column=1, sticky="ew", pady=4)
-        ttk.Button(
-            parent,
-            text=button_text,
-            command=command,
-        ).grid(row=row, column=2, padx=(8, 0), pady=4)
+        ui_add_file_row(self, parent, row, label, variable, command, button_text)
 
     def choose_directory(self, variable: tk.StringVar) -> None:
         selected = filedialog.askdirectory(initialdir=variable.get() or str(Path.cwd()))
@@ -1907,277 +1159,127 @@ class App:
             variable.set(selected)
 
     def choose_certificate_template(self) -> None:
-        selected = filedialog.askopenfilename(
-            initialdir=str(Path(self.certificate_template_var.get()).parent)
-            if self.certificate_template_var.get().strip()
-            else str(Path.cwd()),
-            filetypes=[("Excel 文件", "*.xlsx"), ("所有文件", "*.*")],
-        )
-        if selected:
-            self.certificate_template_var.set(selected)
-            self.load_certificate_headers()
+        ui_choose_certificate_template(self)
 
     def choose_photo_template(self) -> None:
-        selected = filedialog.askopenfilename(
-            initialdir=str(Path(self.photo_template_var.get()).parent)
-            if self.photo_template_var.get().strip()
-            else str(Path.cwd()),
-            filetypes=[("Excel 文件", "*.xlsx"), ("所有文件", "*.*")],
-        )
-        if selected:
-            self.photo_template_var.set(selected)
-            self.load_photo_headers()
+        ui_choose_photo_template(self)
 
     def choose_word_source(self) -> None:
-        selected = filedialog.askopenfilename(
-            initialdir=str(Path(self.word_source_var.get()).parent)
-            if self.word_source_var.get().strip()
-            else str(Path.cwd()),
-            filetypes=[("表样文件", "*.docx *.doc *.xlsx"), ("所有文件", "*.*")],
-        )
-        if selected:
-            self.word_source_var.set(selected)
+        ui_choose_word_source(self)
 
-    def choose_pack_file(self) -> None:
-        selected = filedialog.askopenfilename(
-            initialdir=str(Path(self.pack_source_dir_var.get()).parent)
-            if self.pack_source_dir_var.get().strip()
-            else str(Path.cwd())
-        )
-        if selected:
-            self.pack_source_dir_var.set(selected)
-
-    def choose_match_target(self) -> None:
-        selected = filedialog.askopenfilename(
-            initialdir=str(Path(self.match_target_var.get()).parent)
-            if self.match_target_var.get().strip()
-            else str(Path.cwd()),
-            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
-        )
-        if selected:
-            self.match_target_var.set(selected)
-            self.fill_match_output_path()
-            self.load_match_headers()
-
-    def choose_match_source(self) -> None:
-        selected = filedialog.askopenfilename(
-            initialdir=str(Path(self.match_source_var.get()).parent)
-            if self.match_source_var.get().strip()
-            else str(Path.cwd()),
-            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
-        )
-        if selected:
-            self.match_source_var.set(selected)
-            self.load_match_headers()
+    def choose_sql_template(self) -> None:
+        ui_choose_sql_template(self)
 
     def choose_update_sql_mapping(self) -> None:
-        selected = filedialog.askopenfilename(
-            initialdir=str(Path(self.update_sql_mapping_var.get()).parent)
-            if self.update_sql_mapping_var.get().strip()
-            else str(Path.cwd()),
-            filetypes=[("Excel 文件", "*.xlsx *.xls"), ("所有文件", "*.*")],
-        )
-        if selected:
-            self.update_sql_mapping_var.set(selected)
-            self.load_update_sql_headers()
+        ui_choose_update_sql_mapping(self)
 
-    def export_update_sql_template_file(self) -> None:
-        selected = filedialog.asksaveasfilename(
-            initialdir=str(Path(self.update_sql_mapping_var.get()).parent)
-            if self.update_sql_mapping_var.get().strip()
-            else str(Path.cwd()),
-            defaultextension=".xlsx",
-            initialfile="更新SQL字段映射模板.xlsx",
-            filetypes=[("Excel 文件", "*.xlsx")],
-        )
-        if not selected:
-            return
-        try:
-            summary = export_update_sql_template(Path(selected))
-        except Exception as exc:
-            messagebox.showerror("导出失败", str(exc))
-            return
-        self.update_sql_mapping_var.set(str(summary.output_path))
-        self.load_update_sql_headers()
-        self.update_sql_status_var.set("模板已导出")
-        self.write_log(f"已导出更新SQL字段映射模板：{summary.output_path}")
+    def choose_pack_source_file(self) -> None:
+        ui_choose_pack_source_file(self)
 
-    def load_update_sql_headers(self) -> None:
-        mapping_value = self.update_sql_mapping_var.get().strip()
-        self.update_sql_target_headers = []
-        self.update_sql_source_headers = []
-        self.update_sql_target_key_combo.configure(values=[])
-        self.update_sql_source_key_combo.configure(values=[])
-        if not mapping_value:
-            return
-        mapping_path = Path(mapping_value)
-        if not mapping_path.exists():
-            return
-        try:
-            _, target_values, source_values = load_update_field_mappings(mapping_path)
-        except Exception as exc:
-            messagebox.showerror("加载失败", str(exc))
-            return
-        self.update_sql_target_headers = target_values
-        self.update_sql_source_headers = source_values
-        self.update_sql_target_key_combo.configure(values=target_values)
-        self.update_sql_source_key_combo.configure(values=source_values)
-        if target_values and not self.update_sql_target_key_var.get().strip():
-            self.update_sql_target_key_var.set(target_values[0])
-        if source_values and not self.update_sql_source_key_var.get().strip():
-            self.update_sql_source_key_var.set(source_values[0])
-        self.update_sql_status_var.set("字段已加载")
+    def choose_pack_source_directory(self) -> None:
+        ui_choose_pack_source_directory(self)
+
+    def choose_phone_filter_file(self) -> None:
+        ui_choose_phone_filter_file(self)
+
+    def clear_status_server_form(self) -> None:
+        ui_clear_status_server_form(self)
+
+    def on_status_server_select(self, _event=None) -> None:
+        ui_on_status_server_select(self, _event)
+
+    def save_status_server(self) -> None:
+        ui_save_status_server(self)
+
+    def delete_status_server(self) -> None:
+        ui_delete_status_server(self)
+
+    def test_status_server(self) -> None:
+        ui_test_status_server(self)
+
+    def start_status_query(self) -> None:
+        ui_start_status_query(self)
+
+    def export_status_result(self) -> None:
+        ui_export_status_result(self)
+
+    def refresh_status_server_tree(self) -> None:
+        ui_refresh_status_server_tree(self)
+
+    def choose_match_target(self) -> None:
+        ui_choose_match_target(self)
+
+    def choose_match_source(self) -> None:
+        ui_choose_match_source(self)
+
+    def choose_exam_candidate_file(self) -> None:
+        ui_choose_exam_candidate_file(self)
+
+    def choose_exam_group_file(self) -> None:
+        ui_choose_exam_group_file(self)
+
+    def choose_exam_plan_file(self) -> None:
+        ui_choose_exam_plan_file(self)
+
+    def export_exam_templates_from_ui(self) -> None:
+        ui_export_exam_templates_from_ui(self)
+
+    def load_exam_group_headers(self) -> None:
+        ui_load_exam_group_headers(self)
+
+    def refresh_exam_rule_type_values(self) -> None:
+        ui_refresh_exam_rule_type_values(self)
+
+    def fill_exam_output_path(self) -> None:
+        ui_fill_exam_output_path(self)
 
     def fill_match_output_path(self) -> None:
-        target_value = self.match_target_var.get().strip()
-        if not target_value:
-            return
-        target_path = Path(target_value)
-        self.match_output_var.set(str(target_path.with_name(f"{target_path.stem}_数据匹配结果.xlsx")))
+        ui_fill_match_output_path(self)
+
+    def fill_phone_table_name(self) -> None:
+        ui_fill_phone_table_name(self)
 
     def load_match_headers(self) -> None:
-        target_value = self.match_target_var.get().strip()
-        source_value = self.match_source_var.get().strip()
-        self.match_target_headers = []
-        self.match_source_headers = []
-        self.match_extra_mappings = []
-        self.match_transfer_mappings = []
-        self.match_target_key_combo.configure(values=[])
-        self.match_source_key_combo.configure(values=[])
-        self.match_extra_target_combo.configure(values=[])
-        self.match_extra_source_combo.configure(values=[])
-        self.match_transfer_source_combo.configure(values=[])
-        for item_id in self.match_extra_tree.get_children():
-            self.match_extra_tree.delete(item_id)
-        for item_id in self.match_transfer_tree.get_children():
-            self.match_transfer_tree.delete(item_id)
-        if not target_value or not source_value:
-            return
-        target_path = Path(target_value)
-        source_path = Path(source_value)
-        if not target_path.exists() or not source_path.exists():
-            return
-        try:
-            self.match_target_headers = list_match_headers(target_path)
-            self.match_source_headers = list_match_headers(source_path)
-        except Exception as exc:
-            messagebox.showerror("加载失败", str(exc))
-            return
-        self.match_target_key_combo.configure(values=self.match_target_headers)
-        self.match_source_key_combo.configure(values=self.match_source_headers)
-        self.match_extra_target_combo.configure(values=self.match_target_headers)
-        self.match_extra_source_combo.configure(values=self.match_source_headers)
-        self.match_transfer_source_combo.configure(values=self.match_source_headers)
-        if not self.match_target_key_var.get().strip() and self.match_target_headers:
-            self.match_target_key_var.set(self.match_target_headers[0])
-        if not self.match_source_key_var.get().strip() and self.match_source_headers:
-            self.match_source_key_var.set(self.match_source_headers[0])
-        if self.match_source_headers and not self.match_transfer_source_var.get().strip():
-            self.match_transfer_source_var.set(self.match_source_headers[0])
-            self.match_transfer_target_var.set(self.match_source_headers[0])
+        ui_load_match_headers(self)
+
+    def load_update_sql_headers(self) -> None:
+        ui_load_update_sql_headers(self)
+
+    def export_update_sql_template_file(self) -> None:
+        ui_export_update_sql_template_file(self)
 
     def add_extra_match_mapping(self) -> None:
-        target_column = self.match_extra_target_var.get().strip()
-        source_column = self.match_extra_source_var.get().strip()
-        if not target_column or not source_column:
-            messagebox.showerror("参数错误", "请选择目标表列和来源表列。")
-            return
-        mapping = ColumnMapping(target_column=target_column, source_column=source_column)
-        if mapping in self.match_extra_mappings:
-            return
-        self.match_extra_mappings.append(mapping)
-        self.match_extra_tree.insert("", tk.END, values=(target_column, source_column))
+        ui_add_extra_match_mapping(self)
 
     def remove_extra_match_mapping(self) -> None:
-        selected = self.match_extra_tree.selection()
-        if not selected:
-            return
-        for item_id in selected:
-            values = self.match_extra_tree.item(item_id, "values")
-            self.match_extra_tree.delete(item_id)
-            self.match_extra_mappings = [
-                item
-                for item in self.match_extra_mappings
-                if (item.target_column, item.source_column) != tuple(values)
-            ]
+        ui_remove_extra_match_mapping(self)
 
     def add_transfer_mapping(self) -> None:
-        target_column = self.match_transfer_target_var.get().strip()
-        source_column = self.match_transfer_source_var.get().strip()
-        if not source_column:
-            messagebox.showerror("参数错误", "请选择来源表补充列。")
-            return
-        if not target_column:
-            target_column = source_column
-            self.match_transfer_target_var.set(target_column)
-        mapping = ColumnMapping(target_column=target_column, source_column=source_column)
-        if mapping in self.match_transfer_mappings:
-            return
-        self.match_transfer_mappings.append(mapping)
-        self.match_transfer_tree.insert("", tk.END, values=(target_column, source_column))
+        ui_add_transfer_mapping(self)
 
     def remove_transfer_mapping(self) -> None:
-        selected = self.match_transfer_tree.selection()
-        if not selected:
-            return
-        for item_id in selected:
-            values = self.match_transfer_tree.item(item_id, "values")
-            self.match_transfer_tree.delete(item_id)
-            self.match_transfer_mappings = [
-                item
-                for item in self.match_transfer_mappings
-                if (item.target_column, item.source_column) != tuple(values)
-            ]
+        ui_remove_transfer_mapping(self)
+
+    def refresh_exam_rule_tree(self) -> None:
+        ui_refresh_exam_rule_tree(self)
+
+    def add_exam_rule_item(self) -> None:
+        ui_add_exam_rule_item(self)
+
+    def remove_exam_rule_item(self) -> None:
+        ui_remove_exam_rule_item(self)
+
+    def move_exam_rule_up(self) -> None:
+        ui_move_exam_rule_up(self)
+
+    def move_exam_rule_down(self) -> None:
+        ui_move_exam_rule_down(self)
 
     def create_text_entry(self, parent, textvariable: tk.StringVar, show: str = ""):
-        entry_widget = tk.Entry(
-            parent,
-            textvariable=textvariable,
-            show=show,
-            relief="solid",
-            bd=1,
-            highlightthickness=1,
-            bg="#FCFCFC",
-            fg="#222222",
-            disabledbackground="#F2F2F2",
-            disabledforeground="#8A8A8A",
-            readonlybackground="#F7F7F7",
-            highlightbackground="#CFCFCF",
-            highlightcolor="#4A90E2",
-            insertbackground="#1677FF",
-            insertwidth=2,
-            insertborderwidth=0,
-            cursor="xterm",
-            takefocus=True,
-            exportselection=False,
-        )
-        return entry_widget
+        return ui_create_text_entry(parent, textvariable, show)
 
     def bind_mousewheel_to_canvas(self, canvas: tk.Canvas, target) -> None:
-        def on_mousewheel(event) -> None:
-            if event.delta:
-                delta = -1 if event.delta > 0 else 1
-            elif getattr(event, "num", None) == 4:
-                delta = -1
-            elif getattr(event, "num", None) == 5:
-                delta = 1
-            else:
-                delta = 0
-            if delta != 0:
-                canvas.yview_scroll(delta, "units")
-
-        def bind_events(_event=None) -> None:
-            canvas.bind_all("<MouseWheel>", on_mousewheel)
-            canvas.bind_all("<Button-4>", on_mousewheel)
-            canvas.bind_all("<Button-5>", on_mousewheel)
-
-        def unbind_events(_event=None) -> None:
-            canvas.unbind_all("<MouseWheel>")
-            canvas.unbind_all("<Button-4>")
-            canvas.unbind_all("<Button-5>")
-
-        target.bind("<Enter>", bind_events)
-        target.bind("<Leave>", unbind_events)
+        ui_bind_mousewheel_to_canvas(canvas, target)
 
     def set_widget_state_recursive(self, widget, state: str) -> None:
         try:
@@ -2193,23 +1295,7 @@ class App:
             self.set_widget_state_recursive(child, state)
 
     def update_photo_source_mode_ui(self) -> None:
-        is_oss = self.photo_source_mode_var.get() == "oss"
-        self.skip_download_var.set(not is_oss)
-        self.set_widget_state_recursive(self.photo_oss_frame, "normal" if is_oss else "disabled")
-        self.set_widget_state_recursive(
-            self.photo_browser_frame,
-            "normal" if is_oss else "disabled",
-        )
-        if is_oss:
-            self.run_button.configure(text="下载并生成模板")
-            self.folder_status_var.set("未加载 bucket 文件夹")
-            self.search_status_var.set("未搜索文件夹")
-            self.selected_folder_info_var.set("当前未选择 bucket 文件夹")
-        else:
-            self.run_button.configure(text="生成本地模板")
-            self.folder_status_var.set("本地模式不使用 bucket 浏览")
-            self.search_status_var.set("本地模式不使用 bucket 搜索")
-            self.selected_folder_info_var.set("请直接选择本地照片目录")
+        ui_update_photo_source_mode_ui(self)
 
     def update_certificate_source_mode_ui(self) -> None:
         is_oss = self.certificate_source_mode_var.get() == "oss"
@@ -2233,170 +1319,19 @@ class App:
             self.certificate_selected_folder_info_var.set("请直接选择本地证件资料目录")
 
     def clear_log(self) -> None:
-        self.log_text.delete("1.0", tk.END)
+        ui_clear_log(self)
 
     def write_log(self, message: str) -> None:
-        if int(self.log_text.index("end-1c").split(".")[0]) > 800:
-            self.log_text.delete("1.0", "200.0")
-        self.log_text.insert(tk.END, message + "\n")
-        self.log_text.see(tk.END)
+        ui_write_log(self, message)
 
     def flush_logs(self) -> None:
-        while True:
-            try:
-                message = self.log_queue.get_nowait()
-            except queue.Empty:
-                break
-            else:
-                if isinstance(message, dict) and message.get("type") == "progress":
-                    self.update_progress_ui(
-                        stage=message.get("stage", ""),
-                        current=message.get("current", 0),
-                        total=message.get("total", 0),
-                        current_file=message.get("current_file", ""),
-                    )
-                elif isinstance(message, dict) and message.get("type") == "certificate_summary":
-                    self.update_certificate_summary_ui(message.get("summary"))
-                elif message == "__TASK_DONE__":
-                    self.run_button.configure(state="normal")
-                    self.photo_classify_button.configure(state="normal")
-                    self.cancel_button.configure(state="disabled")
-                    self.status_var.set("完成")
-                    self.progress_text_var.set("任务完成")
-                    if self.progress_bar is not None:
-                        self.progress_bar["value"] = self.progress_bar["maximum"]
-                elif message == "__CERTIFICATE_TASK_DONE__":
-                    self.certificate_download_button.configure(
-                        state="normal" if self.certificate_source_mode_var.get() == "oss" else "disabled"
-                    )
-                    self.certificate_run_button.configure(state="normal")
-                    self.certificate_cancel_button.configure(state="disabled")
-                    self.certificate_status_var.set("完成")
-                    self.certificate_progress_text_var.set("筛选完成")
-                    if self.certificate_progress_bar is not None:
-                        self.certificate_progress_bar["value"] = self.certificate_progress_bar["maximum"]
-                elif isinstance(message, dict) and message.get("type") == "summary":
-                    self.update_summary_ui(message.get("summary"))
-                elif message == "__TASK_CANCELLED__":
-                    self.run_button.configure(state="normal")
-                    self.photo_classify_button.configure(state="normal")
-                    self.cancel_button.configure(state="disabled")
-                    self.status_var.set("已取消")
-                    self.progress_text_var.set("任务已取消")
-                elif message == "__CERTIFICATE_TASK_CANCELLED__":
-                    self.certificate_download_button.configure(
-                        state="normal" if self.certificate_source_mode_var.get() == "oss" else "disabled"
-                    )
-                    self.certificate_run_button.configure(state="normal")
-                    self.certificate_cancel_button.configure(state="disabled")
-                    self.certificate_status_var.set("已取消")
-                    self.certificate_progress_text_var.set("筛选已取消")
-                elif isinstance(message, str) and message.startswith("__TASK_FAILED__::"):
-                    self.run_button.configure(state="normal")
-                    self.photo_classify_button.configure(state="normal")
-                    self.cancel_button.configure(state="disabled")
-                    self.status_var.set("失败")
-                    self.progress_text_var.set("任务失败")
-                    self.write_log(message.split("::", 1)[1])
-                elif isinstance(message, str) and message.startswith("__CERTIFICATE_TASK_FAILED__::"):
-                    self.certificate_download_button.configure(
-                        state="normal" if self.certificate_source_mode_var.get() == "oss" else "disabled"
-                    )
-                    self.certificate_run_button.configure(state="normal")
-                    self.certificate_cancel_button.configure(state="disabled")
-                    self.certificate_status_var.set("失败")
-                    self.certificate_progress_text_var.set("筛选失败")
-                    self.write_log(message.split("::", 1)[1])
-                elif isinstance(message, dict) and message.get("type") == "word_export":
-                    self.update_word_export_ui(message.get("result"))
-                elif isinstance(message, dict) and message.get("type") == "pack_summary":
-                    self.update_pack_summary_ui(message.get("summary"))
-                elif message == "__WORD_EXPORT_DONE__":
-                    self.word_net_button.configure(state="normal")
-                    self.word_java_button.configure(state="normal")
-                    self.word_status_var.set("完成")
-                elif message == "__MATCH_DONE__":
-                    self.match_run_button.configure(state="normal")
-                    self.match_status_var.set("完成")
-                elif message == "__PACK_DONE__":
-                    self.pack_run_button.configure(state="normal")
-                    self.pack_status_var.set("完成")
-                elif isinstance(message, str) and message.startswith("__PACK_FAILED__::"):
-                    self.pack_run_button.configure(state="normal")
-                    self.pack_status_var.set("失败")
-                    self.pack_result_var.set(f"打包失败：\n{message.split('::', 1)[1]}")
-                    self.pack_copy_password_button.configure(state="disabled")
-                    self.pack_open_button.configure(state="disabled")
-                    self.write_log(message.split("::", 1)[1])
-                elif isinstance(message, dict) and message.get("type") == "match_summary":
-                    self.update_match_summary_ui(message.get("summary"))
-                elif isinstance(message, dict) and message.get("type") == "update_sql_result":
-                    result = message.get("result")
-                    self.last_update_sql_result = result
-                    if result is not None:
-                        self.update_sql_result_var.set(
-                            "SQL 生成完成：\n"
-                            f"映射模板：{result.mapping_path}\n"
-                            f"考生表：{result.target_table}\n"
-                            f"临时表：{result.source_table}\n"
-                            f"备份表：{result.backup_target_table} / {result.backup_source_table}\n\n"
-                            f"{result.sql_content}"
-                        )
-                        self.set_update_sql_result_text(self.update_sql_result_var.get())
-                        self.update_sql_copy_button.configure(state="normal")
-                elif isinstance(message, str) and message.startswith("__MATCH_FAILED__::"):
-                    self.match_run_button.configure(state="normal")
-                    self.match_status_var.set("失败")
-                    self.match_result_var.set(f"匹配失败：\n{message.split('::', 1)[1]}")
-                    self.match_open_button.configure(state="disabled")
-                    self.set_match_result_text(self.match_result_var.get())
-                    self.write_log(message.split("::", 1)[1])
-                elif message == "__UPDATE_SQL_DONE__":
-                    self.update_sql_run_button.configure(state="normal")
-                    self.update_sql_status_var.set("完成")
-                elif isinstance(message, str) and message.startswith("__UPDATE_SQL_FAILED__::"):
-                    error_text = message.split("::", 1)[1]
-                    self.update_sql_run_button.configure(state="normal")
-                    self.update_sql_copy_button.configure(state="disabled")
-                    self.update_sql_status_var.set("失败")
-                    self.update_sql_result_var.set(f"生成失败：\n{error_text}")
-                    self.set_update_sql_result_text(self.update_sql_result_var.get())
-                    self.write_log(error_text)
-                elif isinstance(message, str) and message.startswith("__WORD_EXPORT_FAILED__::"):
-                    self.word_net_button.configure(state="normal")
-                    self.word_java_button.configure(state="normal")
-                    self.word_status_var.set("失败")
-                    error_text = message.split("::", 1)[1]
-                    self.word_result_var.set(f"导出失败：\n{error_text}")
-                    self.word_preview_status_var.set("预览不可用")
-                    self.set_word_code("")
-                    self.render_word_preview("")
-                    self.word_copy_button.configure(state="disabled")
-                    self.word_open_browser_button.configure(state="disabled")
-                    self.write_log(error_text)
-                else:
-                    self.write_log(message)
-        self.root.after(150, self.flush_logs)
+        ui_flush_logs(self)
 
     def make_logger(self):
-        def logger(message: str) -> None:
-            self.log_queue.put(message)
-
-        return logger
+        return ui_make_logger(self)
 
     def make_progress_callback(self):
-        def progress(stage: str, current: int, total: int, current_file: str) -> None:
-            self.log_queue.put(
-                {
-                    "type": "progress",
-                    "stage": stage,
-                    "current": current,
-                    "total": total,
-                    "current_file": current_file,
-                }
-            )
-
-        return progress
+        return ui_make_progress_callback(self)
 
     def update_progress_ui(
         self,
@@ -2405,400 +1340,136 @@ class App:
         total: int,
         current_file: str,
     ) -> None:
-        if self.progress_bar is not None:
-            self.progress_bar["maximum"] = max(total, 1)
-            self.progress_bar["value"] = current
-
-        if stage == "download":
-            filename = Path(current_file).name if current_file else ""
-            if total > 0:
-                self.progress_text_var.set(f"下载进度：{current}/{total} {filename}".strip())
-            else:
-                self.progress_text_var.set("正在统计下载文件...")
-        elif stage == "certificate":
-            if self.certificate_progress_bar is not None:
-                self.certificate_progress_bar["maximum"] = max(total, 1)
-                self.certificate_progress_bar["value"] = current
-            if total > 0:
-                self.certificate_progress_text_var.set(
-                    f"筛选进度：{current}/{total} {current_file}".strip()
-                )
-            else:
-                self.certificate_progress_text_var.set("正在读取模板...")
-        elif stage == "certificate_download":
-            if self.certificate_progress_bar is not None:
-                self.certificate_progress_bar["maximum"] = max(total, 1)
-                self.certificate_progress_bar["value"] = current
-            filename = Path(current_file).name if current_file else ""
-            if total > 0:
-                self.certificate_progress_text_var.set(
-                    f"下载证件资料：{current}/{total} {filename}".strip()
-                )
-            else:
-                self.certificate_progress_text_var.set("正在统计证件资料文件...")
+        ui_update_progress_ui(self, stage, current, total, current_file)
 
     def cancel_run(self) -> None:
-        if self.worker is None or not self.worker.is_alive():
-            return
-        self.cancel_event.set()
-        self.status_var.set("取消中")
-        self.progress_text_var.set("正在取消，请稍候...")
-        self.certificate_status_var.set("取消中")
-        self.certificate_progress_text_var.set("正在取消，请稍候...")
-        self.write_log("用户请求取消当前任务。")
+        ui_cancel_run(self)
 
     def update_summary_ui(self, summary: Optional[WorkflowSummary]) -> None:
-        self.last_summary = summary
-        if summary is None:
-            self.summary_text_var.set("任务结果会显示在这里")
-            self.open_template_button.configure(state="disabled")
-            self.open_photo_report_button.configure(state="disabled")
-            return
-
-        lines = []
-        if summary.download_result is not None:
-            lines.append(
-                f"下载任务完成：共找到 {summary.download_result.total_found} 个文件，"
-                f"新下载 {summary.download_result.downloaded_count} 个，"
-                f"跳过已存在 {summary.download_result.skipped_existing_count} 个。"
-            )
-        if summary.template_file_count:
-            lines.append(f"模板文件统计：当前目录共 {summary.template_file_count} 个文件。")
-        if summary.template_created:
-            lines.append("已生成 Excel 模板，可以直接打开填写。")
-        elif summary.classified_count:
-            lines.append(f"分类复制完成，共处理 {summary.classified_count} 个文件。")
-            if summary.report_path is not None:
-                lines.append(f"已导出结果清单：{summary.report_path.name}")
-        elif summary.cancelled:
-            lines.append("任务已取消。")
-        elif summary.dry_run:
-            lines.append("当前为预览模式，没有实际写入文件。")
-        if not lines:
-            lines.append("任务已完成。")
-
-        self.summary_text_var.set("\n".join(lines))
-        if summary.template_path.exists():
-            self.open_template_button.configure(state="normal")
-        else:
-            self.open_template_button.configure(state="disabled")
-        if summary.report_path is not None and summary.report_path.exists():
-            self.open_photo_report_button.configure(state="normal")
-        else:
-            self.open_photo_report_button.configure(state="disabled")
+        ui_update_summary_ui(self, summary)
 
     def update_certificate_summary_ui(
         self,
         summary: Optional[CertificateFilterSummary],
     ) -> None:
-        self.last_certificate_summary = summary
-        if summary is None:
-            self.certificate_summary_text_var.set("证件资料筛选结果会显示在这里")
-            self.open_certificate_report_button.configure(state="disabled")
-            return
-
-        if summary.total_rows == 0 and summary.download_result is not None:
-            lines = [
-                f"证件资料下载完成：共找到 {summary.download_result.total_found} 个文件，"
-                f"新下载 {summary.download_result.downloaded_count} 个，"
-                f"跳过已存在 {summary.download_result.skipped_existing_count} 个。",
-                f"实际下载目录：{summary.source_dir}",
-            ]
-            if summary.cancelled:
-                lines.append("任务已取消。")
-            elif summary.dry_run:
-                lines.append("当前为预览模式，没有实际下载文件。")
-            else:
-                lines.append("请到上面的“证件资料目录”查看下载结果。")
-            self.certificate_summary_text_var.set("\n".join(lines))
-            self.open_certificate_report_button.configure(state="disabled")
-            return
-
-        lines = [
-            f"模板有效行数：{summary.total_rows}，匹配到 {summary.matched_people} 人。",
-            f"缺失人员文件夹：{summary.missing_people} 人。",
-            f"实际复制：{summary.copied_people} 人，{summary.copied_files} 个文件。",
-        ]
-        if summary.download_result is not None:
-            lines.insert(
-                0,
-                f"证件资料下载完成：共找到 {summary.download_result.total_found} 个文件，"
-                f"新下载 {summary.download_result.downloaded_count} 个，"
-                f"跳过已存在 {summary.download_result.skipped_existing_count} 个。",
-            )
-        if summary.classify_output:
-            lines.append("输出结构已按 分类一/分类二/分类三 建目录。")
-        else:
-            lines.append("输出结构未按分类字段建目录。")
-        if summary.rename_folder and summary.folder_name_column:
-            lines.append(f"导出后文件夹名称列：{summary.folder_name_column}")
-        else:
-            lines.append("导出后文件夹名称保持匹配列。")
-        if summary.keyword:
-            lines.append(f"筛选模式：只复制文件名包含“{summary.keyword}”的文件。")
-        else:
-            lines.append("筛选模式：复制整个人员文件夹。")
-        if summary.cancelled:
-            lines.append("任务已取消。")
-        elif summary.dry_run:
-            lines.append("当前为预览模式，没有实际复制文件。")
-        elif summary.report_path is not None:
-            lines.append(f"已导出结果清单：{summary.report_path.name}")
-        self.certificate_summary_text_var.set("\n".join(lines))
-        if summary.report_path is not None and summary.report_path.exists():
-            self.open_certificate_report_button.configure(state="normal")
-        else:
-            self.open_certificate_report_button.configure(state="disabled")
+        ui_update_certificate_summary_ui(self, summary)
 
     def update_word_export_ui(self, result: Optional[WordExportResult]) -> None:
-        self.last_word_export = result
-        if result is None:
-            self.word_result_var.set("表样转换结果会显示在这里")
-            self.word_preview_status_var.set("未生成预览")
-            self.set_word_code("")
-            self.render_word_preview("")
-            self.word_copy_button.configure(state="disabled")
-            self.word_open_browser_button.configure(state="disabled")
-            return
-        variant_label = "Net版" if result.variant == "net" else "Java版"
-        self.word_result_var.set(
-            f"{variant_label}导出完成：\n源文件：{result.source_path}\nHTML 代码已生成，可直接预览或复制。"
-        )
-        self.word_preview_status_var.set(f"{variant_label}预览")
-        self.set_word_code(result.html_content)
-        self.render_word_preview(result.preview_html)
-        self.word_copy_button.configure(state="normal")
-        self.word_open_browser_button.configure(state="normal")
-
-    def set_word_code(self, html_content: str) -> None:
-        if self.word_code_text is None:
-            return
-        self.word_code_text.configure(state="normal")
-        self.word_code_text.delete("1.0", tk.END)
-        self.word_code_text.insert("1.0", html_content)
-        self.word_code_text.configure(state="disabled")
-
-    def render_word_preview(self, html_content: str) -> None:
-        for child in self.word_preview_container.winfo_children():
-            child.destroy()
-        if not html_content:
-            ttk.Label(
-                self.word_preview_container,
-                text="导出后会在这里显示 HTML 预览。",
-            ).grid(row=0, column=0, sticky="nw")
-            return
-        if os.name == "nt":
-            ttk.Label(
-                self.word_preview_container,
-                text="Windows 下已关闭程序内置预览。请点击上方“浏览器预览”查看 HTML 效果。",
-                wraplength=760,
-                justify="left",
-            ).grid(row=0, column=0, sticky="nw")
-            self.word_preview_widget = None
-            self.word_preview_status_var.set(self.word_preview_status_var.get() + "（Windows 建议使用浏览器预览）")
-            return
-        try:
-            from tkinterweb import HtmlFrame
-
-            preview = HtmlFrame(
-                self.word_preview_container,
-                messages_enabled=False,
-            )
-            preview.load_html(html_content)
-            preview.grid(row=0, column=0, sticky="nsew")
-            self.word_preview_widget = preview
-            self.word_preview_status_var.set(self.word_preview_status_var.get() + "（表格增强预览）")
-        except Exception:
-            try:
-                from tkhtmlview import HTMLScrolledText
-
-                preview = HTMLScrolledText(
-                    self.word_preview_container,
-                    html=html_content,
-                )
-                preview.grid(row=0, column=0, sticky="nsew")
-                self.word_preview_widget = preview
-                self.word_preview_status_var.set(self.word_preview_status_var.get() + "（兼容预览）")
-            except Exception:
-                ttk.Label(
-                    self.word_preview_container,
-                    text="当前环境缺少 HTML 预览依赖，请先安装 requirements 后重启程序。",
-                    wraplength=760,
-                    justify="left",
-                ).grid(row=0, column=0, sticky="nw")
-                self.word_preview_widget = None
-
-    def copy_word_html(self) -> None:
-        if self.last_word_export is None:
-            return
-        self.root.clipboard_clear()
-        self.root.clipboard_append(self.last_word_export.html_content)
-        self.root.update()
-        self.word_status_var.set("已复制 HTML")
+        ui_update_word_export_ui(self, result)
 
     def update_pack_summary_ui(self, summary: Optional[PackSummary]) -> None:
-        self.last_pack_summary = summary
-        if summary is None:
-            self.pack_result_var.set("结果打包信息会显示在这里")
-            self.pack_copy_password_button.configure(state="disabled")
-            self.pack_open_button.configure(state="disabled")
-            return
-
-        self.pack_result_var.set(
-            "打包完成：\n"
-            f"源文件：{summary.source_path}\n"
-            f"压缩包：{summary.output_path}\n"
-            f"文件数：{summary.file_count}\n"
-            f"时间：{summary.created_at}\n"
-            f"密码：{summary.password}"
-        )
-        self.pack_copy_password_button.configure(state="normal")
-        self.pack_open_button.configure(state="normal")
+        ui_update_pack_summary_ui(self, summary)
 
     def update_match_summary_ui(self, summary: Optional[DataMatchSummary]) -> None:
-        self.last_match_summary = summary
-        if summary is None:
-            self.match_result_var.set("数据匹配结果会显示在这里")
-            self.match_open_button.configure(state="disabled")
-            self.set_match_result_text(self.match_result_var.get())
-            return
-        self.match_result_var.set(
-            "匹配完成：\n"
-            f"目标表：{summary.target_path}\n"
-            f"来源表：{summary.source_path}\n"
-            f"结果文件：{summary.output_path}\n"
-            f"目标表表头：第 {summary.target_header_row} 行\n"
-            f"来源表表头：第 {summary.source_header_row} 行\n"
-            f"总行数：{summary.total_rows}\n"
-            f"匹配成功：{summary.matched_rows}\n"
-            f"未匹配：{summary.unmatched_rows}\n"
-            f"来源重复键：{summary.duplicate_source_keys}\n"
-            f"重复未写入：{summary.ambiguous_rows}"
-        )
-        self.set_match_result_text(self.match_result_var.get())
-        self.match_open_button.configure(state="normal")
+        ui_update_match_summary_ui(self, summary)
+
+    def update_phone_summary_ui(self, summary) -> None:
+        ui_update_phone_summary_ui(self, summary)
 
     def set_match_result_text(self, content: str) -> None:
-        if self.match_result_text is None:
-            return
-        self.match_result_text.configure(state="normal")
-        self.match_result_text.delete("1.0", tk.END)
-        self.match_result_text.insert("1.0", content)
-        self.match_result_text.configure(state="disabled")
+        ui_set_match_result_text(self, content)
 
-    def set_update_sql_result_text(self, content: str) -> None:
-        if self.update_sql_result_text is None:
-            return
-        self.update_sql_result_text.configure(state="normal")
-        self.update_sql_result_text.delete("1.0", tk.END)
-        self.update_sql_result_text.insert("1.0", content)
-        self.update_sql_result_text.configure(state="disabled")
+    def set_phone_result_text(self, content: str) -> None:
+        ui_set_phone_result_text(self, content)
+
+    def set_id_result_text(self, content: str) -> None:
+        ui_set_id_result_text(self, content)
 
     def set_pack_query_result_text(self, content: str) -> None:
-        if self.pack_query_result_text is None:
-            return
-        self.pack_query_result_text.configure(state="normal")
-        self.pack_query_result_text.delete("1.0", tk.END)
-        self.pack_query_result_text.insert("1.0", content)
-        self.pack_query_result_text.configure(state="disabled")
+        ui_set_pack_query_result_text(self, content)
+
+    def set_sql_result_text(self, content: str) -> None:
+        ui_set_sql_result_text(self, content)
+
+    def set_update_sql_result_text(self, content: str) -> None:
+        ui_set_update_sql_result_text(self, content)
+
+    def update_update_sql_ui(self, result: Optional[UpdateSqlResult]) -> None:
+        ui_update_update_sql_ui(self, result)
+
+    def update_exam_summary_ui(self, summary: Optional[ExamArrangeSummary]) -> None:
+        ui_update_exam_summary_ui(self, summary)
+
+    def update_status_summary_ui(self, summary: Optional[ProjectStageSummary]) -> None:
+        ui_update_status_summary_ui(self, summary)
+
+    def set_exam_result_text(self, content: str) -> None:
+        ui_set_exam_result_text(self, content)
 
     def update_pack_password_mode_ui(self) -> None:
-        if self.pack_use_custom_password_var.get():
-            self.pack_password_entry.configure(state="normal")
-        else:
-            self.pack_password_var.set("")
-            self.pack_password_entry.configure(state="disabled")
+        ui_update_pack_password_mode_ui(self)
+
+    def update_phone_mode_ui(self) -> None:
+        ui_update_phone_mode_ui(self)
+
+    def update_id_day_values(self) -> None:
+        ui_update_id_day_values(self)
+
+    def update_id_city_values(self) -> None:
+        ui_update_id_city_values(self)
+
+    def update_id_county_values(self) -> None:
+        ui_update_id_county_values(self)
+
+    def update_id_region_hint(self) -> None:
+        ui_update_id_region_hint(self)
+
+    def run_id_card_validate(self) -> None:
+        ui_run_id_card_validate(self)
+
+    def run_id_card_generate(self) -> None:
+        try:
+            ui_run_id_card_generate(self)
+        except Exception as exc:
+            messagebox.showerror("身份证生成失败", str(exc))
+
+    def copy_generated_id_card(self) -> None:
+        ui_copy_generated_id_card(self)
 
     def run_pack_history_query(self) -> None:
-        keyword = self.pack_query_var.get().strip()
-        records = query_pack_history(keyword)
-        if not records:
-            self.set_pack_query_result_text("未找到匹配的打包记录。")
-            self.pack_status_var.set("未找到记录")
-            return
-        latest = records[0]
-        self.set_pack_query_result_text(
-            (
-                f"最近匹配记录：\n"
-                f"来源：{latest.get('source_name', '')}\n"
-                f"压缩包：{latest.get('archive_name', '')}\n"
-                f"时间：{latest.get('created_at', '')}\n"
-                f"密码：{latest.get('password', '')}\n"
-                f"路径：{latest.get('output_path', '')}"
-            )
-        )
-        self.pack_status_var.set("已查询密码")
+        ui_run_pack_history_query(self)
 
-    def open_word_preview_in_browser(self) -> None:
-        if self.last_word_export is None:
-            return
-        temp_file = Path(tempfile.gettempdir()) / f"word_preview_{self.last_word_export.variant}.html"
-        temp_file.write_text(self.last_word_export.html_content, encoding="utf-8")
-        try:
-            if os.name == "nt":
-                os.startfile(str(temp_file))
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(temp_file)])
-            else:
-                subprocess.Popen(["xdg-open", str(temp_file)])
-        except Exception as exc:
-            messagebox.showerror("打开失败", str(exc))
+    def set_word_code(self, html_content: str) -> None:
+        ui_set_word_code(self, html_content)
 
-    def open_template_file(self) -> None:
-        if self.last_summary is None:
-            return
-        template_path = self.last_summary.template_path
-        self.open_local_file(template_path, "未找到 Excel 模板")
+    def render_word_preview(self, html_content: str) -> None:
+        ui_render_word_preview(self, html_content)
 
-    def open_photo_report_file(self) -> None:
-        if self.last_summary is None or self.last_summary.report_path is None:
-            return
-        self.open_local_file(self.last_summary.report_path, "未找到结果清单")
+    def copy_word_html(self) -> None:
+        ui_copy_word_html(self)
 
-    def open_certificate_report_file(self) -> None:
-        if self.last_certificate_summary is None or self.last_certificate_summary.report_path is None:
-            return
-        self.open_local_file(self.last_certificate_summary.report_path, "未找到结果清单")
-
-    def copy_pack_password(self) -> None:
-        if self.last_pack_summary is None:
-            return
-        self.root.clipboard_clear()
-        self.root.clipboard_append(self.last_pack_summary.password)
-        self.root.update()
-        self.pack_status_var.set("已复制密码")
-
-    def open_pack_file(self) -> None:
-        if self.last_pack_summary is None:
-            return
-        self.open_local_file(self.last_pack_summary.output_path, "未找到压缩包")
-
-    def open_match_result_file(self) -> None:
-        if self.last_match_summary is None:
-            return
-        self.open_local_file(self.last_match_summary.output_path, "未找到匹配结果文件")
+    def copy_sql_text(self) -> None:
+        ui_copy_sql_text(self)
 
     def copy_update_sql(self) -> None:
-        if self.last_update_sql_result is None:
-            return
-        self.root.clipboard_clear()
-        self.root.clipboard_append(self.last_update_sql_result.sql_content)
-        self.root.update()
-        self.update_sql_status_var.set("已复制 SQL")
+        ui_copy_update_sql(self)
+
+    def open_word_preview_in_browser(self) -> None:
+        ui_open_word_preview_in_browser(self)
+
+    def copy_pack_password(self) -> None:
+        ui_copy_pack_password(self)
+
+    def open_pack_file(self) -> None:
+        ui_open_pack_file(self)
+
+    def open_match_result_file(self) -> None:
+        ui_open_match_result_file(self)
+
+    def open_exam_result_file(self) -> None:
+        ui_open_exam_result_file(self)
+
+    def open_template_file(self) -> None:
+        ui_open_template_file(self)
+
+    def open_photo_report_file(self) -> None:
+        ui_open_photo_report_file(self)
+
+    def open_certificate_report_file(self) -> None:
+        ui_open_certificate_report_file(self)
 
     def open_local_file(self, file_path: Path, not_found_title: str) -> None:
-        if not file_path.exists():
-            messagebox.showerror("文件不存在", f"{not_found_title}：{file_path}")
-            return
-        try:
-            if os.name == "nt":
-                os.startfile(str(file_path))
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(file_path)])
-            else:
-                subprocess.Popen(["xdg-open", str(file_path)])
-        except Exception as exc:
-            messagebox.showerror("打开失败", str(exc))
+        ui_open_local_file(self, file_path, not_found_title)
 
     def build_options(self) -> RunOptions:
         is_oss = self.photo_source_mode_var.get() == "oss"
@@ -2837,441 +1508,70 @@ class App:
         )
 
     def build_credentials(self) -> tuple[str, str, str, str]:
-        return validate_oss_credentials(
-            self.cloud_type_var.get().strip(),
-            self.access_key_id_var.get().strip(),
-            self.access_key_secret_var.get().strip(),
-            self.endpoint_var.get().strip(),
-        )
+        return ui_build_credentials(self)
 
     def validate_cloud_endpoint(self, cloud_type: str, endpoint: str) -> None:
-        cleaned = endpoint.strip()
-        if cloud_type == "aliyun":
-            if "aliyuncs.com" not in cleaned:
-                raise ValueError(
-                    "阿里云 OSS 的 Endpoint 不正确，应类似 `https://oss-cn-hangzhou.aliyuncs.com`。"
-                )
-            return
-
-        normalized = cleaned
-        if normalized.startswith("http://"):
-            normalized = normalized[len("http://") :]
-        elif normalized.startswith("https://"):
-            normalized = normalized[len("https://") :]
-        normalized = normalized.split("/")[0]
-        if "." in normalized:
-            normalized = normalized.split(".", 1)[0]
-        if not normalized.startswith("ap-"):
-            raise ValueError(
-                "腾讯云 COS 的 Endpoint / Region 不正确，应填写 Region（如 `ap-beijing`）或对应 COS Endpoint。"
-            )
+        ui_validate_cloud_endpoint(self, cloud_type, endpoint)
 
     def check_endpoint_reachable(self, cloud_type: str, endpoint: str) -> None:
-        target = endpoint.strip()
-        if cloud_type == "tencent" and not target.startswith(("http://", "https://")):
-            target = f"https://cos.{target}.myqcloud.com"
-
-        host = target
-        if host.startswith("http://"):
-            host = host[len("http://") :]
-        elif host.startswith("https://"):
-            host = host[len("https://") :]
-        host = host.split("/", 1)[0]
-        if not host:
-            raise ValueError("Endpoint / Region 不能为空。")
-
-        try:
-            socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-        except socket.gaierror as exc:
-            raise ValueError(f"Endpoint 无法解析，请检查地址是否正确：{host}") from exc
-
-        try:
-            with socket.create_connection((host, 443), timeout=2):
-                return
-        except OSError as exc:
-            raise ValueError(f"无法连接到 Endpoint：{host}，请检查地址或网络。") from exc
+        ui_check_endpoint_reachable(self, cloud_type, endpoint)
 
     def format_cloud_error(self, error: str) -> str:
-        lowered = error.lower()
-        if "invalidaccesskeyid" in lowered:
-            return "AccessKey ID 不存在或填写错误，请检查后重试。"
-        if "secretid is forbidden" in lowered or "invalidsecretid" in lowered:
-            return "AccessKey ID 不存在或填写错误，请检查后重试。"
-        if "secretkey" in lowered and ("invalid" in lowered or "mismatch" in lowered):
-            return "AccessKey Secret 不正确，请检查后重试。"
-        if "signaturedoesnotmatch" in lowered or "signature not match" in lowered:
-            return "AccessKey Secret 不正确，请检查后重试。"
-        if "access denied" in lowered or "'status': 403" in lowered or "status code: 403" in lowered:
-            return "当前账号没有访问权限，或密钥填写有误。"
-        if "nosuchbucket" in lowered or "bucket does not exist" in lowered:
-            return "Bucket 不存在，请检查 bucket 名称是否正确。"
-        if "invalidbucketname" in lowered:
-            return "Bucket 名称格式不正确。"
-        if "connection" in lowered or "timeout" in lowered or "name or service not known" in lowered:
-            return "无法连接到云存储服务，请检查 Endpoint / Region 和网络。"
-        return error
+        return ui_format_cloud_error(self, error)
 
     def set_folder_values(self, folders) -> None:
-        values = [""] + list(folders)
-        self.folder_values = values
-        self.prefix_combo["values"] = values
+        ui_set_folder_values(self, folders)
 
     def set_bucket_values(self, buckets: List[str]) -> None:
-        self.bucket_values = buckets
-        self.bucket_combo["values"] = buckets
-        current_bucket = self.bucket_name_var.get().strip()
-        if current_bucket and current_bucket not in buckets:
-            self.bucket_name_var.set("")
+        ui_set_bucket_values(self, buckets)
 
     def set_certificate_bucket_values(self, buckets: List[str]) -> None:
-        self.certificate_bucket_values = buckets
-        self.certificate_bucket_combo["values"] = buckets
-        current_bucket = self.certificate_bucket_name_var.get().strip()
-        if current_bucket and current_bucket not in buckets:
-            self.certificate_bucket_name_var.set("")
+        ui_set_certificate_bucket_values(self, buckets)
 
     def sync_bucket_values(self, buckets: List[str]) -> None:
-        self.set_bucket_values(buckets)
-        self.set_certificate_bucket_values(buckets)
+        ui_sync_bucket_values(self, buckets)
 
     def set_certificate_folder_values(self, folders: List[str]) -> None:
-        values = [""] + list(folders)
-        self.certificate_folder_values = values
-        self.certificate_prefix_combo["values"] = values
+        ui_set_certificate_folder_values(self, folders)
 
     def default_cloud_profile(self, cloud_type: str) -> Dict[str, str]:
-        # 两家云厂商的配置分开记忆，切换时不用来回重新输入。
-        if cloud_type == "tencent":
-            endpoint = "ap-beijing"
-        else:
-            endpoint = "https://oss-cn-hangzhou.aliyuncs.com"
-        return {
-            "access_key_id": "",
-            "access_key_secret": "",
-            "endpoint": endpoint,
-            "bucket_name": "",
-            "certificate_bucket_name": "",
-            "prefix": "",
-            "certificate_prefix": "",
-        }
+        return ui_default_cloud_profile(self, cloud_type)
 
     def snapshot_current_cloud_profile(self) -> Dict[str, str]:
-        return {
-            "access_key_id": self.access_key_id_var.get().strip(),
-            "access_key_secret": self.access_key_secret_var.get().strip(),
-            "endpoint": self.endpoint_var.get().strip(),
-            "bucket_name": self.bucket_name_var.get().strip(),
-            "certificate_bucket_name": self.certificate_bucket_name_var.get().strip(),
-            "prefix": self.prefix_var.get().strip(),
-            "certificate_prefix": self.certificate_prefix_var.get().strip(),
-        }
+        return ui_snapshot_current_cloud_profile(self)
 
     def apply_cloud_profile(self, cloud_type: str) -> None:
-        profile = self.cloud_profiles.get(cloud_type) or self.default_cloud_profile(cloud_type)
-        self.access_key_id_var.set(profile.get("access_key_id", ""))
-        self.access_key_secret_var.set(profile.get("access_key_secret", ""))
-        self.endpoint_var.set(profile.get("endpoint", self.default_cloud_profile(cloud_type)["endpoint"]))
-        self.bucket_name_var.set(profile.get("bucket_name", ""))
-        self.certificate_bucket_name_var.set(profile.get("certificate_bucket_name", ""))
-        self.prefix_var.set(profile.get("prefix", ""))
-        self.certificate_prefix_var.set(profile.get("certificate_prefix", ""))
+        ui_apply_cloud_profile(self, cloud_type)
 
     def load_saved_settings(self) -> None:
-        if not self.SETTINGS_FILE.exists():
-            return
-        try:
-            settings = json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            return
-
-        self.prefix_var.set(settings.get("prefix", ""))
-        self.photo_template_var.set(settings.get("photo_template", ""))
-        self.photo_match_column_var.set(settings.get("photo_match_column", ""))
-        self.photo_filter_by_template_var.set(
-            settings.get("photo_filter_by_template", self.photo_filter_by_template_var.get())
-        )
-        self.download_dir_var.set(settings.get("download_dir", self.download_dir_var.get()))
-        self.sorted_dir_var.set(settings.get("sorted_dir", self.sorted_dir_var.get()))
-        self.cloud_type_var.set(settings.get("cloud_type", self.cloud_type_var.get()))
-        saved_profiles = settings.get("cloud_profiles")
-        if isinstance(saved_profiles, dict):
-            for cloud_type in ("aliyun", "tencent"):
-                profile = saved_profiles.get(cloud_type)
-                if isinstance(profile, dict):
-                    merged = self.default_cloud_profile(cloud_type)
-                    merged.update({key: str(value) for key, value in profile.items() if value is not None})
-                    self.cloud_profiles[cloud_type] = merged
-        else:
-            legacy_cloud_type = self.cloud_type_var.get().strip() or "aliyun"
-            legacy_profile = self.default_cloud_profile(legacy_cloud_type)
-            legacy_profile.update(
-                {
-                    "access_key_id": settings.get("access_key_id", ""),
-                    "access_key_secret": settings.get("access_key_secret", ""),
-                    "endpoint": settings.get("endpoint", legacy_profile["endpoint"]),
-                    "bucket_name": settings.get("bucket_name", ""),
-                    "certificate_bucket_name": settings.get("certificate_bucket_name", ""),
-                    "prefix": settings.get("prefix", ""),
-                    "certificate_prefix": settings.get("certificate_prefix", ""),
-                }
-            )
-            self.cloud_profiles[legacy_cloud_type] = legacy_profile
-        self.apply_cloud_profile(self.cloud_type_var.get().strip() or "aliyun")
-        self.photo_source_mode_var.set(settings.get("photo_source_mode", self.photo_source_mode_var.get()))
-        self.skip_download_var.set(settings.get("skip_download", self.skip_download_var.get()))
-        self.flat_var.set(settings.get("flat", self.flat_var.get()))
-        self.dry_run_var.set(settings.get("dry_run", self.dry_run_var.get()))
-        self.include_duplicates_var.set(
-            settings.get("include_duplicates", self.include_duplicates_var.get())
-        )
-        self.move_sorted_files_var.set(
-            settings.get("move_sorted_files", self.move_sorted_files_var.get())
-        )
-        self.skip_existing_var.set(settings.get("skip_existing", self.skip_existing_var.get()))
-        self.certificate_template_var.set(settings.get("certificate_template", ""))
-        self.certificate_source_dir_var.set(
-            settings.get("certificate_source_dir", self.certificate_source_dir_var.get())
-        )
-        self.certificate_output_dir_var.set(
-            settings.get("certificate_output_dir", self.certificate_output_dir_var.get())
-        )
-        self.certificate_match_column_var.set(settings.get("certificate_match_column", ""))
-        self.certificate_rename_folder_var.set(
-            settings.get("certificate_rename_folder", self.certificate_rename_folder_var.get())
-        )
-        self.certificate_folder_name_column_var.set(
-            settings.get("certificate_folder_name_column", "")
-        )
-        self.certificate_keyword_var.set(
-            settings.get("certificate_keyword", self.certificate_keyword_var.get())
-        )
-        self.certificate_classify_var.set(
-            settings.get("certificate_classify", self.certificate_classify_var.get())
-        )
-        self.certificate_dry_run_var.set(
-            settings.get("certificate_dry_run", self.certificate_dry_run_var.get())
-        )
-        self.certificate_mode_var.set(
-            settings.get("certificate_mode", self.certificate_mode_var.get())
-        )
-        self.certificate_source_mode_var.set(
-            settings.get("certificate_source_mode", self.certificate_source_mode_var.get())
-        )
-        self.certificate_bucket_name_var.set(settings.get("certificate_bucket_name", ""))
-        self.certificate_prefix_var.set(settings.get("certificate_prefix", ""))
-        self.word_source_var.set(settings.get("word_source", ""))
-        self.pack_source_dir_var.set(settings.get("pack_source_dir", ""))
-        self.pack_output_dir_var.set(settings.get("pack_output_dir", self.pack_output_dir_var.get()))
-        self.pack_use_custom_password_var.set(
-            settings.get("pack_use_custom_password", self.pack_use_custom_password_var.get())
-        )
-        self.pack_query_var.set(settings.get("pack_query", ""))
-        self.match_target_var.set(settings.get("match_target", ""))
-        self.match_source_var.set(settings.get("match_source", ""))
-        self.match_target_key_var.set(settings.get("match_target_key", ""))
-        self.match_source_key_var.set(settings.get("match_source_key", ""))
-        self.match_output_var.set(settings.get("match_output", ""))
-        self.update_sql_mapping_var.set(settings.get("update_sql_mapping", ""))
-        self.update_sql_target_table_var.set(settings.get("update_sql_target_table", ""))
-        self.update_sql_source_table_var.set(settings.get("update_sql_source_table", ""))
-        self.update_sql_target_key_var.set(settings.get("update_sql_target_key", ""))
-        self.update_sql_source_key_var.set(settings.get("update_sql_source_key", ""))
-        self.update_sql_ignore_empty_var.set(
-            settings.get("update_sql_ignore_empty", self.update_sql_ignore_empty_var.get())
-        )
+        ui_load_saved_settings(self)
 
     def save_settings(self) -> None:
-        settings = {
-            "prefix": self.prefix_var.get().strip(),
-            "photo_template": self.photo_template_var.get().strip(),
-            "photo_match_column": self.photo_match_column_var.get().strip(),
-            "photo_filter_by_template": self.photo_filter_by_template_var.get(),
-            "download_dir": self.download_dir_var.get().strip(),
-            "sorted_dir": self.sorted_dir_var.get().strip(),
-            "cloud_type": self.cloud_type_var.get().strip(),
-            "cloud_profiles": {
-                **self.cloud_profiles,
-                self.cloud_type_var.get().strip() or "aliyun": self.snapshot_current_cloud_profile(),
-            },
-            "photo_source_mode": self.photo_source_mode_var.get().strip(),
-            "skip_download": self.skip_download_var.get(),
-            "flat": self.flat_var.get(),
-            "dry_run": self.dry_run_var.get(),
-            "include_duplicates": self.include_duplicates_var.get(),
-            "move_sorted_files": self.move_sorted_files_var.get(),
-            "skip_existing": self.skip_existing_var.get(),
-            "certificate_template": self.certificate_template_var.get().strip(),
-            "certificate_source_dir": self.certificate_source_dir_var.get().strip(),
-            "certificate_output_dir": self.certificate_output_dir_var.get().strip(),
-            "certificate_match_column": self.certificate_match_column_var.get().strip(),
-            "certificate_rename_folder": self.certificate_rename_folder_var.get(),
-            "certificate_folder_name_column": self.certificate_folder_name_column_var.get().strip(),
-            "certificate_keyword": self.certificate_keyword_var.get().strip(),
-            "certificate_classify": self.certificate_classify_var.get(),
-            "certificate_dry_run": self.certificate_dry_run_var.get(),
-            "certificate_mode": self.certificate_mode_var.get().strip(),
-            "certificate_source_mode": self.certificate_source_mode_var.get().strip(),
-            "certificate_bucket_name": self.certificate_bucket_name_var.get().strip(),
-            "certificate_prefix": self.certificate_prefix_var.get().strip(),
-            "word_source": self.word_source_var.get().strip(),
-            "pack_source_dir": self.pack_source_dir_var.get().strip(),
-            "pack_output_dir": self.pack_output_dir_var.get().strip(),
-            "pack_use_custom_password": self.pack_use_custom_password_var.get(),
-            "pack_query": self.pack_query_var.get().strip(),
-            "match_target": self.match_target_var.get().strip(),
-            "match_source": self.match_source_var.get().strip(),
-            "match_target_key": self.match_target_key_var.get().strip(),
-            "match_source_key": self.match_source_key_var.get().strip(),
-            "match_output": self.match_output_var.get().strip(),
-            "update_sql_mapping": self.update_sql_mapping_var.get().strip(),
-            "update_sql_target_table": self.update_sql_target_table_var.get().strip(),
-            "update_sql_source_table": self.update_sql_source_table_var.get().strip(),
-            "update_sql_target_key": self.update_sql_target_key_var.get().strip(),
-            "update_sql_source_key": self.update_sql_source_key_var.get().strip(),
-            "update_sql_ignore_empty": self.update_sql_ignore_empty_var.get(),
-        }
-        self.SETTINGS_FILE.write_text(
-            json.dumps(settings, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        self.write_log(f"配置已保存到 {self.SETTINGS_FILE}")
+        ui_save_settings(self)
 
     def update_certificate_mode_ui(self) -> None:
-        if self.certificate_mode_var.get() == "keyword":
-            self.certificate_keyword_entry.configure(state="normal")
-        else:
-            self.certificate_keyword_entry.configure(state="disabled")
-        if self.certificate_rename_folder_var.get():
-            self.certificate_folder_name_combo.configure(state="readonly")
-        else:
-            self.certificate_folder_name_combo.configure(state="disabled")
+        ui_update_certificate_mode_ui(self)
 
     def on_cloud_type_changed(self) -> None:
-        previous_type = "tencent" if self.cloud_type_var.get() == "aliyun" else "aliyun"
-        self.cloud_profiles[previous_type] = self.snapshot_current_cloud_profile()
-        self.apply_cloud_profile(self.cloud_type_var.get().strip())
-
-        # 切换云类型后，旧 bucket/前缀结果不能继续沿用，避免串用阿里云和腾讯云的数据。
-        self.sync_bucket_values([])
-        self.set_folder_values([])
-        self.set_certificate_folder_values([])
-        self.bucket_status_var.set("切换云类型后，请重新加载 bucket 列表")
-        self.certificate_bucket_status_var.set("切换云类型后，请重新加载 bucket 列表")
-        self.folder_status_var.set("未加载 bucket 文件夹")
-        self.certificate_folder_status_var.set("未加载 bucket 文件夹")
+        ui_on_cloud_type_changed(self)
 
     def set_certificate_headers(self, headers: List[str]) -> None:
-        self.certificate_headers = headers
-        self.certificate_match_combo["values"] = headers
-        self.certificate_folder_name_combo["values"] = headers
-        current_value = self.certificate_match_column_var.get().strip()
-        if current_value and current_value not in headers:
-            self.certificate_match_column_var.set("")
-        if not self.certificate_match_column_var.get().strip() and headers:
-            self.certificate_match_column_var.set(headers[0])
-        current_folder_name_value = self.certificate_folder_name_column_var.get().strip()
-        if current_folder_name_value and current_folder_name_value not in headers:
-            self.certificate_folder_name_column_var.set("")
+        ui_set_certificate_headers(self, headers)
 
     def set_photo_headers(self, headers: List[str]) -> None:
-        self.photo_headers = headers
-        self.photo_match_combo["values"] = headers
-        current_value = self.photo_match_column_var.get().strip()
-        if current_value and current_value not in headers:
-            self.photo_match_column_var.set("")
-        if not self.photo_match_column_var.get().strip() and headers:
-            self.photo_match_column_var.set(headers[0])
+        ui_set_photo_headers(self, headers)
 
     def load_photo_headers(self) -> None:
-        template_path = self.photo_template_var.get().strip()
-        if not template_path:
-            messagebox.showinfo("缺少模板", "请先选择人员模板文件。")
-            return
-        try:
-            headers = list_template_headers(Path(template_path))
-        except Exception as exc:
-            messagebox.showerror("读取失败", str(exc))
-            return
-        self.set_photo_headers(headers)
-        self.write_log(f"已读取照片模板列：{', '.join(headers) if headers else '无'}")
+        ui_load_photo_headers(self)
 
     def load_certificate_headers(self) -> None:
-        template_path = self.certificate_template_var.get().strip()
-        if not template_path:
-            messagebox.showinfo("缺少模板", "请先选择人员模板文件。")
-            return
-        try:
-            headers = list_template_headers(Path(template_path))
-        except Exception as exc:
-            messagebox.showerror("读取失败", str(exc))
-            return
-        self.set_certificate_headers(headers)
-        self.write_log(f"已读取模板列：{', '.join(headers) if headers else '无'}")
+        ui_load_certificate_headers(self)
 
     def load_buckets(self) -> None:
-        try:
-            cloud_type, access_key_id, access_key_secret, endpoint = self.build_credentials()
-            self.validate_cloud_endpoint(cloud_type, endpoint)
-            self.check_endpoint_reachable(cloud_type, endpoint)
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        self.bucket_status_var.set("正在加载 bucket 列表...")
-        self.write_log("开始加载 bucket 列表。")
-        self.bucket_load_token += 1
-        current_token = self.bucket_load_token
-        self.root.after(8000, lambda: self.handle_bucket_load_timeout(current_token))
-
-        def worker() -> None:
-            try:
-                buckets = list_buckets(access_key_id, access_key_secret, endpoint, cloud_type=cloud_type)
-            except Exception as exc:
-                self.root.after(
-                    0,
-                    lambda: self.finish_bucket_load(
-                        error=f"{type(exc).__name__}: {exc}",
-                        token=current_token,
-                    ),
-                )
-                return
-            self.root.after(0, lambda: self.finish_bucket_load(buckets=buckets, token=current_token))
-
-        threading.Thread(target=worker, daemon=True).start()
+        ui_load_buckets(self)
 
     def load_certificate_buckets(self) -> None:
-        try:
-            cloud_type, access_key_id, access_key_secret, endpoint = self.build_credentials()
-            self.validate_cloud_endpoint(cloud_type, endpoint)
-            self.check_endpoint_reachable(cloud_type, endpoint)
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        self.certificate_bucket_status_var.set("正在加载 bucket 列表...")
-        self.write_log("开始加载证件资料 bucket 列表。")
-        self.certificate_bucket_load_token += 1
-        current_token = self.certificate_bucket_load_token
-        self.root.after(8000, lambda: self.handle_certificate_bucket_load_timeout(current_token))
-
-        def worker() -> None:
-            try:
-                buckets = list_buckets(access_key_id, access_key_secret, endpoint, cloud_type=cloud_type)
-            except Exception as exc:
-                self.root.after(
-                    0,
-                    lambda: self.finish_certificate_bucket_load(
-                        error=f"{type(exc).__name__}: {exc}",
-                        token=current_token,
-                    ),
-                )
-                return
-            self.root.after(
-                0,
-                lambda: self.finish_certificate_bucket_load(buckets=buckets, token=current_token),
-            )
-
-        threading.Thread(target=worker, daemon=True).start()
+        ui_load_certificate_buckets(self)
 
     def finish_bucket_load(
         self,
@@ -3279,30 +1579,7 @@ class App:
         error: Optional[str] = None,
         token: Optional[int] = None,
     ) -> None:
-        if token is not None and token != self.bucket_load_token:
-            return
-        if error is not None:
-            self.bucket_status_var.set("加载失败")
-            self.write_log(f"加载 bucket 失败：{error}")
-            messagebox.showerror("加载 bucket 失败", self.format_cloud_error(error))
-            return
-
-        buckets = buckets or []
-        self.sync_bucket_values(buckets)
-        if buckets:
-            if not self.bucket_name_var.get().strip():
-                self.bucket_name_var.set(buckets[0])
-            if not self.certificate_bucket_name_var.get().strip():
-                self.certificate_bucket_name_var.set(buckets[0])
-            self.bucket_status_var.set(f"已加载 {len(buckets)} 个 bucket")
-            self.certificate_bucket_status_var.set(f"已加载 {len(buckets)} 个 bucket")
-            self.write_log(f"找到 {len(buckets)} 个 bucket。")
-            self.prefix_var.set("")
-            self.folder_status_var.set("请选择 bucket 后点击“加载当前层级”")
-        else:
-            self.bucket_status_var.set("未找到可用 bucket")
-            self.certificate_bucket_status_var.set("未找到可用 bucket")
-            self.write_log("当前凭证下未找到可用 bucket。")
+        ui_finish_bucket_load(self, buckets=buckets, error=error, token=token)
 
     def finish_certificate_bucket_load(
         self,
@@ -3310,217 +1587,45 @@ class App:
         error: Optional[str] = None,
         token: Optional[int] = None,
     ) -> None:
-        if token is not None and token != self.certificate_bucket_load_token:
-            return
-        if error is not None:
-            self.certificate_bucket_status_var.set("加载失败")
-            self.write_log(f"加载证件资料 bucket 失败：{error}")
-            messagebox.showerror("加载 bucket 失败", self.format_cloud_error(error))
-            return
-
-        buckets = buckets or []
-        self.sync_bucket_values(buckets)
-        if buckets:
-            if not self.certificate_bucket_name_var.get().strip():
-                self.certificate_bucket_name_var.set(buckets[0])
-            if not self.bucket_name_var.get().strip():
-                self.bucket_name_var.set(buckets[0])
-            self.certificate_bucket_status_var.set(f"已加载 {len(buckets)} 个 bucket")
-            self.bucket_status_var.set(f"已加载 {len(buckets)} 个 bucket")
-            self.write_log(f"证件资料找到 {len(buckets)} 个 bucket。")
-            self.certificate_prefix_var.set("")
-            self.certificate_folder_status_var.set("请选择 bucket 后点击“加载当前层级”")
-        else:
-            self.certificate_bucket_status_var.set("未找到可用 bucket")
-            self.bucket_status_var.set("未找到可用 bucket")
-            self.write_log("当前凭证下未找到可用证件资料 bucket。")
+        ui_finish_certificate_bucket_load(self, buckets=buckets, error=error, token=token)
 
     def handle_bucket_load_timeout(self, token: int) -> None:
-        if token != self.bucket_load_token:
-            return
-        if self.bucket_status_var.get() != "正在加载 bucket 列表...":
-            return
-        self.bucket_status_var.set("加载失败")
-        timeout_message = "加载 bucket 超时，请检查 Endpoint、密钥或网络后重试。"
-        self.write_log(timeout_message)
-        messagebox.showerror("加载 bucket 失败", timeout_message)
-        self.bucket_load_token += 1
+        ui_handle_bucket_load_timeout(self, token)
 
     def handle_certificate_bucket_load_timeout(self, token: int) -> None:
-        if token != self.certificate_bucket_load_token:
-            return
-        if self.certificate_bucket_status_var.get() != "正在加载 bucket 列表...":
-            return
-        self.certificate_bucket_status_var.set("加载失败")
-        timeout_message = "加载 bucket 超时，请检查 Endpoint、密钥或网络后重试。"
-        self.write_log(timeout_message)
-        messagebox.showerror("加载 bucket 失败", timeout_message)
-        self.certificate_bucket_load_token += 1
+        ui_handle_certificate_bucket_load_timeout(self, token)
 
     def go_to_parent_prefix(self) -> None:
-        current = self.prefix_var.get().strip().strip("/")
-        if not current:
-            self.prefix_var.set("")
-            return
-        parts = current.split("/")
-        parent = "/".join(parts[:-1])
-        self.prefix_var.set(parent + "/" if parent else "")
-        self.load_bucket_folders()
+        ui_go_to_parent_prefix(self)
 
     def go_to_certificate_parent_prefix(self) -> None:
-        current = self.certificate_prefix_var.get().strip().strip("/")
-        if not current:
-            self.certificate_prefix_var.set("")
-            return
-        parts = current.split("/")
-        parent = "/".join(parts[:-1])
-        self.certificate_prefix_var.set(parent + "/" if parent else "")
-        self.load_certificate_folders()
+        ui_go_to_certificate_parent_prefix(self)
 
     def load_bucket_folders(self) -> None:
-        if self.photo_source_mode_var.get() != "oss":
-            return
-        try:
-            config = self.build_config()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        current_prefix = self.prefix_var.get().strip()
-        self.folder_status_var.set("正在加载 bucket 文件夹...")
-        self.write_log(f"加载 bucket 文件夹：{current_prefix or '/'}")
-
-        def worker() -> None:
-            try:
-                entries = list_browser_entries(config, current_prefix)
-            except Exception as exc:
-                self.root.after(
-                    0,
-                    lambda: self.finish_folder_load(error=f"{type(exc).__name__}: {exc}"),
-                )
-                return
-            self.root.after(0, lambda: self.finish_folder_load(entries=entries))
-
-        threading.Thread(target=worker, daemon=True).start()
+        ui_load_bucket_folders(self)
 
     def load_certificate_folders(self) -> None:
-        try:
-            config = self.build_certificate_config()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        current_prefix = self.certificate_prefix_var.get().strip()
-        self.certificate_folder_status_var.set("正在加载 bucket 文件夹...")
-        self.write_log(f"加载证件资料 bucket 文件夹：{current_prefix or '/'}")
-
-        def worker() -> None:
-            try:
-                entries = list_browser_entries(config, current_prefix)
-            except Exception as exc:
-                self.root.after(
-                    0,
-                    lambda: self.finish_certificate_folder_load(
-                        error=f"{type(exc).__name__}: {exc}"
-                    ),
-                )
-                return
-            self.root.after(
-                0,
-                lambda: self.finish_certificate_folder_load(entries=entries),
-            )
-
-        threading.Thread(target=worker, daemon=True).start()
+        ui_load_certificate_folders(self)
 
     def finish_folder_load(
         self,
         entries: Optional[List[BrowserEntry]] = None,
         error: Optional[str] = None,
     ) -> None:
-        if error is not None:
-            self.folder_status_var.set("加载失败")
-            self.write_log(f"加载文件夹失败：{error}")
-            messagebox.showerror("加载失败", self.format_cloud_error(error))
-            return
-
-        entries = entries or []
-        self.current_folder_entries = entries
-        folders = [entry.key for entry in entries if entry.entry_type == "folder"]
-        self.set_folder_values(folders)
-        self.render_folder_tree(entries)
-        folder_count = len([entry for entry in entries if entry.entry_type == "folder"])
-        file_count = len([entry for entry in entries if entry.entry_type == "file"])
-        if entries:
-            self.folder_status_var.set(
-                f"已加载 {folder_count} 个文件夹，{file_count} 个文件"
-            )
-            self.write_log(
-                f"当前层级找到 {folder_count} 个文件夹，{file_count} 个文件。"
-            )
-        else:
-            self.folder_status_var.set("当前层级没有子文件夹和文件")
-            self.write_log("当前层级没有可显示的文件夹或文件。")
+        ui_finish_folder_load(self, entries=entries, error=error)
 
     def finish_certificate_folder_load(
         self,
         entries: Optional[List[BrowserEntry]] = None,
         error: Optional[str] = None,
     ) -> None:
-        if error is not None:
-            self.certificate_folder_status_var.set("加载失败")
-            self.write_log(f"加载证件资料文件夹失败：{error}")
-            messagebox.showerror("加载失败", self.format_cloud_error(error))
-            return
-
-        entries = entries or []
-        self.current_certificate_folder_entries = entries
-        folders = [entry.key for entry in entries if entry.entry_type == "folder"]
-        self.set_certificate_folder_values(folders)
-        self.render_certificate_folder_tree(entries)
-        folder_count = len([entry for entry in entries if entry.entry_type == "folder"])
-        file_count = len([entry for entry in entries if entry.entry_type == "file"])
-        if entries:
-            self.certificate_folder_status_var.set(
-                f"已加载 {folder_count} 个文件夹，{file_count} 个文件"
-            )
-            self.write_log(
-                f"证件资料当前层级找到 {folder_count} 个文件夹，{file_count} 个文件。"
-            )
-        else:
-            self.certificate_folder_status_var.set("当前层级没有子文件夹和文件")
-            self.write_log("证件资料当前层级没有可显示的文件夹或文件。")
+        ui_finish_certificate_folder_load(self, entries=entries, error=error)
 
     def render_folder_tree(self, entries: List[BrowserEntry]) -> None:
-        if self.folder_tree is None:
-            return
-        for item in self.folder_tree.get_children():
-            self.folder_tree.delete(item)
-        self.folder_nodes = {}
-        for entry in entries:
-            meta = "文件夹" if entry.entry_type == "folder" else "文件"
-            node_id = self.folder_tree.insert(
-                "",
-                "end",
-                text=entry.display_name,
-                values=(meta,),
-            )
-            self.folder_nodes[node_id] = entry
+        ui_render_folder_tree(self, entries)
 
     def render_certificate_folder_tree(self, entries: List[BrowserEntry]) -> None:
-        if self.certificate_folder_tree is None:
-            return
-        for item in self.certificate_folder_tree.get_children():
-            self.certificate_folder_tree.delete(item)
-        self.certificate_folder_nodes = {}
-        for entry in entries:
-            meta = "文件夹" if entry.entry_type == "folder" else "文件"
-            node_id = self.certificate_folder_tree.insert(
-                "",
-                "end",
-                text=entry.display_name,
-                values=(meta,),
-            )
-            self.certificate_folder_nodes[node_id] = entry
+        ui_render_certificate_folder_tree(self, entries)
 
     def render_search_tree(self, object_keys: List[str]) -> None:
         if self.search_tree is None:
@@ -3542,243 +1647,51 @@ class App:
             self.search_nodes[node_id] = object_key
 
     def render_certificate_search_tree(self, object_keys: List[str]) -> None:
-        if self.certificate_search_tree is None:
-            return
-        for item in self.certificate_search_tree.get_children():
-            self.certificate_search_tree.delete(item)
-        self.certificate_search_nodes = {}
-        for object_key in object_keys:
-            filename = Path(object_key).name
-            parent_folder = str(Path(object_key).parent)
-            if parent_folder == ".":
-                parent_folder = "/"
-            node_id = self.certificate_search_tree.insert(
-                "",
-                "end",
-                text=filename,
-                values=(parent_folder,),
-            )
-            self.certificate_search_nodes[node_id] = object_key
+        ui_render_certificate_search_tree(self, object_keys)
 
     def on_tree_select(self, _event=None) -> None:
-        if self.folder_tree is None:
-            return
-        selected = self.folder_tree.selection()
-        if not selected:
-            return
-        entry = self.folder_nodes.get(selected[0])
-        if entry is None:
-            return
-        if entry.entry_type == "folder":
-            self.prefix_var.set(entry.key)
-            self.selected_folder_info_var.set(f"当前已选目录：{entry.key or '/'}")
-        else:
-            self.selected_folder_info_var.set(f"当前已选文件：{entry.key}")
+        ui_on_tree_select(self, _event)
 
     def on_tree_double_click(self, _event=None) -> None:
-        if self.folder_tree is None:
-            return
-        selected = self.folder_tree.selection()
-        if not selected:
-            return
-        entry = self.folder_nodes.get(selected[0])
-        if entry is None:
-            return
-        if entry.entry_type == "folder" and entry.key:
-            self.prefix_var.set(entry.key)
-            self.load_bucket_folders()
+        ui_on_tree_double_click(self, _event)
 
     def on_certificate_tree_select(self, _event=None) -> None:
-        if self.certificate_folder_tree is None:
-            return
-        selected = self.certificate_folder_tree.selection()
-        if not selected:
-            return
-        entry = self.certificate_folder_nodes.get(selected[0])
-        if entry is None:
-            return
-        if entry.entry_type == "folder":
-            self.certificate_prefix_var.set(entry.key)
-            self.certificate_selected_folder_info_var.set(f"当前已选目录：{entry.key or '/'}")
-        else:
-            self.certificate_selected_folder_info_var.set(f"当前已选文件：{entry.key}")
+        ui_on_certificate_tree_select(self, _event)
 
     def on_certificate_tree_double_click(self, _event=None) -> None:
-        if self.certificate_folder_tree is None:
-            return
-        selected = self.certificate_folder_tree.selection()
-        if not selected:
-            return
-        entry = self.certificate_folder_nodes.get(selected[0])
-        if entry is None:
-            return
-        if entry.entry_type == "folder" and entry.key:
-            self.certificate_prefix_var.set(entry.key)
-            self.load_certificate_folders()
+        ui_on_certificate_tree_double_click(self, _event)
 
     def search_bucket_files(self) -> None:
-        if self.photo_source_mode_var.get() != "oss":
-            messagebox.showinfo("本地模式", "本地模式不使用 bucket 搜索。")
-            return
-
-        keyword = self.search_keyword_var.get().strip()
-        if not keyword:
-            messagebox.showinfo("缺少关键词", "请输入要搜索的文件夹名称关键词。")
-            return
-
-        current_prefix = self.prefix_var.get().strip() or "/"
-        self.search_status_var.set("正在筛选当前层级文件夹...")
-        self.write_log(f"开始筛选当前层级文件夹：{current_prefix}，关键词：{keyword}")
-        self.finish_search(entries=self.filter_folder_entries(self.current_folder_entries, keyword))
+        ui_search_bucket_files(self)
 
     def search_certificate_files(self) -> None:
-        if self.certificate_source_mode_var.get() != "oss":
-            messagebox.showinfo("本地模式", "本地模式不使用 bucket 搜索。")
-            return
-
-        keyword = self.certificate_search_keyword_var.get().strip()
-        if not keyword:
-            messagebox.showinfo("缺少关键词", "请输入要搜索的文件夹名称关键词。")
-            return
-
-        current_prefix = self.certificate_prefix_var.get().strip() or "/"
-        self.certificate_search_status_var.set("正在筛选当前层级文件夹...")
-        self.write_log(f"开始筛选证件资料当前层级文件夹：{current_prefix}，关键词：{keyword}")
-        self.finish_certificate_search(
-            entries=self.filter_folder_entries(self.current_certificate_folder_entries, keyword)
-        )
+        ui_search_certificate_files(self)
 
     def filter_folder_entries(self, entries: List[BrowserEntry], keyword: str) -> List[BrowserEntry]:
-        cleaned_keyword = keyword.strip().lower()
-        if not cleaned_keyword:
-            return entries
-        return [
-            entry
-            for entry in entries
-            if entry.entry_type == "folder" and cleaned_keyword in entry.display_name.lower()
-        ]
+        return ui_filter_folder_entries(self, entries, keyword)
 
     def finish_search(
         self,
         entries: Optional[List[BrowserEntry]] = None,
         error: Optional[str] = None,
     ) -> None:
-        if error is not None:
-            self.search_status_var.set("搜索失败")
-            self.write_log(f"搜索文件夹失败：{error}")
-            messagebox.showerror("搜索失败", self.format_cloud_error(error))
-            return
-
-        entries = entries or []
-        self.render_folder_tree(entries)
-        if entries:
-            self.search_status_var.set(f"找到 {len(entries)} 个匹配文件夹")
-            self.write_log(f"搜索完成，找到 {len(entries)} 个匹配文件夹。")
-        else:
-            self.search_status_var.set("没有找到匹配文件夹")
-            self.write_log("没有找到匹配文件夹。")
+        ui_finish_search(self, entries=entries, error=error)
 
     def finish_certificate_search(
         self,
         entries: Optional[List[BrowserEntry]] = None,
         error: Optional[str] = None,
     ) -> None:
-        if error is not None:
-            self.certificate_search_status_var.set("搜索失败")
-            self.write_log(f"搜索证件资料文件夹失败：{error}")
-            messagebox.showerror("搜索失败", self.format_cloud_error(error))
-            return
-
-        self.render_certificate_folder_tree(entries)
-        entries = entries or []
-        if entries:
-            self.certificate_search_status_var.set(f"找到 {len(entries)} 个匹配文件夹")
-            self.write_log(f"证件资料搜索完成，找到 {len(entries)} 个匹配文件夹。")
-        else:
-            self.certificate_search_status_var.set("没有找到匹配文件夹")
-            self.write_log("没有找到匹配的证件资料文件夹。")
+        ui_finish_certificate_search(self, entries=entries, error=error)
 
     def on_search_double_click(self, _event=None) -> None:
-        if self.search_tree is None:
-            return
-        selected = self.search_tree.selection()
-        if not selected:
-            return
-
-        object_key = self.search_nodes.get(selected[0], "")
-        if not object_key:
-            return
-
-        parent_folder = str(Path(object_key).parent)
-        if parent_folder == ".":
-            self.prefix_var.set("")
-            self.selected_folder_info_var.set(f"当前已选：/，文件：{Path(object_key).name}")
-        else:
-            normalized_parent = parent_folder.strip("/") + "/"
-            self.prefix_var.set(normalized_parent)
-            self.selected_folder_info_var.set(
-                f"当前已选：{normalized_parent}，文件：{Path(object_key).name}"
-            )
-        self.write_log(f"已根据搜索结果定位到目录：{self.prefix_var.get() or '/'}")
+        ui_on_search_double_click(self, _event)
 
     def on_certificate_search_double_click(self, _event=None) -> None:
-        if self.certificate_search_tree is None:
-            return
-        selected = self.certificate_search_tree.selection()
-        if not selected:
-            return
-
-        object_key = self.certificate_search_nodes.get(selected[0], "")
-        if not object_key:
-            return
-
-        parent_folder = str(Path(object_key).parent)
-        if parent_folder == ".":
-            self.certificate_prefix_var.set("")
-            self.certificate_selected_folder_info_var.set(
-                f"当前已选：/，文件：{Path(object_key).name}"
-            )
-        else:
-            normalized_parent = parent_folder.strip("/") + "/"
-            self.certificate_prefix_var.set(normalized_parent)
-            self.certificate_selected_folder_info_var.set(
-                f"当前已选：{normalized_parent}，文件：{Path(object_key).name}"
-            )
-        self.write_log(
-            f"已根据证件资料搜索结果定位到目录：{self.certificate_prefix_var.get() or '/'}"
-        )
+        ui_on_certificate_search_double_click(self, _event)
 
     def refresh_selected_folder_count(self) -> None:
-        if self.photo_source_mode_var.get() != "oss":
-            messagebox.showinfo("本地模式", "本地模式不使用 bucket 统计。")
-            return
-        try:
-            config = self.build_config()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        prefix = self.prefix_var.get().strip()
-        if not prefix:
-            messagebox.showinfo("未选择文件夹", "请先选择 bucket 文件夹。")
-            return
-
-        self.folder_status_var.set("正在统计已选文件夹图片数量...")
-        self.selected_folder_info_var.set("正在统计图片数量...")
-        self.write_log(f"统计图片数量：{prefix}")
-
-        def worker() -> None:
-            try:
-                count = count_photos_in_prefix(config, prefix)
-            except Exception as exc:
-                self.root.after(
-                    0,
-                    lambda: self.finish_count_refresh(error=f"{type(exc).__name__}: {exc}"),
-                )
-                return
-            self.root.after(0, lambda: self.finish_count_refresh(count=count, prefix=prefix))
-
-        threading.Thread(target=worker, daemon=True).start()
+        ui_refresh_selected_folder_count(self)
 
     def finish_count_refresh(
         self,
@@ -3786,22 +1699,7 @@ class App:
         prefix: str = "",
         error: Optional[str] = None,
     ) -> None:
-        if error is not None:
-            self.folder_status_var.set("统计失败")
-            self.selected_folder_info_var.set("统计失败")
-            self.write_log(f"统计图片数量失败：{error}")
-            messagebox.showerror("统计失败", self.format_cloud_error(error))
-            return
-
-        if self.folder_tree is not None:
-            for node_id, entry in self.folder_nodes.items():
-                if entry.entry_type == "folder" and entry.key == prefix:
-                    self.folder_tree.item(node_id, values=(f"{count} 张图片",))
-                    break
-
-        self.folder_status_var.set("统计完成")
-        self.selected_folder_info_var.set(f"当前已选：{prefix}，图片数：{count}")
-        self.write_log(f"{prefix} 下共有 {count} 张图片。")
+        ui_finish_count_refresh(self, count=count, prefix=prefix, error=error)
 
     def build_certificate_options(self) -> CertificateFilterOptions:
         template_value = self.certificate_template_var.get().strip()
@@ -3854,542 +1752,73 @@ class App:
         return Path(output_value).expanduser().resolve()
 
     def start_photo_download_run(self) -> None:
-        if self.worker is not None and self.worker.is_alive():
-            messagebox.showinfo("任务执行中", "当前任务还没结束。")
-            return
-
-        try:
-            options = self.build_options()
-            oss_config = None if options.skip_download else self.build_config()
-            photo_match_values: List[str] = []
-            if self.photo_source_mode_var.get() == "oss" and self.photo_filter_by_template_var.get():
-                template_value = self.photo_template_var.get().strip()
-                match_column = self.photo_match_column_var.get().strip()
-                if not template_value:
-                    raise ValueError("已勾选按模板名单下载，请先选择人员模板。")
-                if not match_column:
-                    raise ValueError("已勾选按模板名单下载，请先选择匹配列。")
-                template_path = Path(template_value)
-                if not template_path.exists():
-                    raise ValueError("人员模板文件不存在，请重新选择。")
-                photo_match_values = load_match_values(template_path, match_column)
-                if not photo_match_values:
-                    raise ValueError("照片模板匹配列没有可用数据，无法按名单下载。")
-            self.save_settings()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        self.run_button.configure(state="disabled")
-        self.photo_classify_button.configure(state="disabled")
-        self.cancel_button.configure(state="normal")
-        self.status_var.set("运行中")
-        self.progress_text_var.set("准备开始...")
-        self.update_summary_ui(None)
-        self.cancel_event.clear()
-        if self.progress_bar is not None:
-            self.progress_bar["value"] = 0
-        self.write_log("")
-        self.write_log("=" * 60)
-        self.write_log("启动照片下载/模板任务。")
-        if photo_match_values:
-            self.write_log(
-                f"本次仅下载模板中的照片，匹配列：{self.photo_match_column_var.get().strip()}，共 {len(photo_match_values)} 人。"
-            )
-
-        def runner() -> None:
-            try:
-                if photo_match_values and oss_config is not None:
-                    download_dir, sorted_dir = resolve_photo_directories(options)
-                    allowed_stems = set(photo_match_values)
-
-                    def key_filter(object_key: str) -> bool:
-                        relative_path = object_key
-                        normalized_prefix = self.prefix_var.get().strip().strip("/")
-                        if normalized_prefix:
-                            prefix_with_slash = normalized_prefix + "/"
-                            if object_key.startswith(prefix_with_slash):
-                                relative_path = object_key[len(prefix_with_slash):]
-                        filename_stem = Path(relative_path.lstrip("/")).stem
-                        return filename_stem in allowed_stems
-
-                    self.write_log(f"实际下载目录：{download_dir}")
-                    download_result = download_objects(
-                        config=oss_config,
-                        prefix=options.prefix,
-                        download_dir=download_dir,
-                        dry_run=options.dry_run,
-                        skip_existing=options.skip_existing,
-                        logger=self.make_logger(),
-                        progress_callback=self.make_progress_callback(),
-                        cancel_event=self.cancel_event,
-                        key_filter=key_filter,
-                        file_filter=is_photo_key,
-                        stage="download",
-                    )
-                    if self.cancel_event.is_set():
-                        summary = WorkflowSummary(
-                            download_dir=download_dir,
-                            sorted_dir=sorted_dir,
-                            template_path=download_dir / "照片分类模板.xlsx",
-                            download_result=download_result,
-                            template_file_count=0,
-                            classified_count=0,
-                            template_created=False,
-                            cancelled=True,
-                            dry_run=options.dry_run,
-                        )
-                    else:
-                        template_result = generate_template(
-                            source_dir=download_dir,
-                            dry_run=options.dry_run,
-                            logger=self.make_logger(),
-                        )
-                        summary = WorkflowSummary(
-                            download_dir=download_dir,
-                            sorted_dir=sorted_dir,
-                            template_path=template_result.template_path,
-                            download_result=download_result,
-                            template_file_count=template_result.file_count,
-                            classified_count=0,
-                            template_created=template_result.created,
-                            cancelled=False,
-                            dry_run=options.dry_run,
-                        )
-                else:
-                    summary = run_photo_download_and_template(
-                        options=options,
-                        oss_config=oss_config,
-                        logger=self.make_logger(),
-                        progress_callback=self.make_progress_callback(),
-                        cancel_event=self.cancel_event,
-                    )
-            except Exception as exc:
-                self.log_queue.put(f"__TASK_FAILED__::{type(exc).__name__}: {exc}")
-            else:
-                self.log_queue.put({"type": "summary", "summary": summary})
-                if self.cancel_event.is_set():
-                    self.log_queue.put("__TASK_CANCELLED__")
-                else:
-                    self.log_queue.put("__TASK_DONE__")
-
-        self.worker = threading.Thread(target=runner, daemon=True)
-        self.worker.start()
+        ui_start_photo_download_run(self)
 
     def start_photo_classify_run(self) -> None:
-        if self.worker is not None and self.worker.is_alive():
-            messagebox.showinfo("任务执行中", "当前任务还没结束。")
-            return
-
-        try:
-            options = self.build_options()
-            self.save_settings()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        self.run_button.configure(state="disabled")
-        self.photo_classify_button.configure(state="disabled")
-        self.cancel_button.configure(state="normal")
-        self.status_var.set("运行中")
-        self.progress_text_var.set("准备开始...")
-        self.update_summary_ui(None)
-        self.cancel_event.clear()
-        if self.progress_bar is not None:
-            self.progress_bar["value"] = 0
-        self.write_log("")
-        self.write_log("=" * 60)
-        self.write_log("启动照片分类任务。")
-
-        def runner() -> None:
-            try:
-                summary = run_photo_classification_only(
-                    options=options,
-                    logger=self.make_logger(),
-                    cancel_event=self.cancel_event,
-                )
-            except Exception as exc:
-                self.log_queue.put(f"__TASK_FAILED__::{type(exc).__name__}: {exc}")
-            else:
-                self.log_queue.put({"type": "summary", "summary": summary})
-                if self.cancel_event.is_set():
-                    self.log_queue.put("__TASK_CANCELLED__")
-                else:
-                    self.log_queue.put("__TASK_DONE__")
-
-        self.worker = threading.Thread(target=runner, daemon=True)
-        self.worker.start()
+        ui_start_photo_classify_run(self)
 
     def start_certificate_download_run(self) -> None:
-        if self.worker is not None and self.worker.is_alive():
-            messagebox.showinfo("任务执行中", "当前任务还没结束。")
-            return
-        if self.certificate_source_mode_var.get() != "oss":
-            messagebox.showinfo("本地模式", "本地模式下不需要下载证件资料。")
-            return
-
-        try:
-            source_dir = self.resolve_certificate_source_dir(require_value=True)
-            certificate_config = self.build_certificate_config()
-            template_path = Path(self.certificate_template_var.get().strip())
-            match_column = self.certificate_match_column_var.get().strip()
-            if not template_path.exists():
-                raise ValueError("请先选择有效的人员模板文件。")
-            if not match_column:
-                raise ValueError("请先选择匹配列。")
-            match_values = load_match_values(template_path, match_column)
-            if not match_values:
-                raise ValueError("模板匹配列没有可用数据，无法下载证件资料。")
-            self.save_settings()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        self.certificate_download_button.configure(state="disabled")
-        self.certificate_run_button.configure(state="disabled")
-        self.certificate_cancel_button.configure(state="normal")
-        self.certificate_status_var.set("运行中")
-        self.certificate_progress_text_var.set("准备开始...")
-        self.update_certificate_summary_ui(None)
-        self.cancel_event.clear()
-        if self.certificate_progress_bar is not None:
-            self.certificate_progress_bar["value"] = 0
-        self.write_log("")
-        self.write_log("=" * 60)
-        self.write_log("启动证件资料下载任务。")
-        self.write_log(f"实际下载目录：{source_dir}")
-        self.write_log(f"本次仅下载模板中的人员目录，匹配列：{match_column}，共 {len(match_values)} 人。")
-
-        def runner() -> None:
-            try:
-                allowed_people = set(match_values)
-
-                def key_filter(object_key: str) -> bool:
-                    relative_path = object_key
-                    normalized_prefix = self.certificate_prefix_var.get().strip().strip("/")
-                    if normalized_prefix:
-                        prefix_with_slash = normalized_prefix + "/"
-                        if object_key.startswith(prefix_with_slash):
-                            relative_path = object_key[len(prefix_with_slash):]
-                    relative_path = relative_path.lstrip("/")
-                    if not relative_path:
-                        return False
-                    person_folder = Path(relative_path).parts[0] if Path(relative_path).parts else ""
-                    return person_folder in allowed_people
-
-                download_result = download_objects(
-                    config=certificate_config,
-                    prefix=self.certificate_prefix_var.get().strip(),
-                    download_dir=source_dir,
-                    dry_run=self.certificate_dry_run_var.get(),
-                    skip_existing=self.skip_existing_var.get(),
-                    logger=self.make_logger(),
-                    progress_callback=self.make_progress_callback(),
-                    cancel_event=self.cancel_event,
-                    key_filter=key_filter,
-                    stage="certificate_download",
-                )
-                summary = CertificateFilterSummary(
-                    template_path=template_path,
-                    source_dir=source_dir,
-                    output_dir=Path(self.certificate_output_dir_var.get().strip() or source_dir),
-                    match_column=match_column,
-                    rename_folder=self.certificate_rename_folder_var.get(),
-                    folder_name_column=self.certificate_folder_name_column_var.get().strip(),
-                    classify_output=self.certificate_classify_var.get(),
-                    keyword=self.certificate_keyword_var.get().strip() if self.certificate_mode_var.get() == "keyword" else "",
-                    total_rows=0,
-                    matched_people=0,
-                    missing_people=0,
-                    copied_files=0,
-                    copied_people=0,
-                    download_result=download_result,
-                    cancelled=self.cancel_event.is_set(),
-                    dry_run=self.certificate_dry_run_var.get(),
-                )
-            except Exception as exc:
-                self.log_queue.put(f"__CERTIFICATE_TASK_FAILED__::{type(exc).__name__}: {exc}")
-            else:
-                self.log_queue.put({"type": "certificate_summary", "summary": summary})
-                if self.cancel_event.is_set():
-                    self.log_queue.put("__CERTIFICATE_TASK_CANCELLED__")
-                else:
-                    self.log_queue.put("__CERTIFICATE_TASK_DONE__")
-
-        self.worker = threading.Thread(target=runner, daemon=True)
-        self.worker.start()
+        ui_start_certificate_download_run(self)
 
     def start_certificate_run(self) -> None:
-        if self.worker is not None and self.worker.is_alive():
-            messagebox.showinfo("任务执行中", "当前任务还没结束。")
-            return
-
-        try:
-            options = self.build_certificate_options()
-            self.save_settings()
-        except Exception as exc:
-            messagebox.showerror("参数错误", str(exc))
-            return
-
-        self.certificate_download_button.configure(state="disabled")
-        self.certificate_run_button.configure(state="disabled")
-        self.certificate_cancel_button.configure(state="normal")
-        self.certificate_status_var.set("运行中")
-        self.certificate_progress_text_var.set("准备开始...")
-        self.update_certificate_summary_ui(None)
-        self.cancel_event.clear()
-        if self.certificate_progress_bar is not None:
-            self.certificate_progress_bar["value"] = 0
-        self.write_log("")
-        self.write_log("=" * 60)
-        self.write_log("启动证件资料筛选任务。")
-
-        def runner() -> None:
-            try:
-                summary = run_certificate_filter(
-                    options=options,
-                    logger=self.make_logger(),
-                    progress_callback=self.make_progress_callback(),
-                    cancel_event=self.cancel_event,
-                )
-            except Exception as exc:
-                self.log_queue.put(f"__CERTIFICATE_TASK_FAILED__::{type(exc).__name__}: {exc}")
-            else:
-                self.log_queue.put({"type": "certificate_summary", "summary": summary})
-                if self.cancel_event.is_set():
-                    self.log_queue.put("__CERTIFICATE_TASK_CANCELLED__")
-                else:
-                    self.log_queue.put("__CERTIFICATE_TASK_DONE__")
-
-        self.worker = threading.Thread(target=runner, daemon=True)
-        self.worker.start()
+        ui_start_certificate_run(self)
 
     def start_word_export(self, variant: str) -> None:
-        if self.worker is not None and self.worker.is_alive():
-            messagebox.showinfo("任务执行中", "当前任务还没结束。")
-            return
+        ui_start_word_export(self, variant)
 
-        source_value = self.word_source_var.get().strip()
-        if not source_value:
-            messagebox.showerror("参数错误", "请选择表样文件。")
-            return
-        source_path = Path(source_value)
-        if not source_path.exists():
-            messagebox.showerror("参数错误", f"表样文件不存在：{source_path}")
-            self.word_status_var.set("失败")
-            self.word_result_var.set(f"导出失败：\n表样文件不存在：{source_path}")
-            self.word_preview_status_var.set("预览不可用")
-            self.set_word_code("")
-            self.render_word_preview("")
-            self.word_copy_button.configure(state="disabled")
-            self.word_open_browser_button.configure(state="disabled")
-            return
-        if source_path.suffix.lower() not in {".doc", ".docx", ".xlsx"}:
-            messagebox.showerror("参数错误", "仅支持 `.doc`、`.docx` 或 `.xlsx` 文件。")
-            self.word_status_var.set("失败")
-            self.word_result_var.set("导出失败：\n仅支持 `.doc`、`.docx` 或 `.xlsx` 文件。")
-            self.word_preview_status_var.set("预览不可用")
-            self.set_word_code("")
-            self.render_word_preview("")
-            self.word_copy_button.configure(state="disabled")
-            self.word_open_browser_button.configure(state="disabled")
-            return
-
-        self.save_settings()
-        self.word_net_button.configure(state="disabled")
-        self.word_java_button.configure(state="disabled")
-        self.word_status_var.set("导出中")
-        self.word_result_var.set("正在导出 HTML...")
-        self.write_log("")
-        self.write_log("=" * 60)
-        self.write_log(f"启动表样转换任务：{variant}")
-
-        def runner() -> None:
-            try:
-                result = export_word_to_html(
-                    source_path=source_path,
-                    variant=variant,
-                    logger=self.make_logger(),
-                )
-            except Exception as exc:
-                self.log_queue.put(f"__WORD_EXPORT_FAILED__::{type(exc).__name__}: {exc}")
-            else:
-                self.log_queue.put({"type": "word_export", "result": result})
-                self.log_queue.put("__WORD_EXPORT_DONE__")
-
-        self.worker = threading.Thread(target=runner, daemon=True)
-        self.worker.start()
-
-    def start_pack_run(self) -> None:
-        if self.worker is not None and self.worker.is_alive():
-            messagebox.showinfo("任务执行中", "当前任务还没结束。")
-            return
-
-        source_value = self.pack_source_dir_var.get().strip()
-        if not source_value:
-            messagebox.showerror("参数错误", "请选择待打包文件或文件夹。")
-            return
-
-        source_dir = Path(source_value)
-        if not source_dir.exists():
-            messagebox.showerror("参数错误", f"待打包文件或文件夹不存在：{source_dir}")
-            return
-
-        output_value = self.pack_output_dir_var.get().strip()
-        output_dir = Path(output_value) if output_value else source_dir.parent
-        self.pack_output_dir_var.set(str(output_dir))
-        custom_password = self.pack_password_var.get().strip()
-        if self.pack_use_custom_password_var.get() and not custom_password:
-            messagebox.showerror("参数错误", "已勾选手动设置密码，请输入打包密码。")
-            return
-        self.save_settings()
-
-        self.pack_run_button.configure(state="disabled")
-        self.pack_copy_password_button.configure(state="disabled")
-        self.pack_open_button.configure(state="disabled")
-        self.pack_status_var.set("打包中")
-        self.pack_result_var.set("正在压缩并加密，请稍候...")
-        self.write_log(f"启动结果打包任务：{source_dir}")
-
-        def runner() -> None:
-            try:
-                summary = pack_encrypted_folder(
-                    source_dir=source_dir,
-                    output_dir=output_dir,
-                    password=custom_password if self.pack_use_custom_password_var.get() else None,
-                    logger=self.make_logger(),
-                )
-            except Exception as exc:
-                self.log_queue.put(f"__PACK_FAILED__::{type(exc).__name__}: {exc}")
-            else:
-                self.log_queue.put({"type": "pack_summary", "summary": summary})
-                self.log_queue.put("__PACK_DONE__")
-
-        self.worker = threading.Thread(target=runner, daemon=True)
-        self.worker.start()
-
-    def start_match_run(self) -> None:
-        if self.worker is not None and self.worker.is_alive():
-            messagebox.showinfo("任务执行中", "当前任务还没结束。")
-            return
-
-        target_value = self.match_target_var.get().strip()
-        source_value = self.match_source_var.get().strip()
-        if not target_value or not source_value:
-            messagebox.showerror("参数错误", "请选择目标表和来源表。")
-            return
-        target_key = self.match_target_key_var.get().strip()
-        source_key = self.match_source_key_var.get().strip()
-        if not target_key or not source_key:
-            messagebox.showerror("参数错误", "请选择目标表匹配列和来源表匹配列。")
-            return
-        transfer_mappings = list(self.match_transfer_mappings)
-        if not transfer_mappings:
-            messagebox.showerror("参数错误", "请至少选择一个来源表补充列。")
-            return
-        extra_mappings = [
-            mapping
-            for mapping in self.match_extra_mappings
-            if not (
-                mapping.target_column == target_key
-                and mapping.source_column == source_key
-            )
-        ]
-        target_path = Path(target_value)
-        source_path = Path(source_value)
-        if target_path.suffix.lower() not in {".xlsx", ".xls"} or source_path.suffix.lower() not in {".xlsx", ".xls"}:
-            messagebox.showerror("参数错误", "数据匹配仅支持 `.xlsx` 或 `.xls` 文件。")
-            return
-        output_value = self.match_output_var.get().strip()
-        output_path = Path(output_value) if output_value else target_path.with_name(
-            f"{target_path.stem}_数据匹配结果.xlsx"
-        )
-        self.match_output_var.set(str(output_path))
-        self.save_settings()
-
-        self.match_run_button.configure(state="disabled")
-        self.match_open_button.configure(state="disabled")
-        self.match_status_var.set("匹配中")
-        self.match_result_var.set("正在执行数据匹配，请稍候...")
-        self.set_match_result_text(self.match_result_var.get())
-        self.write_log(f"启动数据匹配任务：{target_path.name} <- {source_path.name}")
-
-        def runner() -> None:
-            try:
-                summary = run_data_match(
-                    DataMatchOptions(
-                        target_path=target_path,
-                        source_path=source_path,
-                        target_key_column=target_key,
-                        source_key_column=source_key,
-                        extra_match_mappings=extra_mappings,
-                        transfer_mappings=transfer_mappings,
-                        output_path=output_path,
-                    ),
-                    logger=self.make_logger(),
-                )
-            except Exception as exc:
-                self.log_queue.put(f"__MATCH_FAILED__::{type(exc).__name__}: {exc}")
-            else:
-                self.log_queue.put({"type": "match_summary", "summary": summary})
-                self.log_queue.put("__MATCH_DONE__")
-
-        self.worker = threading.Thread(target=runner, daemon=True)
-        self.worker.start()
+    def start_sql_render(self) -> None:
+        ui_start_sql_render(self)
 
     def start_update_sql_render(self) -> None:
-        mapping_value = self.update_sql_mapping_var.get().strip()
-        if not mapping_value:
-            messagebox.showerror("参数错误", "请选择字段映射模板。")
-            return
-        mapping_path = Path(mapping_value)
-        if not mapping_path.exists():
-            messagebox.showerror("参数错误", f"未找到映射模板：{mapping_path}")
-            return
-        target_table = self.update_sql_target_table_var.get().strip()
-        source_table = self.update_sql_source_table_var.get().strip()
-        target_key = self.update_sql_target_key_var.get().strip()
-        source_key = self.update_sql_source_key_var.get().strip()
-        if not target_table or not source_table:
-            messagebox.showerror("参数错误", "请输入考生表名称和临时表名称。")
-            return
-        if not target_key or not source_key:
-            messagebox.showerror("参数错误", "请选择关联字段。")
-            return
+        ui_start_update_sql_render(self)
 
-        self.save_settings()
-        self.update_sql_run_button.configure(state="disabled")
-        self.update_sql_copy_button.configure(state="disabled")
-        self.update_sql_status_var.set("生成中")
-        self.update_sql_result_var.set("正在生成 SQL，请稍候...")
-        self.set_update_sql_result_text(self.update_sql_result_var.get())
-        self.write_log(f"启动更新SQL生成任务：{target_table} <- {source_table}")
+    def start_pack_run(self) -> None:
+        ui_start_pack_run(self)
 
-        def runner() -> None:
-            try:
-                result = render_update_sql(
-                    mapping_path=mapping_path,
-                    target_table=target_table,
-                    source_table=source_table,
-                    target_key_column=target_key,
-                    source_key_column=source_key,
-                    ignore_empty=self.update_sql_ignore_empty_var.get(),
-                    logger=self.make_logger(),
-                )
-            except Exception as exc:
-                self.log_queue.put(f"__UPDATE_SQL_FAILED__::{type(exc).__name__}: {exc}")
-            else:
-                self.log_queue.put({"type": "update_sql_result", "result": result})
-                self.log_queue.put("__UPDATE_SQL_DONE__")
+    def start_phone_decrypt_run(self) -> None:
+        ui_start_phone_decrypt_run(self)
 
-        self.worker = threading.Thread(target=runner, daemon=True)
-        self.worker.start()
+    def start_match_run(self) -> None:
+        ui_start_match_run(self)
+
+    def start_exam_arrange_run(self) -> None:
+        ui_start_exam_arrange_run(self)
+
+
+def _crash_log_path() -> Path:
+    return Path(os.environ.get("APPDATA", Path.home())) / "aliyun_photo_manager_crash.log"
 
 
 def main() -> None:
-    root = tk.Tk()
-    app = App(root)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+
+        def _on_tk_error(exc_type, exc_value, exc_tb):
+            import traceback
+            msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            log_path = _crash_log_path()
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"\n{'='*60}\nTkinter callback exception:\n{msg}\n")
+            try:
+                messagebox.showerror("程序异常", f"发生错误，已写入日志：\n{log_path}\n\n{msg[:500]}")
+            except Exception:
+                pass
+
+        root.report_callback_exception = _on_tk_error
+
+        app = App(root)
+        root.mainloop()
+    except Exception:
+        import traceback
+        msg = traceback.format_exc()
+        log_path = _crash_log_path()
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"\n{'='*60}\nTop-level crash:\n{msg}\n")
+        try:
+            messagebox.showerror("程序崩溃", f"发生严重错误，已写入日志：\n{log_path}\n\n{msg[:500]}")
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":
