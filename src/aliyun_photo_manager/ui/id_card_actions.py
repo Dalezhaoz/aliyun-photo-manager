@@ -5,8 +5,10 @@ from datetime import date
 
 from ..id_card_tools import (
     build_id_card,
-    extract_region_code,
     get_region_description,
+    list_cities,
+    list_counties,
+    resolve_region_code,
     validate_id_card,
 )
 
@@ -22,12 +24,42 @@ def set_id_result_text(app, content: str) -> None:
 
 def update_id_region_hint(app) -> None:
     custom_code = app.id_custom_region_code_var.get().strip()
-    selected_code = extract_region_code(app.id_region_var.get())
+    selected_code = resolve_region_code(
+        app.id_province_var.get(),
+        app.id_city_var.get(),
+        app.id_county_var.get(),
+    )
     region_code = custom_code or selected_code
     if region_code:
         app.id_region_hint_var.set(get_region_description(region_code))
     else:
-        app.id_region_hint_var.set("请选择预设所在地，或手工填写 6 位区划码。")
+        app.id_region_hint_var.set("请选择省 / 市 / 县，或手工填写 6 位区划码。")
+
+
+def update_id_city_values(app) -> None:
+    cities = list_cities(app.id_province_var.get())
+    app.id_city_combo["values"] = cities
+    if not cities:
+        app.id_city_var.set("")
+        app.id_county_combo["values"] = []
+        app.id_county_var.set("")
+        app.update_id_region_hint()
+        return
+    if app.id_city_var.get().strip() not in cities:
+        app.id_city_var.set(cities[0])
+    update_id_county_values(app)
+
+
+def update_id_county_values(app) -> None:
+    counties = list_counties(app.id_province_var.get(), app.id_city_var.get())
+    app.id_county_combo["values"] = counties
+    if not counties:
+        app.id_county_var.set("")
+        app.update_id_region_hint()
+        return
+    if app.id_county_var.get().strip() not in counties:
+        app.id_county_var.set(counties[0])
+    app.update_id_region_hint()
 
 
 def update_id_day_values(app) -> None:
@@ -80,10 +112,14 @@ def run_id_card_generate(app) -> None:
         raise ValueError("请选择有效的出生日期。")
 
     custom_code = app.id_custom_region_code_var.get().strip()
-    selected_code = extract_region_code(app.id_region_var.get())
+    selected_code = resolve_region_code(
+        app.id_province_var.get(),
+        app.id_city_var.get(),
+        app.id_county_var.get(),
+    )
     area_code = custom_code or selected_code
     if not area_code:
-        raise ValueError("请选择所在地，或填写 6 位区划码。")
+        raise ValueError("请选择省 / 市 / 县，或填写 6 位区划码。")
 
     gender = app.id_gender_var.get().strip() or "男"
     generated = build_id_card(area_code=area_code, birthday=birthday, gender=gender)

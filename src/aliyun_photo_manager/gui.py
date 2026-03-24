@@ -184,6 +184,8 @@ from .ui import (
     update_update_sql_ui as ui_update_update_sql_ui,
     update_pack_password_mode_ui as ui_update_pack_password_mode_ui,
     update_pack_summary_ui as ui_update_pack_summary_ui,
+    update_id_city_values as ui_update_id_city_values,
+    update_id_county_values as ui_update_id_county_values,
     update_id_day_values as ui_update_id_day_values,
     update_id_region_hint as ui_update_id_region_hint,
     update_phone_mode_ui as ui_update_phone_mode_ui,
@@ -315,7 +317,9 @@ class App:
         self.phone_mode_var = tk.StringVar(value="all")
         self.phone_filter_file_var = tk.StringVar()
         self.id_input_var = tk.StringVar()
-        self.id_region_var = tk.StringVar(value="110101 北京市 东城区")
+        self.id_province_var = tk.StringVar(value="北京市")
+        self.id_city_var = tk.StringVar(value="北京市")
+        self.id_county_var = tk.StringVar(value="东城区")
         self.id_custom_region_code_var = tk.StringVar()
         self.id_birth_year_var = tk.StringVar(value="1990")
         self.id_birth_month_var = tk.StringVar(value="01")
@@ -635,6 +639,8 @@ class App:
         self.update_phone_mode_ui()
         self.set_phone_result_text(self.phone_result_var.get())
         self.update_id_day_values()
+        self.update_id_city_values()
+        self.update_id_county_values()
         self.update_id_region_hint()
         self.set_id_result_text(self.id_result_var.get())
         self.load_exam_group_headers()
@@ -1388,6 +1394,12 @@ class App:
 
     def update_id_day_values(self) -> None:
         ui_update_id_day_values(self)
+
+    def update_id_city_values(self) -> None:
+        ui_update_id_city_values(self)
+
+    def update_id_county_values(self) -> None:
+        ui_update_id_county_values(self)
 
     def update_id_region_hint(self) -> None:
         ui_update_id_region_hint(self)

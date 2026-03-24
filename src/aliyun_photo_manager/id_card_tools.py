@@ -79,7 +79,16 @@ REGION_PRESETS = [
 ]
 
 REGION_NAME_BY_CODE = {code: name for code, name in REGION_PRESETS}
-REGION_LABELS = [f"{code} {name}" for code, name in REGION_PRESETS]
+
+REGION_TREE: dict[str, dict[str, dict[str, str]]] = {}
+for code, name in REGION_PRESETS:
+    parts = name.split()
+    if len(parts) == 2:
+        province_name, county_name = parts
+        city_name = province_name
+    else:
+        province_name, city_name, county_name = parts[0], parts[1], parts[2]
+    REGION_TREE.setdefault(province_name, {}).setdefault(city_name, {})[county_name] = code
 
 
 @dataclass
@@ -94,8 +103,28 @@ class IdCardValidationResult:
     note: str
 
 
-def list_region_labels() -> list[str]:
-    return list(REGION_LABELS)
+def list_provinces() -> list[str]:
+    return list(REGION_TREE.keys())
+
+
+def list_cities(province_name: str) -> list[str]:
+    return list(REGION_TREE.get((province_name or "").strip(), {}).keys())
+
+
+def list_counties(province_name: str, city_name: str) -> list[str]:
+    return list(
+        REGION_TREE.get((province_name or "").strip(), {})
+        .get((city_name or "").strip(), {})
+        .keys()
+    )
+
+
+def resolve_region_code(province_name: str, city_name: str, county_name: str) -> str:
+    return (
+        REGION_TREE.get((province_name or "").strip(), {})
+        .get((city_name or "").strip(), {})
+        .get((county_name or "").strip(), "")
+    )
 
 
 def calculate_check_code(body17: str) -> str:

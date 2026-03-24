@@ -279,7 +279,9 @@ def load_saved_settings(app) -> None:
     app.phone_mode_var.set(settings.get("phone_mode", app.phone_mode_var.get()))
     app.phone_filter_file_var.set(settings.get("phone_filter_file", ""))
     app.id_input_var.set(settings.get("id_input", ""))
-    app.id_region_var.set(settings.get("id_region", app.id_region_var.get()))
+    app.id_province_var.set(settings.get("id_province", app.id_province_var.get()))
+    app.id_city_var.set(settings.get("id_city", app.id_city_var.get()))
+    app.id_county_var.set(settings.get("id_county", app.id_county_var.get()))
     app.id_custom_region_code_var.set(settings.get("id_custom_region_code", ""))
     app.id_birth_year_var.set(settings.get("id_birth_year", app.id_birth_year_var.get()))
     app.id_birth_month_var.set(settings.get("id_birth_month", app.id_birth_month_var.get()))
@@ -361,7 +363,9 @@ def save_settings(app) -> None:
         "phone_mode": app.phone_mode_var.get().strip(),
         "phone_filter_file": app.phone_filter_file_var.get().strip(),
         "id_input": app.id_input_var.get().strip(),
-        "id_region": app.id_region_var.get().strip(),
+        "id_province": app.id_province_var.get().strip(),
+        "id_city": app.id_city_var.get().strip(),
+        "id_county": app.id_county_var.get().strip(),
         "id_custom_region_code": app.id_custom_region_code_var.get().strip(),
         "id_birth_year": app.id_birth_year_var.get().strip(),
         "id_birth_month": app.id_birth_month_var.get().strip(),

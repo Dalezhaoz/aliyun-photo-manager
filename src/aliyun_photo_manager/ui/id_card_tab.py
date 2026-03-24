@@ -4,7 +4,7 @@ import tkinter as tk
 from datetime import date
 from tkinter import ttk
 
-from ..id_card_tools import list_region_labels
+from ..id_card_tools import list_provinces
 
 
 def build_id_card_tab(app, notebook: ttk.Notebook) -> None:
@@ -32,15 +32,36 @@ def build_id_card_tab(app, notebook: ttk.Notebook) -> None:
     generate_frame.columnconfigure(1, weight=1)
     generate_frame.columnconfigure(3, weight=1)
 
-    ttk.Label(generate_frame, text="预设所在地", width=16).grid(row=0, column=0, sticky="w", pady=6, padx=(0, 10))
-    app.id_region_combo = ttk.Combobox(
-        generate_frame,
-        textvariable=app.id_region_var,
-        values=list_region_labels(),
+    ttk.Label(generate_frame, text="省 / 市 / 县", width=16).grid(row=0, column=0, sticky="w", pady=6, padx=(0, 10))
+    region_frame = ttk.Frame(generate_frame)
+    region_frame.grid(row=0, column=1, columnspan=3, sticky="ew", pady=6)
+    region_frame.columnconfigure(0, weight=1)
+    region_frame.columnconfigure(1, weight=1)
+    region_frame.columnconfigure(2, weight=1)
+    app.id_province_combo = ttk.Combobox(
+        region_frame,
+        textvariable=app.id_province_var,
+        values=list_provinces(),
         state="readonly",
     )
-    app.id_region_combo.grid(row=0, column=1, columnspan=3, sticky="ew", pady=6)
-    app.id_region_combo.bind("<<ComboboxSelected>>", lambda _event: app.update_id_region_hint())
+    app.id_province_combo.grid(row=0, column=0, sticky="ew")
+    app.id_city_combo = ttk.Combobox(
+        region_frame,
+        textvariable=app.id_city_var,
+        values=[],
+        state="readonly",
+    )
+    app.id_city_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0))
+    app.id_county_combo = ttk.Combobox(
+        region_frame,
+        textvariable=app.id_county_var,
+        values=[],
+        state="readonly",
+    )
+    app.id_county_combo.grid(row=0, column=2, sticky="ew", padx=(10, 0))
+    app.id_province_combo.bind("<<ComboboxSelected>>", lambda _event: app.update_id_city_values())
+    app.id_city_combo.bind("<<ComboboxSelected>>", lambda _event: app.update_id_county_values())
+    app.id_county_combo.bind("<<ComboboxSelected>>", lambda _event: app.update_id_region_hint())
 
     ttk.Label(generate_frame, text="手工区划码", width=16).grid(row=1, column=0, sticky="w", pady=6, padx=(0, 10))
     app.id_custom_region_entry = app.create_text_entry(generate_frame, textvariable=app.id_custom_region_code_var)

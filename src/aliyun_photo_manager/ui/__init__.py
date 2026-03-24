@@ -75,6 +75,8 @@ from .id_card_actions import (
     run_id_card_generate,
     run_id_card_validate,
     set_id_result_text,
+    update_id_city_values,
+    update_id_county_values,
     update_id_day_values,
     update_id_region_hint,
 )
@@ -302,6 +304,8 @@ __all__ = [
     "run_id_card_validate",
     "run_id_card_generate",
     "copy_generated_id_card",
+    "update_id_city_values",
+    "update_id_county_values",
     "update_id_day_values",
     "update_id_region_hint",
     "set_id_result_text",
