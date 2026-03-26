@@ -3,12 +3,14 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
+from .common import create_scrollable_tab
+
 
 def build_phone_tab(app, notebook: ttk.Notebook) -> None:
-    phone_frame = ttk.Frame(notebook, padding=14)
+    phone_tab, phone_frame = create_scrollable_tab(notebook)
     phone_frame.columnconfigure(0, weight=1)
-    phone_frame.rowconfigure(2, weight=1)
-    notebook.add(phone_frame, text="电话解密")
+    phone_frame.rowconfigure(3, weight=1)
+    notebook.add(phone_tab, text="电话解密")
 
     intro_frame = tk.Frame(
         phone_frame,

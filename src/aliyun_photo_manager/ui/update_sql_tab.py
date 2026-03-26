@@ -3,12 +3,14 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
+from .common import create_scrollable_tab
+
 
 def build_update_sql_tab(app, notebook: ttk.Notebook) -> None:
-    update_sql_frame = ttk.Frame(notebook, padding=14)
+    update_sql_tab, update_sql_frame = create_scrollable_tab(notebook)
     update_sql_frame.columnconfigure(0, weight=1)
-    update_sql_frame.rowconfigure(2, weight=1)
-    notebook.add(update_sql_frame, text="更新SQL生成")
+    update_sql_frame.rowconfigure(3, weight=1)
+    notebook.add(update_sql_tab, text="更新SQL生成")
 
     intro_frame = tk.Frame(
         update_sql_frame,

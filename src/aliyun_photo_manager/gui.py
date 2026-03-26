@@ -287,7 +287,7 @@ class App:
         self.root = root
         self.root.title(f"报名系统工具箱 v{__version__}")
         self.root.geometry("1080x760")
-        self.root.minsize(920, 680)
+        self.root.minsize(760, 560)
 
         self.log_queue: "queue.Queue[object]" = queue.Queue()
         self.worker: Optional[threading.Thread] = None

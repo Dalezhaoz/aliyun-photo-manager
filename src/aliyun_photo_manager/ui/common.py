@@ -156,3 +156,31 @@ def bind_mousewheel_to_canvas(canvas: tk.Canvas, target) -> None:
 
     target.bind("<Enter>", bind_events)
     target.bind("<Leave>", unbind_events)
+
+
+def create_scrollable_tab(notebook: ttk.Notebook, padding: int = 14):
+    outer = ttk.Frame(notebook)
+    outer.columnconfigure(0, weight=1)
+    outer.rowconfigure(0, weight=1)
+
+    canvas = tk.Canvas(outer, highlightthickness=0)
+    canvas.grid(row=0, column=0, sticky="nsew")
+
+    scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+    scrollbar.grid(row=0, column=1, sticky="ns")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    content = ttk.Frame(canvas, padding=padding)
+    content.columnconfigure(0, weight=1)
+    window_id = canvas.create_window((0, 0), window=content, anchor="nw")
+
+    def sync_scroll_region(_event=None) -> None:
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    def sync_content_width(event) -> None:
+        canvas.itemconfigure(window_id, width=event.width)
+
+    content.bind("<Configure>", sync_scroll_region)
+    canvas.bind("<Configure>", sync_content_width)
+    bind_mousewheel_to_canvas(canvas, content)
+    return outer, content
