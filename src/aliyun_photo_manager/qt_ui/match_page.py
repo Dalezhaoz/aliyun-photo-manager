@@ -6,6 +6,7 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -107,24 +108,32 @@ class MatchPage(QWidget):
         header_layout.addStretch(1)
         self._add_row(form, 3, "", header_action)
 
-        self.target_key_edit = QLineEdit()
-        self._add_row(form, 4, "目标表匹配列", self.target_key_edit)
-        self.source_key_edit = QLineEdit()
-        self._add_row(form, 5, "来源表匹配列", self.source_key_edit)
+        self.target_key_combo = QComboBox()
+        self._add_row(form, 4, "目标表匹配列", self.target_key_combo)
+        self.source_key_combo = QComboBox()
+        self._add_row(form, 5, "来源表匹配列", self.source_key_combo)
         left_layout.addLayout(form)
 
         extra_title = QLabel("附加匹配列")
         extra_title.setProperty("sectionTitle", True)
         left_layout.addWidget(extra_title)
+        extra_editor = QHBoxLayout()
+        self.extra_target_combo = QComboBox()
+        self.extra_target_combo.setPlaceholderText("目标表列")
+        self.extra_source_combo = QComboBox()
+        self.extra_source_combo.setPlaceholderText("来源表列")
+        add_extra = QPushButton("添加映射")
+        add_extra.clicked.connect(self.add_extra_mapping)
+        extra_editor.addWidget(self.extra_target_combo, 1)
+        extra_editor.addWidget(self.extra_source_combo, 1)
+        extra_editor.addWidget(add_extra)
+        left_layout.addLayout(extra_editor)
         self.extra_table = self._mapping_table("目标表列", "来源表列")
         left_layout.addWidget(self.extra_table)
 
         extra_actions = QHBoxLayout()
-        add_extra = QPushButton("添加映射")
-        add_extra.clicked.connect(lambda: self.extra_table.insertRow(self.extra_table.rowCount()))
         del_extra = QPushButton("删除所选")
         del_extra.clicked.connect(lambda: self._remove_selected_row(self.extra_table))
-        extra_actions.addWidget(add_extra)
         extra_actions.addWidget(del_extra)
         extra_actions.addStretch(1)
         left_layout.addLayout(extra_actions)
@@ -132,14 +141,22 @@ class MatchPage(QWidget):
         transfer_title = QLabel("补充列映射")
         transfer_title.setProperty("sectionTitle", True)
         left_layout.addWidget(transfer_title)
+        transfer_editor = QHBoxLayout()
+        self.transfer_name_edit = QLineEdit()
+        self.transfer_name_edit.setPlaceholderText("结果列名")
+        self.transfer_source_combo = QComboBox()
+        self.transfer_source_combo.setPlaceholderText("来源表列")
+        add_transfer = QPushButton("添加补充列")
+        add_transfer.clicked.connect(self.add_transfer_mapping)
+        transfer_editor.addWidget(self.transfer_name_edit, 1)
+        transfer_editor.addWidget(self.transfer_source_combo, 1)
+        transfer_editor.addWidget(add_transfer)
+        left_layout.addLayout(transfer_editor)
         self.transfer_table = self._mapping_table("结果列名", "来源表列")
         left_layout.addWidget(self.transfer_table)
         transfer_actions = QHBoxLayout()
-        add_transfer = QPushButton("添加补充列")
-        add_transfer.clicked.connect(lambda: self.transfer_table.insertRow(self.transfer_table.rowCount()))
         del_transfer = QPushButton("删除所选")
         del_transfer.clicked.connect(lambda: self._remove_selected_row(self.transfer_table))
-        transfer_actions.addWidget(add_transfer)
         transfer_actions.addWidget(del_transfer)
         transfer_actions.addStretch(1)
         left_layout.addLayout(transfer_actions)
@@ -200,10 +217,16 @@ class MatchPage(QWidget):
             selected, _ = QFileDialog.getOpenFileName(self, "选择 Excel 文件", "", "Excel 文件 (*.xlsx *.xls)")
         if selected:
             line_edit.setText(selected)
+            if not save_mode and line_edit is self.target_edit and not self.output_edit.text().strip():
+                target_path = Path(selected)
+                self.output_edit.setText(str(target_path.with_name(f"{target_path.stem}_数据匹配结果.xlsx")))
 
     def _mapping_table(self, first_header: str, second_header: str) -> QTableWidget:
         table = QTableWidget(0, 2)
         table.setHorizontalHeaderLabels([first_header, second_header])
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
         table.horizontalHeader().setStretchLastSection(True)
         table.verticalHeader().setVisible(False)
         table.setMinimumHeight(140)
@@ -223,13 +246,55 @@ class MatchPage(QWidget):
         except Exception as exc:
             QMessageBox.critical(self, "读取失败", str(exc))
             return
-        if self.target_headers and not self.target_key_edit.text().strip():
-            self.target_key_edit.setText(self.target_headers[0])
-        if self.source_headers and not self.source_key_edit.text().strip():
-            self.source_key_edit.setText(self.source_headers[0])
+        self._reset_combo(self.target_key_combo, self.target_headers)
+        self._reset_combo(self.source_key_combo, self.source_headers)
+        self._reset_combo(self.extra_target_combo, self.target_headers, placeholder="目标表列")
+        self._reset_combo(self.extra_source_combo, self.source_headers, placeholder="来源表列")
+        self._reset_combo(self.transfer_source_combo, self.source_headers, placeholder="来源表列")
         self.result_text.setPlainText(
             "目标表列：\n" + "\n".join(self.target_headers) + "\n\n来源表列：\n" + "\n".join(self.source_headers)
         )
+
+    def _reset_combo(self, combo: QComboBox, values: list[str], placeholder: str = "") -> None:
+        current = combo.currentText().strip()
+        combo.clear()
+        if placeholder:
+            combo.addItem(placeholder, "")
+        for value in values:
+            combo.addItem(value, value)
+        if current and current in values:
+            combo.setCurrentText(current)
+        elif values:
+            combo.setCurrentIndex(1 if placeholder else 0)
+
+    def _combo_value(self, combo: QComboBox) -> str:
+        data = combo.currentData()
+        if isinstance(data, str) and data:
+            return data
+        return combo.currentText().strip()
+
+    def _append_mapping_row(self, table: QTableWidget, first: str, second: str) -> None:
+        row = table.rowCount()
+        table.insertRow(row)
+        table.setItem(row, 0, QTableWidgetItem(first))
+        table.setItem(row, 1, QTableWidgetItem(second))
+
+    def add_extra_mapping(self) -> None:
+        target = self._combo_value(self.extra_target_combo)
+        source = self._combo_value(self.extra_source_combo)
+        if not target or not source:
+            QMessageBox.warning(self, "参数不完整", "请先选择目标表列和来源表列。")
+            return
+        self._append_mapping_row(self.extra_table, target, source)
+
+    def add_transfer_mapping(self) -> None:
+        result_name = self.transfer_name_edit.text().strip()
+        source = self._combo_value(self.transfer_source_combo)
+        if not result_name or not source:
+            QMessageBox.warning(self, "参数不完整", "请先填写结果列名并选择来源表列。")
+            return
+        self._append_mapping_row(self.transfer_table, result_name, source)
+        self.transfer_name_edit.clear()
 
     def _collect_mappings(self, table: QTableWidget) -> list[ColumnMapping]:
         mappings: list[ColumnMapping] = []
@@ -247,12 +312,14 @@ class MatchPage(QWidget):
             options = DataMatchOptions(
                 target_path=Path(self.target_edit.text().strip()),
                 source_path=Path(self.source_edit.text().strip()),
-                target_key_column=self.target_key_edit.text().strip(),
-                source_key_column=self.source_key_edit.text().strip(),
+                target_key_column=self._combo_value(self.target_key_combo),
+                source_key_column=self._combo_value(self.source_key_combo),
                 extra_match_mappings=self._collect_mappings(self.extra_table),
                 transfer_mappings=self._collect_mappings(self.transfer_table),
                 output_path=Path(self.output_edit.text().strip()) if self.output_edit.text().strip() else None,
             )
+            if not options.transfer_mappings:
+                raise ValueError("请至少添加一条补充列映射。")
         except Exception as exc:
             QMessageBox.critical(self, "参数错误", str(exc))
             return

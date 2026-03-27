@@ -111,6 +111,7 @@ class ExamPage(QWidget):
         self.sort_mode_combo = QComboBox()
         self.sort_mode_combo.addItem("按原顺序", "original")
         self.sort_mode_combo.addItem("随机打乱", "random")
+        self.sort_mode_combo.setCurrentIndex(1)
         self._add_row(form, 8, "组内顺序", self.sort_mode_combo)
         left_layout.addLayout(form)
 
@@ -120,8 +121,10 @@ class ExamPage(QWidget):
         rule_row = QHBoxLayout()
         self.rule_type_combo = QComboBox()
         self.rule_type_combo.addItems(["考点", "考场", "座号", "流水号", "岗位编码", "科目号", "自定义"])
+        self.rule_type_combo.currentTextChanged.connect(self.update_rule_custom_state)
         self.rule_custom_edit = QLineEdit()
         self.rule_custom_edit.setPlaceholderText("自定义内容")
+        self.rule_custom_edit.setEnabled(False)
         add_rule_button = QPushButton("添加规则")
         add_rule_button.clicked.connect(self.add_rule)
         rule_row.addWidget(self.rule_type_combo, 1)
@@ -171,6 +174,7 @@ class ExamPage(QWidget):
         body.addWidget(right, 0, 1)
         body.setColumnStretch(0, 3)
         body.setColumnStretch(1, 2)
+        self.update_rule_custom_state(self.rule_type_combo.currentText())
 
     def _card(self) -> QFrame:
         frame = QFrame()
@@ -205,10 +209,20 @@ class ExamPage(QWidget):
             line_edit.setText(selected)
 
     def add_rule(self) -> None:
+        rule_type = self.rule_type_combo.currentText().strip()
+        custom_text = self.rule_custom_edit.text().strip() if rule_type == "自定义" else ""
         row = self.rule_table.rowCount()
         self.rule_table.insertRow(row)
-        self.rule_table.setItem(row, 0, QTableWidgetItem(self.rule_type_combo.currentText().strip()))
-        self.rule_table.setItem(row, 1, QTableWidgetItem(self.rule_custom_edit.text().strip()))
+        self.rule_table.setItem(row, 0, QTableWidgetItem(rule_type))
+        self.rule_table.setItem(row, 1, QTableWidgetItem(custom_text))
+        if rule_type == "自定义":
+            self.rule_custom_edit.clear()
+
+    def update_rule_custom_state(self, value: str) -> None:
+        enabled = value.strip() == "自定义"
+        self.rule_custom_edit.setEnabled(enabled)
+        if not enabled:
+            self.rule_custom_edit.clear()
 
     def remove_rule(self) -> None:
         row = self.rule_table.currentRow()

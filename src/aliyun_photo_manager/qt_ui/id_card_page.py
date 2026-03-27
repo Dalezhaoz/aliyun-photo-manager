@@ -38,6 +38,7 @@ class IdCardPage(QWidget):
     def __init__(self, log_fn: Callable[[str], None]) -> None:
         super().__init__()
         self.log_fn = log_fn
+        self.generated_values: list[str] = []
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -152,8 +153,9 @@ class IdCardPage(QWidget):
         action_layout.addStretch(1)
         self._add_row(form, 4, "", action_row)
 
-        self.generated_edit = QLineEdit()
+        self.generated_edit = QPlainTextEdit()
         self.generated_edit.setReadOnly(True)
+        self.generated_edit.setFixedHeight(124)
         self._add_row(form, 5, "生成结果", self.generated_edit)
         generate_layout.addLayout(form)
         root.addWidget(generate_card)
@@ -227,17 +229,29 @@ class IdCardPage(QWidget):
         )
         gender = "男" if self.gender_male.isChecked() else "女"
         try:
-            generated = build_id_card(area_code, self.birth_edit.date().toPython(), gender)
+            generated_values: list[str] = []
+            seen: set[str] = set()
+            while len(generated_values) < 10:
+                generated = build_id_card(area_code, self.birth_edit.date().toPython(), gender)
+                if generated in seen:
+                    continue
+                seen.add(generated)
+                generated_values.append(generated)
         except Exception as exc:
             QMessageBox.critical(self, "生成失败", str(exc))
             return
-        self.generated_edit.setText(generated)
-        self.result_text.setPlainText(f"已生成身份证：{generated}\n所在地：{get_region_description(area_code)}")
-        self.log_fn(f"已生成身份证：{generated}")
+        self.generated_values = generated_values
+        self.generated_edit.setPlainText("\n".join(generated_values))
+        self.result_text.setPlainText(
+            "已生成身份证：\n"
+            + "\n".join(generated_values)
+            + f"\n\n所在地：\n{get_region_description(area_code)}"
+        )
+        self.log_fn(f"已生成 10 个身份证号，首个：{generated_values[0]}")
 
     def copy_generated(self) -> None:
-        value = self.generated_edit.text().strip()
+        value = self.generated_values[0] if self.generated_values else ""
         if not value:
             return
         QApplication.clipboard().setText(value)
-        self.log_fn("已复制生成的身份证号。")
+        self.log_fn(f"已复制第一个身份证号：{value}")

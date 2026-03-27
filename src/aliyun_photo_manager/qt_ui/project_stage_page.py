@@ -5,7 +5,6 @@ import subprocess
 import sys
 import tempfile
 import traceback
-from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
 
@@ -265,11 +264,16 @@ class ProjectStagePage(QWidget):
             QMessageBox.critical(self, "参数错误", str(exc))
             return
 
+        self.run_button.setEnabled(False)
+        def on_success(summary: ProjectStageSummary) -> None:
+            self.run_button.setEnabled(True)
+            self.result_text.setPlainText(
+                f"连接成功。\n遍历数据库：{summary.visited_databases}\n匹配业务库：{summary.matched_databases}"
+            )
+
         worker = SimpleWorker(
             task=lambda: query_project_stages([config], status_filter="全部"),
-            on_success=lambda summary: self.result_text.setPlainText(
-                f"连接成功。\n遍历数据库：{summary.visited_databases}\n匹配业务库：{summary.matched_databases}"
-            ),
+            on_success=on_success,
             on_error=self.on_error,
         )
         self.thread_pool.start(worker)

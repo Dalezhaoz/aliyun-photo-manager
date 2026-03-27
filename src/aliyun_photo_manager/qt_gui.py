@@ -34,7 +34,6 @@ from .qt_ui import (
     CertificatePage,
     ExamPage,
     IdCardPage,
-    ManualPage,
     MatchPage,
     PackPage,
     PhoneDecryptPage,
@@ -76,7 +75,6 @@ NAV_ENTRIES: list[NavEntry] = [
     NavEntry("phone", "电话解密", "db", "通过 helper 解密电话并回写备用3。", True),
     NavEntry("update_sql", "更新 SQL 生成", "db", "通过字段映射模板生成标准 UPDATE SQL。", True),
     NavEntry("id_card", "身份证工具", "query", "校验并生成 18 位大陆居民身份证。", True),
-    NavEntry("manual", "使用说明", "settings", "查看当前 README 和使用说明。", True),
     NavEntry("about", "关于", "settings", "查看 Qt 预览版说明。", True),
     NavEntry("exam", "考场编排", "experimental", "实验功能：按模板和规则生成考号、考场与座号。", True),
     NavEntry("sql_exec", "SQL 配置执行", "experimental", "实验功能：按 SQL 模板参数生成可执行脚本。", True),
@@ -85,6 +83,21 @@ NAV_ENTRIES: list[NavEntry] = [
 
 
 DEFAULT_FAVORITES = ["certificate", "template", "phone"]
+
+MANUAL_TEXTS: dict[str, str] = {
+    "photo": "适用场景：下载考生照片、生成分类模板、按模板批量分类。\n\n操作步骤：\n1. 先选择数据来源，本地目录可直接处理，云存储需先填写云类型、Endpoint/Region、AccessKey 和 Bucket。\n2. 如需按名单处理，先选择人员模板并勾选只处理模板中的人员。\n3. 选择下载目录或已有照片目录，再选择分类输出目录。\n4. 需要从云端下载时，先加载 Bucket 和当前层级，再执行下载。\n5. 点击生成模板后，在 Excel 里填写分类一、分类二、分类三、修改名称等字段。\n6. 回到程序执行按模板分类，结果会输出分类目录和结果清单。",
+    "certificate": "适用场景：从本地或云存储筛选证件资料，只导出指定人员或指定材料。\n\n操作步骤：\n1. 先选择数据来源，本地目录可直接筛选，云存储模式会先下载后筛选。\n2. 选择人员模板并加载模板列，确认匹配列、名称列等关键字段。\n3. 选择证件资料目录和输出目录。\n4. 如需只导出某类材料，切换筛选模式为关键词文件，并填写关键词。\n5. 如需重命名导出目录，可勾选导出后文件夹重命名并选择名称列。\n6. 运行后查看右侧结果和结果清单，确认导出人数、文件数和输出位置。",
+    "template": "适用场景：把 Word、Excel 表样模板转换成 HTML 代码。\n\n操作步骤：\n1. 选择表样文件，支持 doc、docx、xls、xlsx。\n2. 根据模板类型点击 Net 版导出或 Java 版导出。\n3. 程序会在结果区展示 HTML 和占位符内容。\n4. 可直接复制 HTML，后续粘贴到系统模板或页面中使用。\n5. 若模板异常，优先检查原始表样中的合并单元格、图片和特殊格式。",
+    "match": "适用场景：用来源表字段补充目标表，替代手工 VLOOKUP / XLOOKUP。\n\n操作步骤：\n1. 选择目标表、来源表和输出文件。\n2. 点击加载表头，确认目标表匹配列与来源表匹配列。\n3. 如存在重复姓名或重复主键，可在附加匹配列里继续增加限制条件。\n4. 在补充列映射里填写结果列名，并选择来源表对应列。\n5. 点击开始匹配，程序会输出匹配结果文件和匹配清单。\n6. 若结果不符合预期，优先检查主键列格式、空值和附加匹配列是否一致。",
+    "pack": "适用场景：把照片、证件资料或其他结果目录打包并加密交付。\n\n操作步骤：\n1. 选择待打包对象，可选文件或文件夹。\n2. 选择输出目录。\n3. 如需客户指定密码，勾选手动设置密码并输入密码；否则程序自动生成密码。\n4. 点击一键打包并加密，成功后右侧会显示压缩包路径、密码和历史记录。\n5. 复制密码后发给对方，后续可通过查询历史按文件名、来源名或密码回查。",
+    "phone": "适用场景：按主键编号关联 web_info，加密电话解密后回写到考生表备用3。\n\n操作步骤：\n1. 填写服务器、数据库账号、报名库名和电话库名。\n2. 选择考生表和需要处理的模式，可全量处理，也可按名单处理。\n3. 程序会根据主键编号、考试代码、考试年月和考区参数调用 helper 解密。\n4. 解密成功后写回备用3，并在结果区显示成功、失败和跳过数量。\n5. 若失败，优先检查 helper 是否已构建、数据库连接是否正常、电话库中是否存在对应密文。",
+    "update_sql": "适用场景：根据字段映射模板生成标准 UPDATE SQL，并在执行前自动备份相关表。\n\n操作步骤：\n1. 先准备字段映射模板，或点击导出模板生成标准样例。\n2. 选择映射模板并加载字段。\n3. 填写正式表、临时表以及双方关联字段。\n4. 如需防止空值覆盖正式表，可勾选忽略空值。\n5. 点击生成 SQL，在右侧检查备份语句、更新语句和 where 条件是否正确。\n6. 确认无误后复制 SQL，到数据库工具中执行。",
+    "id_card": "适用场景：校验身份证号，或按地区、出生日期、性别生成测试数据。\n\n操作步骤：\n1. 输入校验区可直接输入 18 位身份证号，点击校验并解析查看出生日期、性别和地区。\n2. 生成区先选择省、市、县，也可手工填写 6 位区划码。\n3. 选择出生日期和性别后点击生成身份证。\n4. 程序会一次生成 10 个合法号码，复制结果默认复制第 1 个。\n5. 若用于测试，请不要把生成号码当作真实身份信息使用。",
+    "exam": "适用场景：实验功能，用于按规则编排考号、考场和座号。\n\n操作步骤：\n1. 准备考生名单与编排规则模板。\n2. 按页面提示加载规则并设置考场容量、排序字段等参数。\n3. 先用小样本验证规则，再执行完整编排。\n4. 输出结果后重点检查考号连续性、考场容量和特殊考生分配是否正确。",
+    "sql_exec": "适用场景：实验功能，用配置模板批量生成 SQL 语句。\n\n操作步骤：\n1. 选择 SQL 模板和参数文件。\n2. 加载后确认变量名、替换值和输出格式。\n3. 先在测试环境预览生成结果，再复制或导出执行。\n4. 如模板中包含删除、更新语句，请务必先备份再执行。",
+    "project_stage": "适用场景：实验功能，汇总多台 SQL Server 上的报名项目阶段状态。\n\n操作步骤：\n1. 填写服务器连接信息，先执行测试连接。\n2. 配置需要查询的项目库、阶段表或汇总规则。\n3. 运行后查看结果区输出，确认每台服务器的阶段状态和统计值。\n4. 如查询慢或失败，优先检查网络、SQL Server 权限和超时设置。",
+    "about": "当前是 Qt 预览版，重点在验证新导航、新布局和功能迁移稳定性。\n\n建议优先测试高频页面：证件资料筛选、电话解密、更新 SQL 生成、数据匹配、结果打包和身份证工具。\n若发现样式、布局或交互问题，可直接按页面逐项反馈。"
+}
 
 
 class LogBridge(QObject):
@@ -235,7 +248,7 @@ class HomePage(QWidget):
         section.setProperty("sectionTitle", True)
         migrated_layout.addWidget(section)
 
-        for key in ("photo", "certificate", "template", "match", "pack", "phone", "update_sql", "id_card", "manual", "exam", "sql_exec", "project_stage"):
+        for key in ("photo", "certificate", "template", "match", "pack", "phone", "update_sql", "id_card", "exam", "sql_exec", "project_stage"):
             entry = next(item for item in NAV_ENTRIES if item.key == key)
             row = QWidget()
             row_layout = QHBoxLayout(row)
@@ -270,6 +283,7 @@ class QtMainWindow(QMainWindow):
         self.favorites: list[str] = list(DEFAULT_FAVORITES)
         self.page_indexes: dict[str, int] = {}
         self.tree_items_by_key: dict[str, QTreeWidgetItem] = {}
+        self.page_help_sections: dict[str, QFrame] = {}
         self.sidebar_collapsed = False
 
         central = QWidget()
@@ -371,13 +385,19 @@ class QtMainWindow(QMainWindow):
         self.content_container = QWidget()
         container_layout = QVBoxLayout(self.content_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(0)
+        container_layout.setSpacing(12)
+        self.header_help_button = QPushButton("说明", self.content_container)
+        self.header_help_button.setObjectName("HelpButton")
+        self.header_help_button.setCursor(Qt.PointingHandCursor)
+        self.header_help_button.setFixedSize(72, 32)
+        self.header_help_button.clicked.connect(self.show_current_help)
         self.header_star_button = PaintedIconButton("star", self.content_container)
         self.header_star_button.setObjectName("StarButton")
         self.header_star_button.clicked.connect(self.toggle_current_favorite)
         self.header_star_button.setFixedSize(28, 28)
         self.stack = QStackedWidget()
         container_layout.addWidget(self.stack)
+        self.header_help_button.raise_()
         self.header_star_button.raise_()
         content_layout.addWidget(self.content_container, 1)
 
@@ -416,8 +436,6 @@ class QtMainWindow(QMainWindow):
                 page = UpdateSqlPage(self.emit_log)
             elif entry.key == "id_card":
                 page = IdCardPage(self.emit_log)
-            elif entry.key == "manual":
-                page = ManualPage()
             elif entry.key == "exam":
                 page = ExamPage(self.emit_log)
             elif entry.key == "sql_exec":
@@ -428,6 +446,7 @@ class QtMainWindow(QMainWindow):
                 page = PlaceholderPage("关于 Qt 预览版", "当前重点是先把新导航和高频页面做稳，再逐步迁移其他业务页。")
             else:
                 page = PlaceholderPage(entry.label, entry.description)
+            self._attach_page_help(entry, page)
             self.page_indexes[entry.key] = self.stack.addWidget(self._wrap_page(page))
 
     def resizeEvent(self, event) -> None:
@@ -486,6 +505,9 @@ class QtMainWindow(QMainWindow):
             x = self.content_container.width() - self.header_star_button.width() - 16
             y = 18
             self.header_star_button.move(max(0, x), max(0, y))
+            help_x = x - self.header_help_button.width() - 10
+            help_y = y - 2
+            self.header_help_button.move(max(0, help_x), max(0, help_y))
         if hasattr(self, "central_panel"):
             self.sidebar_overlay_button.move(18, 28)
 
@@ -513,7 +535,10 @@ class QtMainWindow(QMainWindow):
         is_favorite = key in self.favorites
         self.header_star_button.setChecked(is_favorite)
         self.header_star_button.setEnabled(key not in {"home", "about"})
+        self.header_help_button.setVisible(key not in {"home"})
         self.header_star_button.update()
+        section = self.page_help_sections.get(key)
+        self.header_help_button.setText("收起" if section is not None and section.isVisible() else "说明")
 
     def open_entry(self, key: str) -> None:
         index = self.page_indexes.get(key)
@@ -558,6 +583,37 @@ class QtMainWindow(QMainWindow):
             self.favorites.insert(0, current_key)
         self._refresh_favorites()
         self._update_header_state(current_key)
+
+    def show_current_help(self) -> None:
+        current_index = self.stack.currentIndex()
+        current_key = next((key for key, index in self.page_indexes.items() if index == current_index), None)
+        if current_key is None:
+            return
+        section = self.page_help_sections.get(current_key)
+        if section is None:
+            return
+        section.setVisible(not section.isVisible())
+        self.header_help_button.setText("收起" if section.isVisible() else "说明")
+
+    def _attach_page_help(self, entry: NavEntry, page: QWidget) -> None:
+        layout = page.layout()
+        if layout is None:
+            return
+        banner = QFrame()
+        banner.setProperty("pageCard", True)
+        banner.hide()
+        banner_layout = QVBoxLayout(banner)
+        banner_layout.setContentsMargins(20, 16, 20, 16)
+        banner_layout.setSpacing(8)
+        title = QLabel(f"{entry.label} 操作手册")
+        title.setProperty("sectionTitle", True)
+        text = QLabel(MANUAL_TEXTS.get(entry.key, entry.description))
+        text.setWordWrap(True)
+        text.setProperty("heroText", True)
+        banner_layout.addWidget(title)
+        banner_layout.addWidget(text)
+        layout.insertWidget(1, banner)
+        self.page_help_sections[entry.key] = banner
 
     def collapse_navigation(self) -> None:
         for index in range(self.nav_tree.topLevelItemCount()):
@@ -648,6 +704,27 @@ class QtMainWindow(QMainWindow):
                 selection-background-color: #DCE8FF;
                 selection-color: #173052;
             }
+            QMessageBox {
+                background: #FFFFFF;
+            }
+            QMessageBox QLabel {
+                color: #172033;
+                background: transparent;
+                font-size: 13px;
+            }
+            QMessageBox QPushButton {
+                min-width: 88px;
+                min-height: 34px;
+                padding: 4px 14px;
+                color: #243247;
+                background: #FFFFFF;
+                border: 1px solid #CBD5E1;
+                border-radius: 10px;
+                font-weight: 600;
+            }
+            QMessageBox QPushButton:hover {
+                background: #F7FAFD;
+            }
             #Sidebar, #Card {
                 background: #FFFFFF;
                 border: 1px solid #D9E2EC;
@@ -696,6 +773,19 @@ class QtMainWindow(QMainWindow):
             QLabel[heroText="true"] {
                 font-size: 12px;
                 color: #5B6B7E;
+            }
+            QPushButton#HelpButton {
+                min-width: 72px;
+                min-height: 32px;
+                padding: 4px 14px;
+                color: #314155;
+                background: #FFFFFF;
+                border: 1px solid #CBD5E1;
+                border-radius: 10px;
+                font-weight: 600;
+            }
+            QPushButton#HelpButton:hover {
+                background: #F7FAFD;
             }
             QFrame[pageCard="true"] {
                 background: #FFFFFF;
@@ -748,6 +838,31 @@ class QtMainWindow(QMainWindow):
                 border: 1px solid #CBD5E1;
                 border-radius: 10px;
                 background: #FFFFFF;
+            }
+            QTableWidget {
+                color: #172033;
+                background: #FFFFFF;
+                border: 1px solid #CBD5E1;
+                border-radius: 10px;
+                gridline-color: #E6EDF5;
+                selection-background-color: #DCE8FF;
+                selection-color: #173052;
+            }
+            QTableWidget::item {
+                padding: 6px 8px;
+                border: none;
+            }
+            QTableWidget::item:selected {
+                background: #DCE8FF;
+                color: #173052;
+            }
+            QHeaderView::section {
+                color: #314155;
+                background: #F7FAFD;
+                border: none;
+                border-bottom: 1px solid #D9E2EC;
+                padding: 8px 10px;
+                font-weight: 700;
             }
             QCheckBox, QRadioButton {
                 color: #243247;

@@ -103,33 +103,48 @@ class PhotoPage(QWidget):
 
         self.sorted_dir_edit = QLineEdit()
         self._add_row(form, 2, "分类目录", self._with_dir_button(self.sorted_dir_edit))
+        left_layout.addLayout(form)
+
+        self.cloud_section = QWidget()
+        cloud_layout = QVBoxLayout(self.cloud_section)
+        cloud_layout.setContentsMargins(0, 0, 0, 0)
+        cloud_layout.setSpacing(12)
+        cloud_title = QLabel("云存储配置")
+        cloud_title.setProperty("sectionTitle", True)
+        cloud_layout.addWidget(cloud_title)
+
+        cloud_form = QGridLayout()
+        cloud_form.setHorizontalSpacing(14)
+        cloud_form.setVerticalSpacing(14)
 
         self.cloud_type_combo = QComboBox()
         self.cloud_type_combo.addItems(["aliyun", "tencent"])
-        self._add_row(form, 3, "云类型", self.cloud_type_combo)
+        self._add_row(cloud_form, 0, "云类型", self.cloud_type_combo)
 
         self.endpoint_edit = QLineEdit()
-        self._add_row(form, 4, "Endpoint / Region", self.endpoint_edit)
+        self._add_row(cloud_form, 1, "Endpoint / Region", self.endpoint_edit)
 
         self.access_key_id_edit = QLineEdit()
-        self._add_row(form, 5, "AccessKey ID", self.access_key_id_edit)
+        self._add_row(cloud_form, 2, "AccessKey ID", self.access_key_id_edit)
 
         self.access_key_secret_edit = QLineEdit()
         self.access_key_secret_edit.setEchoMode(QLineEdit.Password)
-        self._add_row(form, 6, "AccessKey Secret", self.access_key_secret_edit)
+        self._add_row(cloud_form, 3, "AccessKey Secret", self.access_key_secret_edit)
 
         self.bucket_edit = QLineEdit()
-        self._add_row(form, 7, "Bucket", self.bucket_edit)
+        self._add_row(cloud_form, 4, "Bucket", self.bucket_edit)
 
         self.prefix_edit = QLineEdit()
-        self._add_row(form, 8, "前缀", self.prefix_edit)
+        self._add_row(cloud_form, 5, "前缀", self.prefix_edit)
+
+        cloud_layout.addLayout(cloud_form)
+        left_layout.addWidget(self.cloud_section)
 
         self.dry_run_checkbox = QCheckBox("仅预览，不实际执行")
-        form.addWidget(self.dry_run_checkbox, 9, 1)
+        left_layout.addWidget(self.dry_run_checkbox)
         self.skip_existing_checkbox = QCheckBox("下载时跳过已存在文件")
         self.skip_existing_checkbox.setChecked(True)
-        form.addWidget(self.skip_existing_checkbox, 10, 1)
-        left_layout.addLayout(form)
+        left_layout.addWidget(self.skip_existing_checkbox)
         left_layout.addStretch(1)
 
         actions = QHBoxLayout()
@@ -194,6 +209,7 @@ class PhotoPage(QWidget):
 
     def update_source_mode_state(self) -> None:
         cloud_mode = self.source_mode_combo.currentIndex() == 1
+        self.cloud_section.setVisible(cloud_mode)
         for widget in (
             self.cloud_type_combo,
             self.endpoint_edit,

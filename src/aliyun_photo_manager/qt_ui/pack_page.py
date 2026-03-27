@@ -111,7 +111,7 @@ class PackPage(QWidget):
         form.addWidget(self.custom_password_checkbox, 2, 1)
 
         self.password_edit = QLineEdit()
-        self.password_edit.setEnabled(False)
+        self.password_edit.setReadOnly(True)
         self._add_row(form, 3, "打包密码", self.password_edit)
         left_layout.addLayout(form)
 
@@ -192,7 +192,9 @@ class PackPage(QWidget):
             line_edit.setText(selected)
 
     def update_password_state(self, checked: bool) -> None:
-        self.password_edit.setEnabled(checked)
+        self.password_edit.setReadOnly(not checked)
+        if checked:
+            self.password_edit.clear()
 
     def start_pack(self) -> None:
         source_text = self.source_edit.text().strip()
@@ -216,6 +218,7 @@ class PackPage(QWidget):
         self.run_button.setEnabled(True)
         self.copy_button.setEnabled(True)
         self.last_summary = summary
+        self.password_edit.setText(summary.password)
         self.result_text.setPlainText(
             "\n".join(
                 [
