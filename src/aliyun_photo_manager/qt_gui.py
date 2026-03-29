@@ -276,6 +276,82 @@ class HomePage(QWidget):
         root.addWidget(migrated)
 
 
+class AboutPage(QWidget):
+    def __init__(self, show_experimental: bool) -> None:
+        super().__init__()
+        self.show_experimental = show_experimental
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(16)
+
+        hero = QFrame()
+        hero.setProperty("pageCard", True)
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(24, 22, 24, 22)
+        hero_layout.setSpacing(8)
+
+        title = QLabel("关于")
+        title.setProperty("heroTitle", True)
+        intro = QLabel(f"报名系统工具箱 v{__version__}，用于报名业务中的文件处理、数据处理、数据库辅助和查询工具。")
+        intro.setWordWrap(True)
+        intro.setProperty("heroText", True)
+        hero_layout.addWidget(title)
+        hero_layout.addWidget(intro)
+        root.addWidget(hero)
+
+        capability = QFrame()
+        capability.setProperty("pageCard", True)
+        capability_layout = QVBoxLayout(capability)
+        capability_layout.setContentsMargins(24, 22, 24, 24)
+        capability_layout.setSpacing(14)
+        capability_title = QLabel("主要功能")
+        capability_title.setProperty("sectionTitle", True)
+        capability_layout.addWidget(capability_title)
+
+        features = [
+            "照片下载与分类：支持本地目录和云存储下载后生成模板、按模板分类。",
+            "证件资料筛选：按模板列筛选资料目录，也支持先下载后处理。",
+            "表样转换：将 Word / Excel 表样转换成 HTML。",
+            "数据匹配：按主键和附加匹配列补充来源表字段。",
+            "结果打包：对结果文件或文件夹进行压缩与 AES 加密。",
+            "电话解密：通过 helper 解密电话并回写备用3。",
+            "更新 SQL 生成：按字段映射模板生成标准 UPDATE SQL。",
+            "身份证工具：校验 18 位身份证并批量生成测试号码。",
+        ]
+        if self.show_experimental:
+            features.extend(
+                [
+                    "考场编排：按模板和规则编排考号、考场和座号。",
+                    "SQL 配置执行：按模板参数生成可执行 SQL。",
+                    "项目阶段汇总：汇总多台 SQL Server 上的项目阶段状态。",
+                ]
+            )
+        for feature in features:
+            label = QLabel(feature)
+            label.setWordWrap(True)
+            capability_layout.addWidget(label)
+        root.addWidget(capability)
+
+        update_card = QFrame()
+        update_card.setProperty("pageCard", True)
+        update_layout = QVBoxLayout(update_card)
+        update_layout.setContentsMargins(24, 22, 24, 24)
+        update_layout.setSpacing(14)
+        update_title = QLabel("更新说明")
+        update_title.setProperty("sectionTitle", True)
+        update_layout.addWidget(update_title)
+
+        update_text = QLabel(
+            "Windows 版支持检查更新。首页和关于页右上角保留更新按钮，点击后会检查远端版本并按增量包或整包执行更新。"
+        )
+        update_text.setWordWrap(True)
+        update_layout.addWidget(update_text)
+        root.addWidget(update_card)
+
+
 class QtMainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -465,7 +541,7 @@ class QtMainWindow(QMainWindow):
             elif entry.key == "project_stage":
                 page = ProjectStagePage(self.emit_log)
             elif entry.key == "about":
-                page = PlaceholderPage("关于", "查看当前版本、功能范围和使用说明。")
+                page = AboutPage(self.release_config.show_experimental)
             else:
                 page = PlaceholderPage(entry.label, entry.description)
             self._attach_page_help(entry, page)
