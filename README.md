@@ -1,6 +1,6 @@
 # 报名系统工具箱
 
-当前版本：`v1.3.0`
+当前版本：`v3.0.0`
 
 这是一个桌面工具，主要用于：
 
@@ -398,8 +398,26 @@ cd aliyun_photo_manager
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-python build_windows_app.py
+python build_windows_app.py --channel stable
 ```
+
+### Windows 增量更新发布
+
+```bat
+cd aliyun_photo_manager
+python build_windows_release.py --channel stable --base-url https://your-update-host.example.com/windows --previous-version 1.3.0
+```
+
+说明：
+- `--channel stable` 不下放实验功能，`--channel beta` 下放实验功能
+- 会先构建主程序和 `aliyun_photo_manager_updater.exe`
+- 发布目录输出到 `releases/windows/<版本号>/`
+- 会生成：
+  - `update_manifest.json`
+  - `aliyun_photo_manager_full_<版本号>.zip`
+  - 如果提供 `--previous-version`，还会生成对应增量包
+  - `releases/windows/latest.json`
+- 客户端 Windows 包目录可放置 `update_config.json`，内容可参考 `update_config.example.json`
 
 ## 自定义图标
 

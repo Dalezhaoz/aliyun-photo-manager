@@ -1,3 +1,5 @@
+import json
+import argparse
 from pathlib import Path
 
 import PyInstaller.__main__
@@ -18,9 +20,38 @@ HELPER_PUBLISH_DIR = (
     / "win-x86"
     / "publish"
 )
+UPDATER_EXE = (
+    PROJECT_ROOT
+    / "dist_updater"
+    / "aliyun_photo_manager_updater"
+    / "aliyun_photo_manager_updater.exe"
+)
 
 
-def main() -> None:
+def write_release_config(channel: str) -> Path:
+    config_path = PROJECT_ROOT / "release_config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "channel": channel,
+                "show_experimental": channel == "beta",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build Windows desktop app.")
+    parser.add_argument("--channel", choices=["stable", "beta"], default="stable")
+    return parser.parse_args()
+
+
+def main(channel: str = "stable") -> None:
+    release_config = write_release_config(channel)
     args = [
         str(ENTRY_FILE),
         "--name=aliyun_photo_manager",
@@ -36,11 +67,13 @@ def main() -> None:
         "--hidden-import=aliyun_photo_manager.config",
         "--hidden-import=aliyun_photo_manager.downloader",
         "--hidden-import=aliyun_photo_manager.excel_classifier",
+        "--hidden-import=aliyun_photo_manager.release_config",
         "--hidden-import=PIL",
         "--hidden-import=PIL.Image",
         "--hidden-import=openpyxl",
         "--hidden-import=oss2",
         "--clean",
+        f"--add-data={release_config};.",
     ]
     if ICON_PATH.exists():
         args.append(f"--icon={ICON_PATH}")
@@ -48,8 +81,11 @@ def main() -> None:
         for helper_file in HELPER_PUBLISH_DIR.iterdir():
             if helper_file.is_file():
                 args.append(f"--add-binary={helper_file};.")
+    if UPDATER_EXE.exists():
+        args.append(f"--add-binary={UPDATER_EXE};.")
     PyInstaller.__main__.run(args)
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(channel=args.channel)

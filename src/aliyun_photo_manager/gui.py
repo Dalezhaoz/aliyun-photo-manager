@@ -20,6 +20,7 @@ from .app import (
     run_photo_download_and_template,
 )
 from . import __version__
+from .release_config import load_release_config
 from .certificate_filter import (
     CertificateFilterOptions,
     CertificateFilterSummary,
@@ -312,6 +313,7 @@ class App:
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
+        self.release_config = load_release_config()
         self.root.title(f"报名系统工具箱 v{__version__}")
         self.root.geometry("1080x760")
         self.root.minsize(920, 680)
@@ -325,6 +327,8 @@ class App:
         self.nav_group_indicators: Dict[str, ttk.Label] = {}
         self.nav_group_expanded: Dict[str, bool] = {}
         self.nav_selected_text = ""
+        self.visible_home_shortcut_options = self._build_visible_home_shortcut_options()
+        self.visible_nav_groups = self._build_visible_nav_groups()
 
         self.prefix_var = tk.StringVar()
         self.photo_source_mode_var = tk.StringVar(value="oss")
@@ -1057,7 +1061,7 @@ class App:
         )
         header.pack(fill="x")
 
-        for group_name, items in self.NAV_GROUPS:
+        for group_name, items in self.visible_nav_groups:
             self.nav_group_expanded[group_name] = True
             group_frame = tk.Frame(parent, bg="#F8FBFF")
             group_frame.pack(fill="x", pady=(0, 6))
@@ -1157,11 +1161,28 @@ class App:
                 fg="#173052" if is_selected else "#40546A",
                 font=("Microsoft YaHei UI", 11, "bold") if is_selected else ("Microsoft YaHei UI", 11),
             )
-        for group_name, items in self.NAV_GROUPS:
+        for group_name, items in self.visible_nav_groups:
             if any(item_tab_text == tab_text for _, item_tab_text in items):
                 if not self.nav_group_expanded.get(group_name, True):
                     self.toggle_nav_group(group_name, expanded=True)
                 break
+
+    def _build_visible_nav_groups(self) -> List[tuple[str, list[tuple[str, str]]]]:
+        groups = []
+        for group_name, items in self.NAV_GROUPS:
+            if group_name == "实验功能" and not self.release_config.show_experimental:
+                continue
+            groups.append((group_name, items))
+        return groups
+
+    def _build_visible_home_shortcut_options(self) -> List[str]:
+        if self.release_config.show_experimental:
+            return list(self.HOME_SHORTCUT_OPTIONS)
+        return [
+            item
+            for item in self.HOME_SHORTCUT_OPTIONS
+            if item not in {"考场编排", "SQL 配置执行", "项目阶段汇总"}
+        ]
 
     def reset_split_default(self, pane_name: str) -> None:
         if not self.default_sash_pending.get(pane_name):

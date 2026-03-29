@@ -23,7 +23,7 @@ def build_home_settings_tab(app, notebook: ttk.Notebook) -> None:
         combo = ttk.Combobox(
             cell,
             textvariable=shortcut_var,
-            values=app.HOME_SHORTCUT_OPTIONS,
+            values=app.visible_home_shortcut_options,
             state="readonly",
         )
         combo.grid(row=1, column=0, sticky="ew")

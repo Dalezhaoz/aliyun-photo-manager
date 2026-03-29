@@ -43,6 +43,8 @@ from .qt_ui import (
     TemplateConvertPage,
     UpdateSqlPage,
 )
+from .release_config import load_release_config
+from .update_manager import UpdateError, check_for_updates, download_update_package, launch_windows_updater
 
 
 @dataclass(frozen=True)
@@ -66,7 +68,7 @@ NAV_GROUPS: list[tuple[str, str]] = [
 
 
 NAV_ENTRIES: list[NavEntry] = [
-    NavEntry("home", "首页", "start", "查看收藏入口、最近使用和当前迁移范围。", True),
+    NavEntry("home", "首页", "start", "查看常用入口和功能总览。", True),
     NavEntry("certificate", "证件资料筛选", "files", "按模板筛选资料目录，支持本地目录主流程。", True),
     NavEntry("template", "表样转换", "files", "将 Word / Excel 表样转换成 HTML。", True),
     NavEntry("photo", "照片下载与分类", "files", "支持本地目录和云存储下载后生成模板、按模板分类。", True),
@@ -75,7 +77,7 @@ NAV_ENTRIES: list[NavEntry] = [
     NavEntry("phone", "电话解密", "db", "通过 helper 解密电话并回写备用3。", True),
     NavEntry("update_sql", "更新 SQL 生成", "db", "通过字段映射模板生成标准 UPDATE SQL。", True),
     NavEntry("id_card", "身份证工具", "query", "校验并生成 18 位大陆居民身份证。", True),
-    NavEntry("about", "关于", "settings", "查看 Qt 预览版说明。", True),
+    NavEntry("about", "关于", "settings", "查看版本与工具说明。", True),
     NavEntry("exam", "考场编排", "experimental", "实验功能：按模板和规则生成考号、考场与座号。", True),
     NavEntry("sql_exec", "SQL 配置执行", "experimental", "实验功能：按 SQL 模板参数生成可执行脚本。", True),
     NavEntry("project_stage", "项目阶段汇总", "experimental", "实验功能：汇总多台 SQL Server 上的报名项目阶段状态。", True),
@@ -96,7 +98,7 @@ MANUAL_TEXTS: dict[str, str] = {
     "exam": "适用场景：实验功能，用于按规则编排考号、考场和座号。\n\n操作步骤：\n1. 准备考生名单与编排规则模板。\n2. 按页面提示加载规则并设置考场容量、排序字段等参数。\n3. 先用小样本验证规则，再执行完整编排。\n4. 输出结果后重点检查考号连续性、考场容量和特殊考生分配是否正确。",
     "sql_exec": "适用场景：实验功能，用配置模板批量生成 SQL 语句。\n\n操作步骤：\n1. 选择 SQL 模板和参数文件。\n2. 加载后确认变量名、替换值和输出格式。\n3. 先在测试环境预览生成结果，再复制或导出执行。\n4. 如模板中包含删除、更新语句，请务必先备份再执行。",
     "project_stage": "适用场景：实验功能，汇总多台 SQL Server 上的报名项目阶段状态。\n\n操作步骤：\n1. 填写服务器连接信息，先执行测试连接。\n2. 配置需要查询的项目库、阶段表或汇总规则。\n3. 运行后查看结果区输出，确认每台服务器的阶段状态和统计值。\n4. 如查询慢或失败，优先检查网络、SQL Server 权限和超时设置。",
-    "about": "当前是 Qt 预览版，重点在验证新导航、新布局和功能迁移稳定性。\n\n建议优先测试高频页面：证件资料筛选、电话解密、更新 SQL 生成、数据匹配、结果打包和身份证工具。\n若发现样式、布局或交互问题，可直接按页面逐项反馈。"
+    "about": "当前版本为 3.0.0。\n\n本工具覆盖照片下载与分类、证件资料筛选、表样转换、数据匹配、结果打包、电话解密、更新 SQL 生成、身份证工具，以及实验功能页。\n若发现样式、布局或交互问题，可直接按页面逐项反馈。"
 }
 
 
@@ -207,15 +209,17 @@ class PlaceholderPage(QWidget):
 
         body = QPlainTextEdit()
         body.setReadOnly(True)
-        body.setPlainText("这个功能在 Qt 版主框架里已经预留入口，后续会按优先级逐步迁移。")
+        body.setPlainText("这个功能当前使用通用占位页展示，后续会继续补齐交互细节和页面说明。")
         info_layout.addWidget(body)
         root.addWidget(info)
 
 
 class HomePage(QWidget):
-    def __init__(self, open_callback) -> None:
+    def __init__(self, open_callback, visible_entries: list[NavEntry], show_experimental: bool) -> None:
         super().__init__()
         self.open_callback = open_callback
+        self.visible_entries = visible_entries
+        self.show_experimental = show_experimental
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -231,7 +235,7 @@ class HomePage(QWidget):
 
         title = QLabel("报名系统工具箱")
         title.setProperty("heroTitle", True)
-        intro = QLabel("Qt 预览版先迁正式功能，实验功能继续保留占位。左侧支持分组、搜索和常用功能。")
+        intro = QLabel("左侧支持分组、搜索和常用功能，右侧按页面展开具体业务操作。")
         intro.setWordWrap(True)
         intro.setProperty("heroText", True)
         hero_layout.addWidget(title)
@@ -244,12 +248,18 @@ class HomePage(QWidget):
         migrated_layout.setContentsMargins(24, 22, 24, 24)
         migrated_layout.setSpacing(14)
 
-        section = QLabel("当前已迁移页面")
+        section = QLabel("功能入口")
         section.setProperty("sectionTitle", True)
         migrated_layout.addWidget(section)
 
-        for key in ("photo", "certificate", "template", "match", "pack", "phone", "update_sql", "id_card", "exam", "sql_exec", "project_stage"):
-            entry = next(item for item in NAV_ENTRIES if item.key == key)
+        preferred_keys = ["photo", "certificate", "template", "match", "pack", "phone", "update_sql", "id_card"]
+        if self.show_experimental:
+            preferred_keys.extend(["exam", "sql_exec", "project_stage"])
+        visible_map = {entry.key: entry for entry in self.visible_entries}
+        for key in preferred_keys:
+            entry = visible_map.get(key)
+            if entry is None:
+                continue
             row = QWidget()
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(0, 0, 0, 0)
@@ -269,7 +279,8 @@ class HomePage(QWidget):
 class QtMainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle(f"报名系统工具箱 Qt 预览版 v{__version__}")
+        self.release_config = load_release_config()
+        self.setWindowTitle(f"报名系统工具箱 v{__version__}")
         self.resize(1440, 920)
         self.setMinimumSize(1180, 760)
 
@@ -279,7 +290,13 @@ class QtMainWindow(QMainWindow):
         self.log_bridge = LogBridge()
         self.log_bridge.message.connect(self.append_log)
 
-        self.entries_by_key = {entry.key: entry for entry in NAV_ENTRIES}
+        self.visible_nav_entries = [
+            entry for entry in NAV_ENTRIES if self.release_config.show_experimental or entry.group != "experimental"
+        ]
+        self.visible_nav_groups = [
+            group for group in NAV_GROUPS if self.release_config.show_experimental or group[0] != "experimental"
+        ]
+        self.entries_by_key = {entry.key: entry for entry in self.visible_nav_entries}
         self.favorites: list[str] = list(DEFAULT_FAVORITES)
         self.page_indexes: dict[str, int] = {}
         self.tree_items_by_key: dict[str, QTreeWidgetItem] = {}
@@ -321,7 +338,7 @@ class QtMainWindow(QMainWindow):
         title_block.setSpacing(2)
         self.sidebar_app_title = QLabel("报名系统工具箱")
         self.sidebar_app_title.setProperty("appTitle", True)
-        self.sidebar_app_subtitle = QLabel(f"Qt 预览版 v{__version__}")
+        self.sidebar_app_subtitle = QLabel(f"v{__version__}")
         self.sidebar_app_subtitle.setProperty("appSubtitle", True)
         title_block.addWidget(self.sidebar_app_title)
         title_block.addWidget(self.sidebar_app_subtitle)
@@ -386,6 +403,11 @@ class QtMainWindow(QMainWindow):
         container_layout = QVBoxLayout(self.content_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(12)
+        self.header_update_button = QPushButton("更新", self.content_container)
+        self.header_update_button.setObjectName("HelpButton")
+        self.header_update_button.setCursor(Qt.PointingHandCursor)
+        self.header_update_button.setFixedSize(72, 32)
+        self.header_update_button.clicked.connect(self.run_update_check)
         self.header_help_button = QPushButton("说明", self.content_container)
         self.header_help_button.setObjectName("HelpButton")
         self.header_help_button.setCursor(Qt.PointingHandCursor)
@@ -397,6 +419,7 @@ class QtMainWindow(QMainWindow):
         self.header_star_button.setFixedSize(28, 28)
         self.stack = QStackedWidget()
         container_layout.addWidget(self.stack)
+        self.header_update_button.raise_()
         self.header_help_button.raise_()
         self.header_star_button.raise_()
         content_layout.addWidget(self.content_container, 1)
@@ -417,9 +440,9 @@ class QtMainWindow(QMainWindow):
         self.open_entry("home")
 
     def _build_pages(self) -> None:
-        for entry in NAV_ENTRIES:
+        for entry in self.visible_nav_entries:
             if entry.key == "home":
-                page = HomePage(self.open_entry)
+                page = HomePage(self.open_entry, self.visible_nav_entries, self.release_config.show_experimental)
             elif entry.key == "photo":
                 page = PhotoPage(self.emit_log)
             elif entry.key == "certificate":
@@ -443,7 +466,7 @@ class QtMainWindow(QMainWindow):
             elif entry.key == "project_stage":
                 page = ProjectStagePage(self.emit_log)
             elif entry.key == "about":
-                page = PlaceholderPage("关于 Qt 预览版", "当前重点是先把新导航和高频页面做稳，再逐步迁移其他业务页。")
+                page = PlaceholderPage("关于", "查看当前版本、功能范围和使用说明。")
             else:
                 page = PlaceholderPage(entry.label, entry.description)
             self._attach_page_help(entry, page)
@@ -458,14 +481,14 @@ class QtMainWindow(QMainWindow):
         self.tree_items_by_key.clear()
         group_nodes: dict[str, QTreeWidgetItem] = {}
 
-        for group_key, group_label in NAV_GROUPS:
+        for group_key, group_label in self.visible_nav_groups:
             node = QTreeWidgetItem([group_label])
             node.setData(0, Qt.UserRole, ("group", group_key))
             node.setExpanded(group_key in {"start", "files", "db"})
             group_nodes[group_key] = node
             self.nav_tree.addTopLevelItem(node)
 
-        for entry in NAV_ENTRIES:
+        for entry in self.visible_nav_entries:
             item = QTreeWidgetItem([entry.label])
             item.setData(0, Qt.UserRole, ("entry", entry.key))
             if not entry.migrated:
@@ -475,6 +498,10 @@ class QtMainWindow(QMainWindow):
 
     def _build_menu(self) -> None:
         menu = self.menuBar().addMenu("工具")
+        check_update = QAction("检查更新", self)
+        check_update.triggered.connect(self.run_update_check)
+        menu.addAction(check_update)
+
         open_project = QAction("打开项目目录", self)
         open_project.triggered.connect(
             lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path.cwd())))
@@ -484,6 +511,46 @@ class QtMainWindow(QMainWindow):
         about_action = QAction("关于", self)
         about_action.triggered.connect(lambda: self.open_entry("about"))
         menu.addAction(about_action)
+
+    def run_update_check(self) -> None:
+        if sys.platform != "win32":
+            QMessageBox.information(self, "检查更新", "增量更新目前只支持 Windows。")
+            return
+        try:
+            result = check_for_updates()
+        except UpdateError as exc:
+            QMessageBox.warning(self, "检查更新失败", str(exc))
+            return
+
+        if not result.has_update or result.package is None:
+            QMessageBox.information(
+                self,
+                "检查更新",
+                f"当前已是最新版本：{result.current_version}",
+            )
+            return
+
+        package = result.package
+        package_label = "增量包" if package.package_type == "patch" else "整包"
+        message = (
+            f"发现新版本：{result.latest_version}\n"
+            f"当前版本：{result.current_version}\n"
+            f"更新方式：{package_label}\n\n"
+            "是否立即下载并应用更新？"
+        )
+        answer = QMessageBox.question(self, "发现新版本", message)
+        if answer != QMessageBox.Yes:
+            return
+
+        try:
+            package_path = download_update_package(package)
+            launch_windows_updater(package_path)
+        except UpdateError as exc:
+            QMessageBox.critical(self, "更新失败", str(exc))
+            return
+
+        QMessageBox.information(self, "开始更新", "更新包已下载，程序退出后会自动替换文件并重新启动。")
+        QApplication.instance().quit()
 
     def _wrap_page(self, page: QWidget) -> QScrollArea:
         scroll = QScrollArea()
@@ -508,6 +575,8 @@ class QtMainWindow(QMainWindow):
             help_x = x - self.header_help_button.width() - 10
             help_y = y - 2
             self.header_help_button.move(max(0, help_x), max(0, help_y))
+            update_x = help_x - self.header_update_button.width() - 10
+            self.header_update_button.move(max(0, update_x), max(0, help_y))
         if hasattr(self, "central_panel"):
             self.sidebar_overlay_button.move(18, 28)
 
@@ -536,6 +605,7 @@ class QtMainWindow(QMainWindow):
         self.header_star_button.setChecked(is_favorite)
         self.header_star_button.setEnabled(key not in {"home", "about"})
         self.header_help_button.setVisible(key not in {"home"})
+        self.header_update_button.setVisible(True)
         self.header_star_button.update()
         section = self.page_help_sections.get(key)
         self.header_help_button.setText("收起" if section is not None and section.isVisible() else "说明")
@@ -612,7 +682,7 @@ class QtMainWindow(QMainWindow):
         text.setProperty("heroText", True)
         banner_layout.addWidget(title)
         banner_layout.addWidget(text)
-        layout.insertWidget(1, banner)
+        layout.insertWidget(2, banner)
         self.page_help_sections[entry.key] = banner
 
     def collapse_navigation(self) -> None:
