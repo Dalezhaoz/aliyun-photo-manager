@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QUrl, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -408,11 +408,6 @@ class QtMainWindow(QMainWindow):
         self.header_update_button.setCursor(Qt.PointingHandCursor)
         self.header_update_button.setFixedSize(72, 32)
         self.header_update_button.clicked.connect(self.run_update_check)
-        self.header_help_button = QPushButton("说明", self.content_container)
-        self.header_help_button.setObjectName("HelpButton")
-        self.header_help_button.setCursor(Qt.PointingHandCursor)
-        self.header_help_button.setFixedSize(72, 32)
-        self.header_help_button.clicked.connect(self.show_current_help)
         self.header_star_button = PaintedIconButton("star", self.content_container)
         self.header_star_button.setObjectName("StarButton")
         self.header_star_button.clicked.connect(self.toggle_current_favorite)
@@ -420,7 +415,6 @@ class QtMainWindow(QMainWindow):
         self.stack = QStackedWidget()
         container_layout.addWidget(self.stack)
         self.header_update_button.raise_()
-        self.header_help_button.raise_()
         self.header_star_button.raise_()
         content_layout.addWidget(self.content_container, 1)
 
@@ -438,6 +432,11 @@ class QtMainWindow(QMainWindow):
         self._apply_styles()
 
         self.open_entry("home")
+        QTimer.singleShot(0, self._position_overlay_buttons)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, self._position_overlay_buttons)
 
     def _build_pages(self) -> None:
         for entry in self.visible_nav_entries:
@@ -569,14 +568,32 @@ class QtMainWindow(QMainWindow):
 
     def _position_overlay_buttons(self) -> None:
         if hasattr(self, "content_container"):
-            x = self.content_container.width() - self.header_star_button.width() - 16
-            y = 18
-            self.header_star_button.move(max(0, x), max(0, y))
-            help_x = x - self.header_help_button.width() - 10
-            help_y = y - 2
-            self.header_help_button.move(max(0, help_x), max(0, help_y))
-            update_x = help_x - self.header_update_button.width() - 10
-            self.header_update_button.move(max(0, update_x), max(0, help_y))
+            anchor_right = self.content_container.width() - 16
+            anchor_y = 18
+
+            current_scroll = self.stack.currentWidget()
+            if current_scroll is not None:
+                host = current_scroll.widget()
+                if host is not None and host.layout() is not None and host.layout().count() > 0:
+                    page = host.layout().itemAt(0).widget()
+                    if page is not None and page.layout() is not None and page.layout().count() > 0:
+                        hero = page.layout().itemAt(0).widget()
+                        if hero is not None:
+                            hero_top_right = hero.mapTo(self.content_container, hero.rect().topRight())
+                            anchor_right = hero_top_right.x() - 18
+                            anchor_y = hero_top_right.y() + 18
+
+            right = anchor_right
+            y = anchor_y
+
+            if self.header_star_button.isVisible():
+                right -= self.header_star_button.width()
+                self.header_star_button.move(max(0, right), max(0, y))
+                right -= 10
+
+            if self.header_update_button.isVisible():
+                right -= self.header_update_button.width()
+                self.header_update_button.move(max(0, right), max(0, y - 2))
         if hasattr(self, "central_panel"):
             self.sidebar_overlay_button.move(18, 28)
 
@@ -604,11 +621,8 @@ class QtMainWindow(QMainWindow):
         is_favorite = key in self.favorites
         self.header_star_button.setChecked(is_favorite)
         self.header_star_button.setEnabled(key not in {"home", "about"})
-        self.header_help_button.setVisible(key not in {"home"})
-        self.header_update_button.setVisible(True)
+        self.header_update_button.setVisible(key in {"home", "about"})
         self.header_star_button.update()
-        section = self.page_help_sections.get(key)
-        self.header_help_button.setText("收起" if section is not None and section.isVisible() else "说明")
 
     def open_entry(self, key: str) -> None:
         index = self.page_indexes.get(key)
@@ -654,21 +668,20 @@ class QtMainWindow(QMainWindow):
         self._refresh_favorites()
         self._update_header_state(current_key)
 
-    def show_current_help(self) -> None:
-        current_index = self.stack.currentIndex()
-        current_key = next((key for key, index in self.page_indexes.items() if index == current_index), None)
-        if current_key is None:
-            return
-        section = self.page_help_sections.get(current_key)
-        if section is None:
-            return
-        section.setVisible(not section.isVisible())
-        self.header_help_button.setText("收起" if section.isVisible() else "说明")
-
     def _attach_page_help(self, entry: NavEntry, page: QWidget) -> None:
         layout = page.layout()
         if layout is None:
             return
+        hero_title = None
+        hero = None
+        if layout.count() > 0:
+            hero = layout.itemAt(0).widget()
+        if hero is not None and hero.layout() is not None:
+            for index in range(hero.layout().count()):
+                widget = hero.layout().itemAt(index).widget()
+                if isinstance(widget, QLabel) and bool(widget.property("heroTitle")):
+                    hero_title = widget
+                    break
         banner = QFrame()
         banner.setProperty("pageCard", True)
         banner.hide()
@@ -682,8 +695,19 @@ class QtMainWindow(QMainWindow):
         text.setProperty("heroText", True)
         banner_layout.addWidget(title)
         banner_layout.addWidget(text)
-        layout.insertWidget(2, banner)
+        layout.insertWidget(1, banner)
         self.page_help_sections[entry.key] = banner
+        if hero_title is not None:
+            hero_title.setCursor(Qt.PointingHandCursor)
+            hero_title.setToolTip("点击查看操作手册")
+            key = entry.key
+            hero_title.mousePressEvent = lambda _event, target=key: self._toggle_help_for_key(target)
+
+    def _toggle_help_for_key(self, key: str) -> None:
+        section = self.page_help_sections.get(key)
+        if section is None:
+            return
+        section.setVisible(not section.isVisible())
 
     def collapse_navigation(self) -> None:
         for index in range(self.nav_tree.topLevelItemCount()):
