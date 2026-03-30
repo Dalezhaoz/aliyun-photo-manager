@@ -30,6 +30,7 @@ from ..certificate_filter import (
 )
 from ..config import OssConfig, validate_oss_config
 from ..downloader import DownloadResult, download_objects, list_browser_entries, list_buckets
+from .common import AppComboBox
 
 
 class WorkerSignals(QObject):
@@ -114,7 +115,7 @@ class CertificatePage(QWidget):
         form.setColumnStretch(1, 1)
         row_index = 0
 
-        self.source_mode_combo = QComboBox()
+        self.source_mode_combo = AppComboBox()
         self.source_mode_combo.addItems(["本地目录", "云存储下载后处理"])
         self.source_mode_combo.currentIndexChanged.connect(self.update_source_mode_state)
         self._add_form_row(form, row_index, "数据来源", self.source_mode_combo)
@@ -125,7 +126,7 @@ class CertificatePage(QWidget):
         self._add_form_row(form, row_index, "人员模板", template_row)
         row_index += 1
 
-        self.match_combo = QComboBox()
+        self.match_combo = AppComboBox()
         self.match_combo.setEditable(False)
         load_headers_btn = QPushButton("加载模板列")
         load_headers_btn.clicked.connect(self.load_headers)
@@ -147,7 +148,7 @@ class CertificatePage(QWidget):
         self._add_form_row(form, row_index, "输出目录", output_row)
         row_index += 1
 
-        self.mode_combo = QComboBox()
+        self.mode_combo = AppComboBox()
         self.mode_combo.addItems(["复制整个人员文件夹", "只复制关键词文件"])
         self.mode_combo.currentIndexChanged.connect(self.update_keyword_state)
         self._add_form_row(form, row_index, "筛选模式", self.mode_combo)
@@ -157,7 +158,7 @@ class CertificatePage(QWidget):
         self._add_form_row(form, row_index, "文件关键词", self.keyword_edit)
         row_index += 1
 
-        self.folder_name_combo = QComboBox()
+        self.folder_name_combo = AppComboBox()
         self.folder_name_combo.setEditable(False)
         self.folder_name_combo.setEnabled(False)
         self._add_form_row(form, row_index, "名称列", self.folder_name_combo)
@@ -177,7 +178,7 @@ class CertificatePage(QWidget):
         cloud_form.setHorizontalSpacing(14)
         cloud_form.setVerticalSpacing(14)
 
-        self.cloud_type_combo = QComboBox()
+        self.cloud_type_combo = AppComboBox()
         self.cloud_type_combo.addItems(["aliyun", "tencent"])
         self._add_form_row(cloud_form, 0, "云类型", self.cloud_type_combo)
 
@@ -196,7 +197,7 @@ class CertificatePage(QWidget):
         bucket_layout = QHBoxLayout(bucket_row)
         bucket_layout.setContentsMargins(0, 0, 0, 0)
         bucket_layout.setSpacing(10)
-        self.bucket_combo = QComboBox()
+        self.bucket_combo = AppComboBox()
         self.bucket_combo.setEditable(False)
         self.bucket_combo.currentTextChanged.connect(self.on_bucket_changed)
         bucket_layout.addWidget(self.bucket_combo, 1)
@@ -223,7 +224,7 @@ class CertificatePage(QWidget):
         browser_layout = QHBoxLayout(browser_row)
         browser_layout.setContentsMargins(0, 0, 0, 0)
         browser_layout.setSpacing(10)
-        self.browser_combo = QComboBox()
+        self.browser_combo = AppComboBox()
         self.browser_combo.setEditable(False)
         browser_layout.addWidget(self.browser_combo, 1)
         self.enter_folder_button = QPushButton("进入目录")

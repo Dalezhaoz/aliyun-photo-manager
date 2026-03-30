@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from ..app import RunOptions, WorkflowSummary, run_photo_classification_only, run_photo_download_and_template
 from ..config import OssConfig, validate_oss_config
+from .common import AppComboBox
 
 
 class WorkerSignals(QObject):
@@ -93,7 +94,7 @@ class PhotoPage(QWidget):
         form.setHorizontalSpacing(14)
         form.setVerticalSpacing(14)
 
-        self.source_mode_combo = QComboBox()
+        self.source_mode_combo = AppComboBox()
         self.source_mode_combo.addItems(["本地目录", "云存储下载后处理"])
         self.source_mode_combo.currentIndexChanged.connect(self.update_source_mode_state)
         self._add_row(form, 0, "数据来源", self.source_mode_combo)
@@ -117,7 +118,7 @@ class PhotoPage(QWidget):
         cloud_form.setHorizontalSpacing(14)
         cloud_form.setVerticalSpacing(14)
 
-        self.cloud_type_combo = QComboBox()
+        self.cloud_type_combo = AppComboBox()
         self.cloud_type_combo.addItems(["aliyun", "tencent"])
         self._add_row(cloud_form, 0, "云类型", self.cloud_type_combo)
 

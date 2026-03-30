@@ -29,6 +29,7 @@ from ..exam_arranger import (
     export_exam_templates,
     run_exam_arrangement,
 )
+from .common import AppComboBox
 
 
 class WorkerSignals(QObject):
@@ -108,7 +109,7 @@ class ExamPage(QWidget):
         self._add_row(form, 6, "座号位数", self.seat_digits_edit)
         self.serial_digits_edit = QLineEdit("3")
         self._add_row(form, 7, "流水号位数", self.serial_digits_edit)
-        self.sort_mode_combo = QComboBox()
+        self.sort_mode_combo = AppComboBox()
         self.sort_mode_combo.addItem("按原顺序", "original")
         self.sort_mode_combo.addItem("随机打乱", "random")
         self.sort_mode_combo.setCurrentIndex(1)
@@ -119,7 +120,7 @@ class ExamPage(QWidget):
         rule_title.setProperty("sectionTitle", True)
         left_layout.addWidget(rule_title)
         rule_row = QHBoxLayout()
-        self.rule_type_combo = QComboBox()
+        self.rule_type_combo = AppComboBox()
         self.rule_type_combo.addItems(["考点", "考场", "座号", "流水号", "岗位编码", "科目号", "自定义"])
         self.rule_type_combo.currentTextChanged.connect(self.update_rule_custom_state)
         self.rule_custom_edit = QLineEdit()

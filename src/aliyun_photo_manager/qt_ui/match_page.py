@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..data_matcher import ColumnMapping, DataMatchOptions, DataMatchSummary, list_headers, run_data_match
+from .common import AppComboBox
 
 
 class WorkerSignals(QObject):
@@ -108,9 +109,9 @@ class MatchPage(QWidget):
         header_layout.addStretch(1)
         self._add_row(form, 3, "", header_action)
 
-        self.target_key_combo = QComboBox()
+        self.target_key_combo = AppComboBox()
         self._add_row(form, 4, "目标表匹配列", self.target_key_combo)
-        self.source_key_combo = QComboBox()
+        self.source_key_combo = AppComboBox()
         self._add_row(form, 5, "来源表匹配列", self.source_key_combo)
         left_layout.addLayout(form)
 
@@ -118,9 +119,9 @@ class MatchPage(QWidget):
         extra_title.setProperty("sectionTitle", True)
         left_layout.addWidget(extra_title)
         extra_editor = QHBoxLayout()
-        self.extra_target_combo = QComboBox()
+        self.extra_target_combo = AppComboBox()
         self.extra_target_combo.setPlaceholderText("目标表列")
-        self.extra_source_combo = QComboBox()
+        self.extra_source_combo = AppComboBox()
         self.extra_source_combo.setPlaceholderText("来源表列")
         add_extra = QPushButton("添加映射")
         add_extra.clicked.connect(self.add_extra_mapping)
@@ -144,7 +145,7 @@ class MatchPage(QWidget):
         transfer_editor = QHBoxLayout()
         self.transfer_name_edit = QLineEdit()
         self.transfer_name_edit.setPlaceholderText("结果列名")
-        self.transfer_source_combo = QComboBox()
+        self.transfer_source_combo = AppComboBox()
         self.transfer_source_combo.setPlaceholderText("来源表列")
         add_transfer = QPushButton("添加补充列")
         add_transfer.clicked.connect(self.add_transfer_mapping)

@@ -35,6 +35,7 @@ from ..project_stage_report import (
     query_project_stages,
     summary_from_dict,
 )
+from .common import AppComboBox
 
 
 class WorkerSignals(QObject):
@@ -144,7 +145,7 @@ class ProjectStagePage(QWidget):
         filters = QGridLayout()
         filters.setHorizontalSpacing(14)
         filters.setVerticalSpacing(14)
-        self.status_filter_combo = QComboBox()
+        self.status_filter_combo = AppComboBox()
         self.status_filter_combo.addItems(["正在进行 + 即将开始", "全部", "只看正在进行", "只看即将开始"])
         self._add_row(filters, 0, "状态", self.status_filter_combo)
         self.stage_keyword_edit = QLineEdit()

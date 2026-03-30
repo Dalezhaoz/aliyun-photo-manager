@@ -30,6 +30,7 @@ from ..id_card_tools import (
     resolve_region_code,
     validate_id_card,
 )
+from .common import AppComboBox
 
 
 class IdCardPage(QWidget):
@@ -95,12 +96,12 @@ class IdCardPage(QWidget):
         province_layout = QHBoxLayout(province_row)
         province_layout.setContentsMargins(0, 0, 0, 0)
         province_layout.setSpacing(10)
-        self.province_combo = QComboBox()
+        self.province_combo = AppComboBox()
         self.province_combo.addItems(list_provinces())
         self.province_combo.currentTextChanged.connect(self.update_city_values)
-        self.city_combo = QComboBox()
+        self.city_combo = AppComboBox()
         self.city_combo.currentTextChanged.connect(self.update_county_values)
-        self.county_combo = QComboBox()
+        self.county_combo = AppComboBox()
         self.county_combo.currentTextChanged.connect(self.update_region_hint)
         province_layout.addWidget(self.province_combo, 1)
         province_layout.addWidget(self.city_combo, 1)

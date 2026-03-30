@@ -25,6 +25,7 @@ from ..update_sql_generator import (
     load_update_field_mappings,
     render_update_sql,
 )
+from .common import AppComboBox
 
 
 class UpdateSqlPage(QWidget):
@@ -96,9 +97,9 @@ class UpdateSqlPage(QWidget):
         self.source_table_edit = QLineEdit()
         self._add_row(form, 3, "临时表名称", self.source_table_edit)
 
-        self.target_key_combo = QComboBox()
+        self.target_key_combo = AppComboBox()
         self._add_row(form, 4, "考生表关联字段", self.target_key_combo)
-        self.source_key_combo = QComboBox()
+        self.source_key_combo = AppComboBox()
         self._add_row(form, 5, "临时表关联字段", self.source_key_combo)
 
         self.ignore_empty_checkbox = QCheckBox("忽略空值，不覆盖正式表")

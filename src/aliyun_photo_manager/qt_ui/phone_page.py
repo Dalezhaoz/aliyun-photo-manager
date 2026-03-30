@@ -27,6 +27,7 @@ from ..phone_decrypt import (
     load_filter_id_cards,
     run_phone_decrypt,
 )
+from .common import AppComboBox
 
 
 class WorkerSignals(QObject):
