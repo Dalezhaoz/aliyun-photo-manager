@@ -18,6 +18,7 @@ if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
 from aliyun_photo_manager import __version__
+from aliyun_photo_manager.release_config import load_release_config
 
 APP_DIR = PROJECT_ROOT / "dist_qt" / "aliyun_photo_manager_qt"
 UPDATER_EXE = (
@@ -29,6 +30,7 @@ UPDATER_EXE = (
 RELEASES_DIR = PROJECT_ROOT / "releases" / "windows"
 MANIFEST_NAME = "update_manifest.json"
 UPDATE_CONFIG_NAME = "update_config.json"
+DEPLOY_BUNDLE_NAME = "aliyun_photo_manager_qt_update_site_{version}.zip"
 
 
 def parse_args() -> argparse.Namespace:
@@ -146,6 +148,53 @@ def write_update_config(app_dir: Path, base_url: str) -> None:
     )
 
 
+def detect_previous_version(current_version: str) -> str:
+    latest_path = RELEASES_DIR / "latest.json"
+    if not latest_path.exists():
+        return ""
+    try:
+        payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    latest_version = str(payload.get("latest_version", "")).strip()
+    if not latest_version or latest_version == current_version:
+        return ""
+    return latest_version
+
+
+def build_deploy_bundle(version: str, release_dir: Path) -> Path | None:
+    latest_json_path = RELEASES_DIR / "latest.json"
+    if not latest_json_path.exists():
+        return None
+
+    deploy_root = release_dir / "deploy"
+    if deploy_root.exists():
+        shutil.rmtree(deploy_root)
+    deploy_root.mkdir(parents=True, exist_ok=True)
+
+    deploy_version_dir = deploy_root / version
+    deploy_version_dir.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy2(latest_json_path, deploy_root / "latest.json")
+    for item in release_dir.iterdir():
+        if item.name == "deploy":
+            continue
+        if item.is_file():
+            shutil.copy2(item, deploy_version_dir / item.name)
+
+    bundle_path = release_dir / DEPLOY_BUNDLE_NAME.format(version=version)
+    if bundle_path.exists():
+        bundle_path.unlink()
+    with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.write(deploy_root / "latest.json", "latest.json")
+        for file_path in sorted(deploy_version_dir.rglob("*")):
+            if not file_path.is_file():
+                continue
+            relative_path = file_path.relative_to(deploy_root).as_posix()
+            archive.write(file_path, relative_path)
+    return bundle_path
+
+
 def ensure_updater_bundled(app_dir: Path) -> None:
     if not UPDATER_EXE.exists():
         raise RuntimeError(f"Updater not found: {UPDATER_EXE}")
@@ -155,6 +204,8 @@ def ensure_updater_bundled(app_dir: Path) -> None:
 def main() -> None:
     args = parse_args()
     version = __version__
+    release_config = load_release_config()
+    base_url = args.base_url.strip() or release_config.update_base_url.strip()
 
     if not args.skip_build:
         build_updater_main()
@@ -164,7 +215,7 @@ def main() -> None:
         raise RuntimeError(f"Qt app directory not found: {APP_DIR}")
 
     ensure_updater_bundled(APP_DIR)
-    write_update_config(APP_DIR, args.base_url.strip())
+    write_update_config(APP_DIR, base_url)
 
     manifest = build_manifest(APP_DIR, version)
     manifest["channel"] = args.channel
@@ -178,7 +229,7 @@ def main() -> None:
     write_package(full_zip, APP_DIR, manifest)
 
     patch_manifest = None
-    previous_version = args.previous_version.strip()
+    previous_version = args.previous_version.strip() or detect_previous_version(version)
     if previous_version:
         previous_manifest = load_previous_manifest(previous_version)
         if previous_manifest:
@@ -186,8 +237,11 @@ def main() -> None:
             patch_zip = release_dir / f"aliyun_photo_manager_qt_patch_{previous_version}_to_{version}.zip"
             write_package(patch_zip, APP_DIR, patch_manifest)
 
-    write_latest_metadata(version, manifest, patch_manifest, args.base_url.strip())
+    write_latest_metadata(version, manifest, patch_manifest, base_url)
+    deploy_bundle = build_deploy_bundle(version, release_dir)
     print(f"Qt release generated at: {release_dir}")
+    if deploy_bundle is not None:
+        print(f"Upload-ready bundle: {deploy_bundle}")
 
 
 if __name__ == "__main__":

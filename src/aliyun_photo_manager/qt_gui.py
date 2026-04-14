@@ -13,8 +13,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -69,9 +67,9 @@ NAV_GROUPS: list[tuple[str, str]] = [
 
 NAV_ENTRIES: list[NavEntry] = [
     NavEntry("home", "首页", "start", "查看常用入口和功能总览。", True),
-    NavEntry("certificate", "证件资料筛选", "files", "按模板筛选资料目录，支持本地目录主流程。", True),
+    NavEntry("certificate", "证件资料筛选", "files", "支持云端按表过滤下载，并按模板动态分层导出。", True),
     NavEntry("template", "表样转换", "files", "将 Word / Excel 表样转换成 HTML。", True),
-    NavEntry("photo", "照片下载与分类", "files", "支持本地目录和云存储下载后生成模板、按模板分类。", True),
+    NavEntry("photo", "照片下载与分类", "files", "支持云端目录选择、按表过滤下载和按模板分类。", True),
     NavEntry("pack", "结果打包", "files", "对任意结果文件或文件夹压缩并 AES 加密。", True),
     NavEntry("match", "数据匹配", "data", "按主键和附加匹配列补充来源表字段。", True),
     NavEntry("phone", "电话解密", "db", "通过 helper 解密电话并回写备用3。", True),
@@ -87,8 +85,8 @@ NAV_ENTRIES: list[NavEntry] = [
 DEFAULT_FAVORITES = ["certificate", "template", "phone"]
 
 MANUAL_TEXTS: dict[str, str] = {
-    "photo": "适用场景：下载考生照片、生成分类模板、按模板批量分类。\n\n操作步骤：\n1. 先选择数据来源，本地目录可直接处理，云存储需先填写云类型、Endpoint/Region、AccessKey 和 Bucket。\n2. 如需按名单处理，先选择人员模板并勾选只处理模板中的人员。\n3. 选择下载目录或已有照片目录，再选择分类输出目录。\n4. 需要从云端下载时，先加载 Bucket 和当前层级，再执行下载。\n5. 点击生成模板后，在 Excel 里填写分类一、分类二、分类三、修改名称等字段。\n6. 回到程序执行按模板分类，结果会输出分类目录和结果清单。",
-    "certificate": "适用场景：从本地或云存储筛选证件资料，只导出指定人员或指定材料。\n\n操作步骤：\n1. 先选择数据来源，本地目录可直接筛选，云存储模式会先下载后筛选。\n2. 选择人员模板并加载模板列，确认匹配列、名称列等关键字段。\n3. 选择证件资料目录和输出目录。\n4. 如需只导出某类材料，切换筛选模式为关键词文件，并填写关键词。\n5. 如需重命名导出目录，可勾选导出后文件夹重命名并选择名称列。\n6. 运行后查看右侧结果和结果清单，确认导出人数、文件数和输出位置。",
+    "photo": "适用场景：从本地目录或云存储批量下载照片，生成模板后再按模板分类。\n\n操作步骤：\n1. 先选择数据来源；云存储模式下填写云类型、Endpoint/Region、AccessKey 和 Bucket。\n2. 如需从云端指定目录下载，先加载 Bucket，再点“加载当前层级”，单击文件夹选中，双击进入子目录。\n3. 选择下载目录和分类输出目录。\n4. 如需只下载名单中的照片，可勾选“云下载时按表过滤”，上传过滤表并选择“前缀列”。\n5. 点击“生成模板”后，在 Excel 中补充分类列、名称等信息。\n6. 回到程序执行按模板分类，结果会输出分类目录和结果清单。",
+    "certificate": "适用场景：从本地或云存储筛选证件资料，只导出指定文件夹或指定材料。\n\n操作步骤：\n1. 先选择数据来源；云存储模式下填写云类型、Endpoint/Region、AccessKey 和 Bucket。\n2. 如需从云端指定目录下载，先加载 Bucket，再点“加载当前层级”，单击文件夹选中，双击进入子目录。\n3. 选择处理模板并加载列，确认匹配列、导出名称列和分层列。\n4. 如需只下载表中的人员目录，可勾选“云下载时按表过滤”，上传过滤表并选择“文件夹名列”。\n5. 如需只导出某类材料，可切换为关键词文件模式并填写关键词；如需改名，可勾选导出后文件夹重命名。\n6. 运行后查看结果和结果清单，确认导出人数、文件数、分层列和输出位置。",
     "template": "适用场景：把 Word、Excel 表样模板转换成 HTML 代码。\n\n操作步骤：\n1. 选择表样文件，支持 doc、docx、xls、xlsx。\n2. 根据模板类型点击 Net 版导出或 Java 版导出。\n3. 程序会在结果区展示 HTML 和占位符内容。\n4. 可直接复制 HTML，后续粘贴到系统模板或页面中使用。\n5. 若模板异常，优先检查原始表样中的合并单元格、图片和特殊格式。",
     "match": "适用场景：用来源表字段补充目标表，替代手工 VLOOKUP / XLOOKUP。\n\n操作步骤：\n1. 选择目标表、来源表和输出文件。\n2. 点击加载表头，确认目标表匹配列与来源表匹配列。\n3. 如存在重复姓名或重复主键，可在附加匹配列里继续增加限制条件。\n4. 在补充列映射里填写结果列名，并选择来源表对应列。\n5. 点击开始匹配，程序会输出匹配结果文件和匹配清单。\n6. 若结果不符合预期，优先检查主键列格式、空值和附加匹配列是否一致。",
     "pack": "适用场景：把照片、证件资料或其他结果目录打包并加密交付。\n\n操作步骤：\n1. 选择待打包对象，可选文件或文件夹。\n2. 选择输出目录。\n3. 如需客户指定密码，勾选手动设置密码并输入密码；否则程序自动生成密码。\n4. 点击一键打包并加密，成功后右侧会显示压缩包路径、密码和历史记录。\n5. 复制密码后发给对方，后续可通过查询历史按文件名、来源名或密码回查。",
@@ -98,7 +96,7 @@ MANUAL_TEXTS: dict[str, str] = {
     "exam": "适用场景：实验功能，用于按规则编排考号、考场和座号。\n\n操作步骤：\n1. 准备考生名单与编排规则模板。\n2. 按页面提示加载规则并设置考场容量、排序字段等参数。\n3. 先用小样本验证规则，再执行完整编排。\n4. 输出结果后重点检查考号连续性、考场容量和特殊考生分配是否正确。",
     "sql_exec": "适用场景：实验功能，用配置模板批量生成 SQL 语句。\n\n操作步骤：\n1. 选择 SQL 模板和参数文件。\n2. 加载后确认变量名、替换值和输出格式。\n3. 先在测试环境预览生成结果，再复制或导出执行。\n4. 如模板中包含删除、更新语句，请务必先备份再执行。",
     "project_stage": "适用场景：实验功能，汇总多台 SQL Server 上的报名项目阶段状态。\n\n操作步骤：\n1. 填写服务器连接信息，先执行测试连接。\n2. 配置需要查询的项目库、阶段表或汇总规则。\n3. 运行后查看结果区输出，确认每台服务器的阶段状态和统计值。\n4. 如查询慢或失败，优先检查网络、SQL Server 权限和超时设置。",
-    "about": "当前版本为 3.0.0。\n\n本工具覆盖照片下载与分类、证件资料筛选、表样转换、数据匹配、结果打包、电话解密、更新 SQL 生成、身份证工具，以及实验功能页。\n若发现样式、布局或交互问题，可直接按页面逐项反馈。"
+    "about": "当前版本以页面标题显示为准。\n\n本工具覆盖照片下载与分类、证件资料筛选、表样转换、数据匹配、结果打包、电话解密、更新 SQL 生成、身份证工具，以及实验功能页。\n本次已支持云端目录选择、云下载按表过滤，以及证件资料按所选列动态分层导出。"
 }
 
 
@@ -276,6 +274,106 @@ class HomePage(QWidget):
         root.addWidget(migrated)
 
 
+class HomeLandingPage(QWidget):
+    def __init__(
+        self,
+        open_callback,
+        entries_by_key: dict[str, NavEntry],
+        favorites: list[str],
+        show_experimental: bool,
+    ) -> None:
+        super().__init__()
+        self.open_callback = open_callback
+        self.entries_by_key = entries_by_key
+        self.favorites = favorites
+        self.show_experimental = show_experimental
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(16)
+
+        hero = QFrame()
+        hero.setProperty("pageCard", True)
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(24, 22, 24, 22)
+        hero_layout.setSpacing(8)
+
+        title = QLabel("报名系统工具箱")
+        title.setProperty("heroTitle", True)
+        intro = QLabel("首页只显示收藏功能和快捷入口，全部功能请从左侧导航按分类查看。")
+        intro.setWordWrap(True)
+        intro.setProperty("heroText", True)
+        hero_layout.addWidget(title)
+        hero_layout.addWidget(intro)
+        root.addWidget(hero)
+
+        favorites_card = QFrame()
+        favorites_card.setProperty("pageCard", True)
+        favorites_layout = QVBoxLayout(favorites_card)
+        favorites_layout.setContentsMargins(24, 22, 24, 24)
+        favorites_layout.setSpacing(14)
+        favorites_title = QLabel("收藏功能")
+        favorites_title.setProperty("sectionTitle", True)
+        favorites_layout.addWidget(favorites_title)
+
+        favorite_entries = [self.entries_by_key[key] for key in self.favorites if key in self.entries_by_key]
+        if favorite_entries:
+            for entry in favorite_entries:
+                favorites_layout.addWidget(self._build_entry_row(entry))
+        else:
+            empty = QLabel("还没有收藏功能，可以在功能页右上角点击星标加入收藏。")
+            empty.setWordWrap(True)
+            empty.setProperty("heroText", True)
+            favorites_layout.addWidget(empty)
+        root.addWidget(favorites_card)
+
+        shortcuts_card = QFrame()
+        shortcuts_card.setProperty("pageCard", True)
+        shortcuts_layout = QVBoxLayout(shortcuts_card)
+        shortcuts_layout.setContentsMargins(24, 22, 24, 24)
+        shortcuts_layout.setSpacing(14)
+        shortcuts_title = QLabel("快捷开始")
+        shortcuts_title.setProperty("sectionTitle", True)
+        shortcuts_layout.addWidget(shortcuts_title)
+
+        shortcut_keys = ["certificate", "template", "phone", "update_sql"]
+        if self.show_experimental:
+            shortcut_keys.append("exam")
+        for key in shortcut_keys:
+            entry = self.entries_by_key.get(key)
+            if entry is not None:
+                shortcuts_layout.addWidget(self._build_entry_row(entry))
+
+        root.addWidget(shortcuts_card)
+
+    def _build_entry_row(self, entry: NavEntry) -> QWidget:
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(12)
+
+        text_block = QVBoxLayout()
+        text_block.setContentsMargins(0, 0, 0, 0)
+        text_block.setSpacing(4)
+
+        title = QLabel(entry.label)
+        title.setProperty("sectionTitle", True)
+        desc = QLabel(entry.description)
+        desc.setWordWrap(True)
+        desc.setProperty("heroText", True)
+        text_block.addWidget(title)
+        text_block.addWidget(desc)
+
+        row_layout.addLayout(text_block, 1)
+        button = QPushButton("打开")
+        button.setFixedWidth(96)
+        button.clicked.connect(lambda _=False, target=entry.key: self.open_callback(target))
+        row_layout.addWidget(button, 0, Qt.AlignVCenter)
+        return row
+
+
 class AboutPage(QWidget):
     def __init__(self, show_experimental: bool) -> None:
         super().__init__()
@@ -355,9 +453,18 @@ class AboutPage(QWidget):
 class QtMainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
+        self._initial_window_placed = False
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowMinMaxButtonsHint
+            | Qt.WindowCloseButtonHint
+        )
         self.release_config = load_release_config()
         self.setWindowTitle(f"报名系统工具箱 v{__version__}")
-        self.resize(1440, 920)
+        self.resize(1220, 760)
+        self.setMinimumSize(1120, 700)
         self.setMinimumSize(1180, 760)
 
         font = QFont("Microsoft YaHei UI", 10)
@@ -381,7 +488,7 @@ class QtMainWindow(QMainWindow):
 
         central = QWidget()
         root_layout = QVBoxLayout(central)
-        root_layout.setContentsMargins(18, 18, 18, 18)
+        root_layout.setContentsMargins(14, 14, 14, 14)
         root_layout.setSpacing(12)
         self.setCentralWidget(central)
         self.central_panel = central
@@ -394,8 +501,8 @@ class QtMainWindow(QMainWindow):
         self.sidebar = QFrame()
         self.sidebar.setObjectName("Sidebar")
         self.sidebar.setProperty("collapsed", False)
-        self.sidebar.setMinimumWidth(280)
-        self.sidebar.setMaximumWidth(340)
+        self.sidebar.setMinimumWidth(230)
+        self.sidebar.setMaximumWidth(280)
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(16, 16, 16, 16)
         sidebar_layout.setSpacing(12)
@@ -444,15 +551,6 @@ class QtMainWindow(QMainWindow):
         self.sidebar_title = QLabel("导航")
         self.sidebar_title.setProperty("sectionTitle", True)
         sidebar_body_layout.addWidget(self.sidebar_title)
-
-        self.fav_title = QLabel("常用功能")
-        self.fav_title.setProperty("sectionTitle", True)
-        sidebar_body_layout.addWidget(self.fav_title)
-        self.favorite_list = QListWidget()
-        self.favorite_list.setObjectName("QuickList")
-        self.favorite_list.setFixedHeight(148)
-        self.favorite_list.itemClicked.connect(self.open_from_quick_list)
-        sidebar_body_layout.addWidget(self.favorite_list)
 
         nav_title_row = QHBoxLayout()
         self.nav_title = QLabel("全部功能")
@@ -503,7 +601,6 @@ class QtMainWindow(QMainWindow):
 
         self._build_navigation_tree()
         self._build_pages()
-        self._refresh_favorites()
         self._build_menu()
         self._apply_styles()
 
@@ -512,12 +609,15 @@ class QtMainWindow(QMainWindow):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        if not self._initial_window_placed:
+            self._ensure_reasonable_window_geometry()
+            self._initial_window_placed = True
         QTimer.singleShot(0, self._position_overlay_buttons)
 
     def _build_pages(self) -> None:
         for entry in self.visible_nav_entries:
             if entry.key == "home":
-                page = HomePage(self.open_entry, self.visible_nav_entries, self.release_config.show_experimental)
+                page = self._create_home_page()
             elif entry.key == "photo":
                 page = PhotoPage(self.emit_log)
             elif entry.key == "certificate":
@@ -547,9 +647,59 @@ class QtMainWindow(QMainWindow):
             self._attach_page_help(entry, page)
             self.page_indexes[entry.key] = self.stack.addWidget(self._wrap_page(page))
 
+    def _create_home_page(self) -> QWidget:
+        return HomeLandingPage(
+            self.open_entry,
+            self.entries_by_key,
+            list(self.favorites),
+            self.release_config.show_experimental,
+        )
+
+    def _replace_home_page(self) -> None:
+        home_index = self.page_indexes.get("home")
+        if home_index is None:
+            return
+        old_widget = self.stack.widget(home_index)
+        new_widget = self._wrap_page(self._create_home_page())
+        self.stack.insertWidget(home_index, new_widget)
+        if old_widget is not None:
+            self.stack.removeWidget(old_widget)
+            old_widget.deleteLater()
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._position_overlay_buttons()
+
+    def _ensure_reasonable_window_geometry(self) -> None:
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is None:
+            return
+
+        available = screen.availableGeometry()
+        frame = self.frameGeometry()
+
+        target_width = min(self.width(), max(available.width() - 40, 900))
+        target_height = min(self.height(), max(available.height() - 40, 600))
+
+        needs_reset = (
+            self.isMaximized()
+            or self.isFullScreen()
+            or frame.width() > available.width()
+            or frame.height() > available.height()
+            or frame.right() < available.left()
+            or frame.left() > available.right()
+            or frame.bottom() < available.top()
+            or frame.top() > available.bottom()
+        )
+
+        if needs_reset:
+            self.showNormal()
+            self.resize(target_width, target_height)
+            frame = self.frameGeometry()
+
+        x = available.left() + max(0, (available.width() - frame.width()) // 2)
+        y = available.top() + max(0, (available.height() - frame.height()) // 2)
+        self.move(x, y)
 
     def _build_navigation_tree(self) -> None:
         self.nav_tree.clear()
@@ -673,16 +823,6 @@ class QtMainWindow(QMainWindow):
         if hasattr(self, "central_panel"):
             self.sidebar_overlay_button.move(18, 28)
 
-    def _refresh_favorites(self) -> None:
-        self.favorite_list.clear()
-        for key in self.favorites:
-            entry = self.entries_by_key.get(key)
-            if entry is None:
-                continue
-            item = QListWidgetItem(entry.label)
-            item.setData(Qt.UserRole, key)
-            self.favorite_list.addItem(item)
-
     def _set_current_tree_item(self, key: str) -> None:
         item = self.tree_items_by_key.get(key)
         if item is None:
@@ -727,11 +867,6 @@ class QtMainWindow(QMainWindow):
         if kind == "group":
             self.nav_tree.clearSelection()
 
-    def open_from_quick_list(self, item: QListWidgetItem) -> None:
-        key = item.data(Qt.UserRole)
-        if key:
-            self.open_entry(key)
-
     def toggle_current_favorite(self) -> None:
         current_index = self.stack.currentIndex()
         current_key = next((key for key, index in self.page_indexes.items() if index == current_index), None)
@@ -741,7 +876,7 @@ class QtMainWindow(QMainWindow):
             self.favorites.remove(current_key)
         else:
             self.favorites.insert(0, current_key)
-        self._refresh_favorites()
+        self._replace_home_page()
         self._update_header_state(current_key)
 
     def _attach_page_help(self, entry: NavEntry, page: QWidget) -> None:
@@ -801,7 +936,6 @@ class QtMainWindow(QMainWindow):
             self.sidebar_app_subtitle.hide()
             self.search_edit.hide()
             self.sidebar_title.hide()
-            self.fav_title.hide()
             self.nav_title.hide()
             self.sidebar_body.hide()
             self.sidebar_toggle_button.hide()
@@ -825,7 +959,6 @@ class QtMainWindow(QMainWindow):
             self.sidebar_app_subtitle.show()
             self.search_edit.show()
             self.sidebar_title.show()
-            self.fav_title.show()
             self.nav_title.show()
             self.sidebar_body.show()
             self.sidebar_overlay_button.hide()
@@ -838,9 +971,9 @@ class QtMainWindow(QMainWindow):
             self.style().unpolish(self.sidebar)
             self.style().polish(self.sidebar)
             self.sidebar_layout.setContentsMargins(16, 16, 16, 16)
-            self.sidebar.setMinimumWidth(280)
-            self.sidebar.setMaximumWidth(340)
-            self.main_splitter.setSizes([300, max(780, self.width() - 300)])
+            self.sidebar.setMinimumWidth(230)
+            self.sidebar.setMaximumWidth(280)
+            self.main_splitter.setSizes([250, max(760, self.width() - 250)])
         self.sidebar.layout().invalidate()
         self.sidebar.layout().activate()
         self._position_overlay_buttons()
@@ -916,7 +1049,7 @@ class QtMainWindow(QMainWindow):
                 background: transparent;
             }
             QLabel[appTitle="true"] {
-                font-size: 26px;
+                font-size: 24px;
                 font-weight: 700;
                 color: #172033;
             }
@@ -926,9 +1059,9 @@ class QtMainWindow(QMainWindow):
             }
             QLabel[formLabel="true"] {
                 color: #314155;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 600;
-                min-width: 112px;
+                min-width: 98px;
             }
             QLabel[sectionTitle="true"] {
                 color: #172033;
@@ -936,18 +1069,18 @@ class QtMainWindow(QMainWindow):
                 font-weight: 700;
             }
             QLabel[heroTitle="true"] {
-                font-size: 22px;
+                font-size: 19px;
                 font-weight: 700;
                 color: #172033;
             }
             QLabel[heroText="true"] {
-                font-size: 12px;
+                font-size: 11px;
                 color: #5B6B7E;
             }
             QPushButton#HelpButton {
                 min-width: 72px;
-                min-height: 32px;
-                padding: 4px 14px;
+                min-height: 30px;
+                padding: 3px 12px;
                 color: #314155;
                 background: #FFFFFF;
                 border: 1px solid #CBD5E1;
@@ -964,19 +1097,19 @@ class QtMainWindow(QMainWindow):
             }
             QLineEdit, QComboBox, QDateEdit, QSpinBox {
                 color: #172033;
-                min-height: 36px;
-                padding: 4px 10px;
+                min-height: 30px;
+                padding: 3px 8px;
                 border: 1px solid #CBD5E1;
-                border-radius: 10px;
+                border-radius: 9px;
                 background: #FFFFFF;
             }
             QComboBox {
-                padding-right: 36px;
+                padding-right: 30px;
             }
             QComboBox::drop-down {
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
-                width: 34px;
+                width: 28px;
                 border: none;
                 background: transparent;
             }
@@ -990,13 +1123,13 @@ class QtMainWindow(QMainWindow):
                 selection-background-color: #DCE8FF;
                 selection-color: #173052;
                 border: 1px solid #CBD5E1;
-                border-radius: 10px;
-                padding: 6px;
+                border-radius: 9px;
+                padding: 4px;
                 outline: none;
             }
             QComboBox QAbstractItemView::item {
-                min-height: 34px;
-                padding: 4px 10px;
+                min-height: 28px;
+                padding: 3px 8px;
                 border-radius: 8px;
             }
             QComboBox QAbstractItemView::item:selected {
@@ -1062,10 +1195,10 @@ class QtMainWindow(QMainWindow):
                 background: #3E7BFA;
             }
             QPushButton {
-                min-height: 36px;
-                padding: 0 14px;
+                min-height: 32px;
+                padding: 0 12px;
                 border: 1px solid #CBD5E1;
-                border-radius: 10px;
+                border-radius: 9px;
                 background: #FFFFFF;
                 color: #1F3147;
                 font-weight: 600;

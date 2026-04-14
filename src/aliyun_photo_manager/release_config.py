@@ -10,6 +10,7 @@ from pathlib import Path
 class ReleaseConfig:
     channel: str = "stable"
     show_experimental: bool = False
+    update_base_url: str = ""
 
 
 def _app_root() -> Path:
@@ -32,4 +33,9 @@ def load_release_config() -> ReleaseConfig:
         return ReleaseConfig()
     channel = str(payload.get("channel", "stable")).strip() or "stable"
     show_experimental = bool(payload.get("show_experimental", channel == "beta"))
-    return ReleaseConfig(channel=channel, show_experimental=show_experimental)
+    update_base_url = str(payload.get("update_base_url", "")).strip()
+    return ReleaseConfig(
+        channel=channel,
+        show_experimental=show_experimental,
+        update_base_url=update_base_url,
+    )

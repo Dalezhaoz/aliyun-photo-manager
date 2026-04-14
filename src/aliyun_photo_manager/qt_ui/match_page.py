@@ -50,8 +50,8 @@ class MatchWorker(QRunnable):
 
 
 class MatchPage(QWidget):
-    LABEL_WIDTH = 132
-    ACTION_WIDTH = 144
+    LABEL_WIDTH = 118
+    ACTION_WIDTH = 116
 
     def __init__(self, log_fn: Callable[[str], None]) -> None:
         super().__init__()

@@ -1,5 +1,5 @@
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event
 from typing import Callable, Dict, List, Optional
@@ -20,6 +20,7 @@ class CertificateFilterOptions:
     rename_folder: bool = False
     folder_name_column: str = ""
     classify_output: bool = False
+    classify_columns: List[str] = field(default_factory=list)
     keyword: str = ""
     dry_run: bool = False
 
@@ -33,6 +34,7 @@ class CertificateFilterSummary:
     rename_folder: bool
     folder_name_column: str
     classify_output: bool
+    classify_columns: List[str]
     keyword: str
     total_rows: int
     matched_people: int
@@ -48,13 +50,20 @@ class CertificateFilterSummary:
 @dataclass
 class CertificateRecord:
     match_value: str
-    category_1: str
-    category_2: str
-    category_3: str
+    classify_values: Dict[str, str]
     output_relative_dir: str
     copied_files: int
     status: str
     note: str
+
+
+@dataclass
+class CertificateTemplateSummary:
+    template_path: Path
+    source_dir: Path
+    people_count: int
+    created: bool
+    dry_run: bool = False
 
 
 def _log(logger: LogFn, message: str) -> None:
@@ -101,6 +110,23 @@ def load_match_values(template_path: Path, match_column: str) -> List[str]:
     for row in rows:
         # 模板下载和筛选都依赖这份名单，先在这里去重，避免重复处理同一个人。
         value = row.get(match_column, "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+    return values
+
+
+def load_column_values(template_path: Path, column_name: str) -> List[str]:
+    rows = _read_template_rows(template_path)
+    headers = list(rows[0].keys()) if rows else list_template_headers(template_path)
+    if column_name not in headers:
+        raise ValueError(f"模板中不存在匹配列：{column_name}")
+
+    values: List[str] = []
+    seen = set()
+    for row in rows:
+        value = row.get(column_name, "").strip()
         if not value or value in seen:
             continue
         seen.add(value)
@@ -160,7 +186,11 @@ def _copy_person_folder(
     return copied_files
 
 
-def _export_certificate_report(output_dir: Path, records: List[CertificateRecord]) -> Path:
+def _export_certificate_report(
+    output_dir: Path,
+    records: List[CertificateRecord],
+    classify_columns: List[str],
+) -> Path:
     Workbook, _ = _load_openpyxl()
     workbook = Workbook()
     worksheet = workbook.active
@@ -168,9 +198,7 @@ def _export_certificate_report(output_dir: Path, records: List[CertificateRecord
     worksheet.append(
         [
             "匹配值",
-            "分类一",
-            "分类二",
-            "分类三",
+            *classify_columns,
             "输出相对目录",
             "复制文件数",
             "状态",
@@ -181,9 +209,7 @@ def _export_certificate_report(output_dir: Path, records: List[CertificateRecord
         worksheet.append(
             [
                 record.match_value,
-                record.category_1,
-                record.category_2,
-                record.category_3,
+                *[record.classify_values.get(column, "") for column in classify_columns],
                 record.output_relative_dir,
                 record.copied_files,
                 record.status,
@@ -194,6 +220,82 @@ def _export_certificate_report(output_dir: Path, records: List[CertificateRecord
     report_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(report_path)
     return report_path
+
+
+def generate_certificate_template(
+    source_dir: Path,
+    output_dir: Path | None = None,
+    dry_run: bool = False,
+    logger: LogFn = None,
+) -> CertificateTemplateSummary:
+    if not source_dir.exists():
+        raise FileNotFoundError(f"证件资料目录不存在：{source_dir}")
+
+    Workbook, load_workbook = _load_openpyxl()
+    template_dir = (output_dir or source_dir).expanduser().resolve()
+    template_dir.mkdir(parents=True, exist_ok=True)
+    template_path = template_dir / "证件资料筛选模板.xlsx"
+
+    people = sorted(path.name for path in source_dir.iterdir() if path.is_dir())
+    existing_rows: Dict[str, Dict[str, str]] = {}
+    existed_before = template_path.exists()
+
+    if existed_before:
+        try:
+            workbook = load_workbook(template_path)
+            worksheet = workbook.worksheets[0]
+            headers = [_normalize_cell(cell.value) for cell in worksheet[1]]
+            for row in worksheet.iter_rows(min_row=2, values_only=True):
+                if not row:
+                    continue
+                item: Dict[str, str] = {}
+                has_value = False
+                for index, header in enumerate(headers):
+                    if not header:
+                        continue
+                    value = _normalize_cell(row[index] if len(row) > index else "")
+                    item[header] = value
+                    if value:
+                        has_value = True
+                match_value = item.get("匹配值", "")
+                if has_value and match_value:
+                    existing_rows[match_value] = item
+        except Exception:
+            existing_rows = {}
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "筛选模板"
+    headers = ["匹配值", "分类一", "分类二", "分类三", "导出后文件夹名称", "备注"]
+    worksheet.append(headers)
+
+    for person in people:
+        existing = existing_rows.get(person, {})
+        worksheet.append(
+            [
+                person,
+                existing.get("分类一", ""),
+                existing.get("分类二", ""),
+                existing.get("分类三", ""),
+                existing.get("导出后文件夹名称", ""),
+                existing.get("备注", ""),
+            ]
+        )
+
+    if dry_run:
+        _log(logger, f"[DRY-RUN] 将生成证件资料模板：{template_path}")
+    else:
+        workbook.save(template_path)
+        action = "更新" if existed_before else "生成"
+        _log(logger, f"已{action}证件资料模板：{template_path}")
+
+    return CertificateTemplateSummary(
+        template_path=template_path,
+        source_dir=source_dir,
+        people_count=len(people),
+        created=not existed_before,
+        dry_run=dry_run,
+    )
 
 
 def run_certificate_filter(
@@ -213,6 +315,10 @@ def run_certificate_filter(
         raise ValueError(f"模板中不存在匹配列：{options.match_column}")
     if options.rename_folder and options.folder_name_column not in headers:
         raise ValueError(f"模板中不存在导出后文件夹名称列：{options.folder_name_column}")
+    if options.classify_output:
+        for column in options.classify_columns:
+            if column not in headers:
+                raise ValueError(f"模板中不存在分类列：{column}")
 
     total_rows = len(rows)
     matched_people = 0
@@ -240,6 +346,7 @@ def run_certificate_filter(
                 rename_folder=options.rename_folder,
                 folder_name_column=options.folder_name_column,
                 classify_output=options.classify_output,
+                classify_columns=list(options.classify_columns),
                 keyword=options.keyword.strip(),
                 total_rows=total_rows,
                 matched_people=matched_people,
@@ -262,9 +369,7 @@ def run_certificate_filter(
             records.append(
                 CertificateRecord(
                     match_value=match_value,
-                    category_1=row.get("分类一", "").strip(),
-                    category_2=row.get("分类二", "").strip(),
-                    category_3=row.get("分类三", "").strip(),
+                    classify_values={column: row.get(column, "").strip() for column in options.classify_columns},
                     output_relative_dir="",
                     copied_files=0,
                     status="跳过",
@@ -284,9 +389,7 @@ def run_certificate_filter(
             records.append(
                 CertificateRecord(
                     match_value=match_value,
-                    category_1=row.get("分类一", "").strip(),
-                    category_2=row.get("分类二", "").strip(),
-                    category_3=row.get("分类三", "").strip(),
+                    classify_values={column: row.get(column, "").strip() for column in options.classify_columns},
                     output_relative_dir="",
                     copied_files=0,
                     status="缺失",
@@ -304,7 +407,7 @@ def run_certificate_filter(
 
         destination_dir = options.output_dir
         if options.classify_output:
-            for field in ("分类一", "分类二", "分类三"):
+            for field in options.classify_columns:
                 value = row.get(field, "").strip()
                 if value:
                     destination_dir = destination_dir / value
@@ -323,9 +426,7 @@ def run_certificate_filter(
             records.append(
                 CertificateRecord(
                     match_value=match_value,
-                    category_1=row.get("分类一", "").strip(),
-                    category_2=row.get("分类二", "").strip(),
-                    category_3=row.get("分类三", "").strip(),
+                    classify_values={column: row.get(column, "").strip() for column in options.classify_columns},
                     output_relative_dir=relative_destination_dir,
                     copied_files=current_file_count,
                     status="预览" if options.dry_run else "已复制",
@@ -342,9 +443,7 @@ def run_certificate_filter(
             records.append(
                 CertificateRecord(
                     match_value=match_value,
-                    category_1=row.get("分类一", "").strip(),
-                    category_2=row.get("分类二", "").strip(),
-                    category_3=row.get("分类三", "").strip(),
+                    classify_values={column: row.get(column, "").strip() for column in options.classify_columns},
                     output_relative_dir=relative_destination_dir,
                     copied_files=0,
                     status="跳过",
@@ -362,7 +461,7 @@ def run_certificate_filter(
     )
     report_path = None
     if not options.dry_run:
-        report_path = _export_certificate_report(options.output_dir, records)
+        report_path = _export_certificate_report(options.output_dir, records, list(options.classify_columns))
         _log(logger, f"已导出结果清单：{report_path}")
     return CertificateFilterSummary(
         template_path=options.template_path,
@@ -372,6 +471,7 @@ def run_certificate_filter(
         rename_folder=options.rename_folder,
         folder_name_column=options.folder_name_column,
         classify_output=options.classify_output,
+        classify_columns=list(options.classify_columns),
         keyword=options.keyword.strip(),
         total_rows=total_rows,
         matched_people=matched_people,

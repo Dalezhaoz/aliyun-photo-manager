@@ -31,15 +31,21 @@ UPDATE_CONFIG_PATH = PROJECT_ROOT / "update_config.json"
 
 def write_release_config(channel: str) -> Path:
     config_path = PROJECT_ROOT / "release_config.json"
+    existing: dict = {}
+    if config_path.exists():
+        try:
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+        except Exception:
+            existing = {}
+    payload = dict(existing)
+    payload.update(
+        {
+            "channel": channel,
+            "show_experimental": channel == "beta",
+        }
+    )
     config_path.write_text(
-        json.dumps(
-            {
-                "channel": channel,
-                "show_experimental": channel == "beta",
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
+        json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return config_path

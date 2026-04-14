@@ -10,6 +10,8 @@ venv/
 build/
 dist/
 *.spec
+tools/PhoneDecryptHelper/bin/
+tools/PhoneDecryptHelper/obj/
 
 # Test and tooling caches
 .pytest_cache/

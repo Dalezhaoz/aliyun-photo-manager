@@ -6,9 +6,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import zipfile
 from pathlib import Path
+
+import tkinter as tk
+from tkinter import messagebox
 
 
 def parse_args() -> argparse.Namespace:
@@ -107,19 +111,82 @@ def restart_app(app_dir: Path, restart_exe: str) -> None:
         subprocess.Popen([str(exe_path)], cwd=str(app_dir), close_fds=True)
 
 
+def run_with_status_window(task, title: str = "在线更新") -> int:
+    root = tk.Tk()
+    root.title(title)
+    root.resizable(False, False)
+    root.attributes("-topmost", True)
+    root.protocol("WM_DELETE_WINDOW", lambda: None)
+
+    frame = tk.Frame(root, padx=22, pady=18)
+    frame.pack(fill="both", expand=True)
+
+    status_var = tk.StringVar(value="正在应用更新，请稍候...")
+    detail_var = tk.StringVar(value="更新过程中程序会暂时关闭，请不要重复打开。")
+
+    tk.Label(frame, textvariable=status_var, font=("Microsoft YaHei UI", 11, "bold")).pack(anchor="w")
+    tk.Label(
+        frame,
+        textvariable=detail_var,
+        font=("Microsoft YaHei UI", 9),
+        fg="#555555",
+        wraplength=320,
+        justify="left",
+    ).pack(anchor="w", pady=(8, 0))
+
+    result: dict[str, str | int | None] = {"code": None, "error": ""}
+
+    def worker() -> None:
+        try:
+            task()
+        except Exception as exc:
+            result["code"] = 1
+            result["error"] = str(exc)
+            root.after(0, lambda: status_var.set("更新失败"))
+            root.after(0, lambda: detail_var.set(str(exc) or "更新过程中发生未知错误。"))
+            root.after(
+                0,
+                lambda: messagebox.showerror(
+                    title,
+                    f"更新失败：\n{str(exc) or '未知错误'}",
+                    parent=root,
+                ),
+            )
+        else:
+            result["code"] = 0
+            root.after(0, lambda: status_var.set("更新成功"))
+            root.after(0, lambda: detail_var.set("已完成文件替换，程序将自动重新打开；如果没有自动打开，请手动启动一次。"))
+            root.after(
+                0,
+                lambda: messagebox.showinfo(
+                    title,
+                    "更新成功，程序即将重新打开。\n如果没有自动打开，请手动启动一次。",
+                    parent=root,
+                ),
+            )
+        finally:
+            root.after(0, root.destroy)
+
+    threading.Thread(target=worker, daemon=True).start()
+    root.mainloop()
+    return int(result["code"] or 0)
+
+
 def main() -> int:
     args = parse_args()
     app_dir = Path(args.app_dir).resolve()
     package_path = Path(args.package).resolve()
 
-    try:
+    def task() -> None:
         wait_for_process_exit(args.wait_pid)
         apply_update(app_dir, package_path)
         restart_app(app_dir, args.restart_exe)
+
+    try:
+        return run_with_status_window(task)
     except Exception as exc:
         print(f"更新失败：{exc}", file=sys.stderr)
         return 1
-    return 0
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ from pathlib import Path
 from threading import Event
 from typing import Callable, Optional
 
+from .certificate_filter import load_column_values
 from .config import OssConfig
 from .downloader import DownloadResult, download_photos
 from .excel_classifier import ClassificationResult, apply_classification_from_template, generate_template
@@ -23,6 +24,9 @@ class RunOptions:
     include_duplicates: bool = False
     move_sorted_files: bool = False
     skip_existing: bool = True
+    filter_download: bool = False
+    filter_template_path: Optional[Path] = None
+    filter_column: str = ""
 
 
 @dataclass
@@ -49,14 +53,12 @@ def ensure_child_directory(base_dir: Path, child_name: str) -> Path:
 def build_prefixed_directory(base_dir: Path, prefix: str, child_name: str) -> Path:
     normalized = base_dir.expanduser().resolve()
     cleaned_prefix = prefix.strip().strip("/")
-    # 云端前缀会映射到本地目录结构里，避免不同批次文件都堆在根目录。
     if cleaned_prefix:
         return normalized.joinpath(*cleaned_prefix.split("/"), child_name)
     return ensure_child_directory(normalized, child_name)
 
 
 def resolve_photo_directories(options: RunOptions) -> tuple[Path, Path]:
-    # 本地模式直接使用用户选择的目录；云端模式会在目录下自动补业务子目录。
     if options.skip_download:
         return (
             options.download_dir.expanduser().resolve(),
@@ -66,6 +68,26 @@ def resolve_photo_directories(options: RunOptions) -> tuple[Path, Path]:
         build_prefixed_directory(options.download_dir, options.prefix, "下载文件"),
         build_prefixed_directory(options.sorted_dir, options.prefix, "分类结果"),
     )
+
+
+def _build_photo_key_filter(options: RunOptions) -> Optional[Callable[[str], bool]]:
+    if not options.filter_download:
+        return None
+    if options.filter_template_path is None or not options.filter_template_path.exists():
+        raise ValueError("已启用按表过滤下载，请先选择有效的过滤表。")
+    if not options.filter_column.strip():
+        raise ValueError("已启用按表过滤下载，请先选择文件名前缀列。")
+
+    allowed_prefixes = load_column_values(options.filter_template_path, options.filter_column)
+    normalized_prefixes = tuple(value.strip() for value in allowed_prefixes if value.strip())
+    if not normalized_prefixes:
+        raise ValueError("过滤表中的文件名前缀列没有可用数据。")
+
+    def photo_key_filter(object_key: str) -> bool:
+        stem = Path(object_key).stem
+        return any(stem.startswith(prefix_value) for prefix_value in normalized_prefixes)
+
+    return photo_key_filter
 
 
 def run_photo_download_and_template(
@@ -90,6 +112,10 @@ def run_photo_download_and_template(
     if not options.skip_download:
         if oss_config is None:
             raise ValueError("未提供 OSS 配置。")
+        photo_key_filter = _build_photo_key_filter(options)
+        if options.filter_download:
+            prefixes = load_column_values(options.filter_template_path, options.filter_column)
+            log(f"本次仅下载过滤表中的照片，匹配列：{options.filter_column}，共 {len(prefixes)} 个前缀。")
         log("开始下载 OSS 照片。")
         download_result = download_photos(
             config=oss_config,
@@ -100,6 +126,7 @@ def run_photo_download_and_template(
             logger=logger,
             progress_callback=progress_callback,
             cancel_event=cancel_event,
+            key_filter=photo_key_filter,
         )
         if cancel_event is not None and cancel_event.is_set():
             log("下载已取消。")
@@ -121,7 +148,6 @@ def run_photo_download_and_template(
     if not download_dir.exists() and not options.dry_run:
         raise FileNotFoundError(f"下载目录不存在：{download_dir}")
 
-    # 模板始终基于“当前层级”的照片生成，给后续人工补分类信息使用。
     log("开始生成 Excel 分类模板。")
     template_result = generate_template(
         source_dir=download_dir,
@@ -183,7 +209,6 @@ def run_photo_classification_only(
             dry_run=options.dry_run,
         )
 
-    # 分类阶段严格依赖模板，不再重新扫描云端或本地目录结构。
     classification_result: ClassificationResult = apply_classification_from_template(
         source_dir=download_dir,
         target_dir=sorted_dir,
@@ -205,6 +230,59 @@ def run_photo_classification_only(
     )
 
 
+def run_photo_template_only(
+    options: RunOptions,
+    logger: LogFn = None,
+    progress_callback: ProgressFn = None,
+    cancel_event: Optional[Event] = None,
+) -> WorkflowSummary:
+    del progress_callback
+
+    def log(message: str) -> None:
+        if logger is not None:
+            logger(message)
+
+    download_dir, sorted_dir = resolve_photo_directories(options)
+    template_path = download_dir / "照片分类模板.xlsx"
+
+    log("开始执行照片模板生成任务。")
+    log(f"照片来源目录：{download_dir}")
+    if not download_dir.exists() and not options.dry_run:
+        raise FileNotFoundError(f"照片目录不存在：{download_dir}")
+
+    if cancel_event is not None and cancel_event.is_set():
+        log("任务已取消。")
+        return WorkflowSummary(
+            download_dir=download_dir,
+            sorted_dir=sorted_dir,
+            template_path=template_path,
+            download_result=None,
+            template_file_count=0,
+            classified_count=0,
+            template_created=False,
+            cancelled=True,
+            dry_run=options.dry_run,
+        )
+
+    template_result = generate_template(
+        source_dir=download_dir,
+        dry_run=options.dry_run,
+        logger=logger,
+    )
+    log("照片模板生成任务完成。")
+    return WorkflowSummary(
+        download_dir=download_dir,
+        sorted_dir=sorted_dir,
+        template_path=template_result.template_path,
+        download_result=None,
+        template_file_count=template_result.file_count,
+        classified_count=0,
+        template_created=template_result.created,
+        cancelled=False,
+        dry_run=options.dry_run,
+    )
+
+
 def run_workflow(
     options: RunOptions,
     oss_config: Optional[OssConfig] = None,
@@ -212,132 +290,10 @@ def run_workflow(
     progress_callback: ProgressFn = None,
     cancel_event: Optional[Event] = None,
 ) -> WorkflowSummary:
-    def log(message: str) -> None:
-        if logger is not None:
-            logger(message)
-
-    if options.skip_download:
-        download_dir = options.download_dir.expanduser().resolve()
-        sorted_dir = options.sorted_dir.expanduser().resolve()
-    else:
-        download_dir = build_prefixed_directory(options.download_dir, options.prefix, "下载文件")
-        sorted_dir = build_prefixed_directory(options.sorted_dir, options.prefix, "分类结果")
-
-    log("开始执行任务。")
-    log(f"实际下载目录：{download_dir}")
-    log(f"实际分类目录：{sorted_dir}")
-    if cancel_event is not None and cancel_event.is_set():
-        log("任务已取消。")
-        return
-    download_result: Optional[DownloadResult] = None
-    if not options.skip_download:
-        if oss_config is None:
-            raise ValueError("未提供 OSS 配置。")
-        log("开始下载 OSS 照片。")
-        download_result = download_photos(
-            config=oss_config,
-            prefix=options.prefix,
-            download_dir=download_dir,
-            dry_run=options.dry_run,
-            skip_existing=options.skip_existing,
-            logger=logger,
-            progress_callback=progress_callback,
-            cancel_event=cancel_event,
-        )
-        if cancel_event is not None and cancel_event.is_set():
-            log("下载已取消。")
-            return WorkflowSummary(
-                download_dir=download_dir,
-                sorted_dir=sorted_dir,
-                template_path=download_dir / "照片分类模板.xlsx",
-                download_result=download_result,
-                template_file_count=0,
-                classified_count=0,
-                template_created=False,
-                cancelled=True,
-                dry_run=options.dry_run,
-            )
-        log("OSS 下载阶段完成。")
-    else:
-        log("已跳过 OSS 下载，直接使用本地目录分类。")
-
-    if not download_dir.exists() and not options.dry_run:
-        raise FileNotFoundError(f"下载目录不存在：{download_dir}")
-
-    if cancel_event is not None and cancel_event.is_set():
-        log("任务已取消。")
-        return WorkflowSummary(
-            download_dir=download_dir,
-            sorted_dir=sorted_dir,
-            template_path=download_dir / "照片分类模板.xlsx",
-            download_result=download_result,
-            template_file_count=0,
-            classified_count=0,
-            template_created=False,
-            cancelled=True,
-            dry_run=options.dry_run,
-        )
-    log("开始生成 Excel 分类模板。")
-    template_result = generate_template(
-        source_dir=download_dir,
-        dry_run=options.dry_run,
+    return run_photo_download_and_template(
+        options=options,
+        oss_config=oss_config,
         logger=logger,
-    )
-
-    if options.dry_run:
-        log("当前为预览模式，不会真正生成 Excel 或复制文件。")
-        log("任务完成。")
-        return WorkflowSummary(
-            download_dir=download_dir,
-            sorted_dir=sorted_dir,
-            template_path=template_result.template_path,
-            download_result=download_result,
-            template_file_count=template_result.file_count,
-            classified_count=0,
-            template_created=template_result.created,
-            dry_run=True,
-        )
-
-    if template_result.created:
-        log(f"已为当前目录生成模板，共写入 {template_result.file_count} 个文件。")
-        log("请先填写 Excel 里的分类信息，再次点击开始执行进行复制分类。")
-        log("任务完成。")
-        return WorkflowSummary(
-            download_dir=download_dir,
-            sorted_dir=sorted_dir,
-            template_path=template_result.template_path,
-            download_result=download_result,
-            template_file_count=template_result.file_count,
-            classified_count=0,
-            template_created=True,
-        )
-
-    if cancel_event is not None and cancel_event.is_set():
-        log("任务已取消。")
-        return WorkflowSummary(
-            download_dir=download_dir,
-            sorted_dir=sorted_dir,
-            template_path=template_result.template_path,
-            download_result=download_result,
-            template_file_count=template_result.file_count,
-            classified_count=0,
-            template_created=False,
-            cancelled=True,
-        )
-    log("开始按照 Excel 模板复制分类。")
-    classified_count = apply_classification_from_template(
-        source_dir=download_dir,
-        target_dir=sorted_dir,
-        dry_run=options.dry_run,
-        logger=logger,
-    )
-    log("任务完成。")
-    return WorkflowSummary(
-        download_dir=download_dir,
-        sorted_dir=sorted_dir,
-        template_path=template_result.template_path,
-        download_result=download_result,
-        template_file_count=template_result.file_count,
-        classified_count=classified_count,
-        template_created=False,
+        progress_callback=progress_callback,
+        cancel_event=cancel_event,
     )

@@ -43,9 +43,7 @@ def _load_openpyxl():
     try:
         from openpyxl import Workbook, load_workbook
     except ImportError as exc:
-        raise ImportError(
-            "缺少依赖 openpyxl，请先执行 `pip install -r requirements.txt`。"
-        ) from exc
+        raise ImportError("缺少依赖 openpyxl，请先执行 `pip install -r requirements.txt`。") from exc
     return Workbook, load_workbook
 
 
@@ -54,9 +52,7 @@ def list_current_level_files(directory: Path) -> List[Path]:
     for path in sorted(directory.iterdir(), key=lambda item: item.name):
         if not path.is_file():
             continue
-        if path.name == TEMPLATE_FILENAME:
-            continue
-        if path.name.startswith("."):
+        if path.name == TEMPLATE_FILENAME or path.name.startswith("."):
             continue
         files.append(path)
     return files
@@ -68,7 +64,7 @@ def split_filename_parts(filename: str) -> List[str]:
 
 
 def normalize_existing_values(row: tuple) -> List[str]:
-    # 兼容旧模板列结构，避免历史模板在升级后直接错位。
+    # 兼容旧模板列结构，避免历史模板升级后出现错位。
     values = ["" if value is None else str(value) for value in row[1:]]
     if len(values) >= 6:
         return values[:6]
@@ -77,6 +73,15 @@ def normalize_existing_values(row: tuple) -> List[str]:
     while len(values) < 6:
         values.append("")
     return values[:6]
+
+
+def _safe_save_workbook(workbook, path: Path, locked_message: str) -> None:
+    try:
+        workbook.save(path)
+    except PermissionError as exc:
+        raise PermissionError(f"{locked_message}：{path}") from exc
+    finally:
+        workbook.close()
 
 
 def generate_template(
@@ -91,24 +96,26 @@ def generate_template(
     Workbook, load_workbook = _load_openpyxl()
 
     if template_path.exists():
-        workbook = load_workbook(template_path)
-        worksheet = workbook.worksheets[0]
-        for row in worksheet.iter_rows(min_row=2, values_only=True):
-            if not row or not row[0]:
-                continue
-            filename = str(row[0]).strip()
-            existing_rows[filename] = normalize_existing_values(row)
-    else:
-        workbook = Workbook()
-        worksheet = workbook.active
-        worksheet.title = "分类模板"
+        existing_workbook = load_workbook(template_path)
+        try:
+            worksheet = existing_workbook.worksheets[0]
+            for row in worksheet.iter_rows(min_row=2, values_only=True):
+                if not row or not row[0]:
+                    continue
+                filename = str(row[0]).strip()
+                existing_rows[filename] = normalize_existing_values(row)
+        finally:
+            existing_workbook.close()
 
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "分类模板"
     worksheet.delete_rows(1, worksheet.max_row)
     worksheet.append(HEADERS)
+
     for file_path in current_files:
         prefix, suffix = split_filename_parts(file_path.name)
         values = existing_rows.get(file_path.name, ["", "", "", "", "", ""])
-        # 前两列由程序重新拆分生成，后面的分类信息尽量沿用旧模板里已经填好的值。
         row_values = [file_path.name, prefix, suffix, *values[2:]]
         if values[0]:
             row_values[1] = values[0]
@@ -117,9 +124,10 @@ def generate_template(
         worksheet.append(row_values)
 
     if dry_run:
+        workbook.close()
         _log(logger, f"[DRY-RUN] 将生成或更新 Excel 模板：{template_path}")
     else:
-        workbook.save(template_path)
+        _safe_save_workbook(workbook, template_path, "模板文件正被占用，请先关闭")
         if created:
             _log(logger, f"已生成 Excel 模板：{template_path}")
         else:
@@ -167,34 +175,36 @@ def validate_template_ready(template_path: Path) -> None:
     _, load_workbook = _load_openpyxl()
     workbook_formula = load_workbook(template_path, data_only=False)
     workbook_values = load_workbook(template_path, data_only=True)
-    sheet_formula = workbook_formula.worksheets[0]
-    sheet_values = workbook_values.worksheets[0]
+    try:
+        sheet_formula = workbook_formula.worksheets[0]
+        sheet_values = workbook_values.worksheets[0]
+        check_columns = [4, 5, 6, 7]
 
-    check_columns = [4, 5, 6, 7]
-    # 只检查用户会写公式的业务列，避免把未计算的公式文本直接拿去做分类。
-    for row_index, (formula_row, value_row) in enumerate(
-        zip(
-            sheet_formula.iter_rows(min_row=2),
-            sheet_values.iter_rows(min_row=2, values_only=True),
-        ),
-        start=2,
-    ):
-        if not value_row:
-            continue
-        original_name = _normalize_cell(value_row[0] if len(value_row) > 0 else "")
-        if not original_name:
-            continue
+        for row_index, (formula_row, value_row) in enumerate(
+            zip(
+                sheet_formula.iter_rows(min_row=2),
+                sheet_values.iter_rows(min_row=2, values_only=True),
+            ),
+            start=2,
+        ):
+            if not value_row:
+                continue
+            original_name = _normalize_cell(value_row[0] if len(value_row) > 0 else "")
+            if not original_name:
+                continue
 
-        for col_index in check_columns:
-            formula_cell = formula_row[col_index - 1]
-            formula_value = formula_cell.value
-            data_value = value_row[col_index - 1] if len(value_row) >= col_index else None
-            if isinstance(formula_value, str) and formula_value.startswith("="):
-                if _normalize_cell(data_value) == "":
+            for col_index in check_columns:
+                formula_cell = formula_row[col_index - 1]
+                formula_value = formula_cell.value
+                data_value = value_row[col_index - 1] if len(value_row) >= col_index else None
+                if isinstance(formula_value, str) and formula_value.startswith("=") and _normalize_cell(data_value) == "":
                     raise ValueError(
                         f"检测到第一个 sheet 第 {row_index} 行存在尚未计算完成的公式。"
                         "请先在 Excel/WPS 中完成公式计算并保存，再执行分类。"
                     )
+    finally:
+        workbook_formula.close()
+        workbook_values.close()
 
 
 def export_classification_report(target_dir: Path, records: List[ClassificationRecord]) -> Path:
@@ -229,7 +239,7 @@ def export_classification_report(target_dir: Path, records: List[ClassificationR
         )
     report_path = target_dir / "照片分类结果清单.xlsx"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    workbook.save(report_path)
+    _safe_save_workbook(workbook, report_path, "结果清单正被占用，请先关闭")
     return report_path
 
 
@@ -246,67 +256,70 @@ def apply_classification_from_template(
     validate_template_ready(template_path)
     _, load_workbook = _load_openpyxl()
     workbook = load_workbook(template_path, data_only=True)
-    worksheet = workbook.worksheets[0]
-
     processed_count = 0
     records: List[ClassificationRecord] = []
-    for row in worksheet.iter_rows(min_row=2, values_only=True):
-        if not row:
-            continue
 
-        original_name = _normalize_cell(row[0] if len(row) > 0 else "")
-        if not original_name:
-            continue
+    try:
+        worksheet = workbook.worksheets[0]
+        for row in worksheet.iter_rows(min_row=2, values_only=True):
+            if not row:
+                continue
 
-        source_file = source_dir / original_name
-        if not source_file.exists() or not source_file.is_file():
-            _log(logger, f"[SKIP] 文件不存在：{source_file}")
+            original_name = _normalize_cell(row[0] if len(row) > 0 else "")
+            if not original_name:
+                continue
+
+            source_file = source_dir / original_name
+            if not source_file.exists() or not source_file.is_file():
+                _log(logger, f"[SKIP] 文件不存在：{source_file}")
+                records.append(
+                    ClassificationRecord(
+                        original_name=original_name,
+                        destination_relative_path="",
+                        category_1=_normalize_cell(row[3] if len(row) > 3 else ""),
+                        category_2=_normalize_cell(row[4] if len(row) > 4 else ""),
+                        category_3=_normalize_cell(row[5] if len(row) > 5 else ""),
+                        renamed_name=_normalize_cell(row[6] if len(row) > 6 else ""),
+                        status="跳过",
+                        note="源文件不存在",
+                    )
+                )
+                continue
+
+            categories = [
+                _normalize_cell(row[3] if len(row) > 3 else ""),
+                _normalize_cell(row[4] if len(row) > 4 else ""),
+                _normalize_cell(row[5] if len(row) > 5 else ""),
+            ]
+            renamed_value = _normalize_cell(row[6] if len(row) > 6 else "")
+            destination_name = _ensure_filename(original_name, renamed_value)
+
+            destination_dir = target_dir
+            for category in categories:
+                if category:
+                    destination_dir = destination_dir / category
+
+            destination_path = _ensure_unique_path(destination_dir / destination_name)
+            _log(logger, f"[COPY] {source_file} -> {destination_path}")
+            if not dry_run:
+                destination_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_file, destination_path)
+
             records.append(
                 ClassificationRecord(
                     original_name=original_name,
-                    destination_relative_path="",
-                    category_1=_normalize_cell(row[3] if len(row) > 3 else ""),
-                    category_2=_normalize_cell(row[4] if len(row) > 4 else ""),
-                    category_3=_normalize_cell(row[5] if len(row) > 5 else ""),
-                    renamed_name=_normalize_cell(row[6] if len(row) > 6 else ""),
-                    status="跳过",
-                    note="源文件不存在",
+                    destination_relative_path=str(destination_path.relative_to(target_dir)),
+                    category_1=categories[0],
+                    category_2=categories[1],
+                    category_3=categories[2],
+                    renamed_name=destination_name,
+                    status="预览" if dry_run else "已复制",
+                    note="",
                 )
             )
-            continue
-
-        categories = [
-            _normalize_cell(row[3] if len(row) > 3 else ""),
-            _normalize_cell(row[4] if len(row) > 4 else ""),
-            _normalize_cell(row[5] if len(row) > 5 else ""),
-        ]
-        renamed_value = _normalize_cell(row[6] if len(row) > 6 else "")
-        destination_name = _ensure_filename(original_name, renamed_value)
-
-        destination_dir = target_dir
-        for category in categories:
-            if category:
-                destination_dir = destination_dir / category
-
-        # 根目录允许保留“未分类”文件；已分类文件只会进入具体分类目录。
-        destination_path = _ensure_unique_path(destination_dir / destination_name)
-        _log(logger, f"[COPY] {source_file} -> {destination_path}")
-        if not dry_run:
-            destination_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_file, destination_path)
-        records.append(
-            ClassificationRecord(
-                original_name=original_name,
-                destination_relative_path=str(destination_path.relative_to(target_dir)),
-                category_1=categories[0],
-                category_2=categories[1],
-                category_3=categories[2],
-                renamed_name=destination_name,
-                status="预览" if dry_run else "已复制",
-                note="",
-            )
-        )
-        processed_count += 1
+            processed_count += 1
+    finally:
+        workbook.close()
 
     _log(logger, f"分类复制完成，共处理 {processed_count} 个文件。")
     report_path = None

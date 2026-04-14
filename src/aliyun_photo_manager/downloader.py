@@ -325,6 +325,7 @@ def download_photos(
     logger: Optional[Callable[[str], None]] = None,
     progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     cancel_event: Optional[Event] = None,
+    key_filter: Optional[Callable[[str], bool]] = None,
 ) -> DownloadResult:
     # 照片下载只是通用下载器的一个特化入口：额外按图片后缀过滤。
     return download_objects(
@@ -337,6 +338,7 @@ def download_photos(
         progress_callback=progress_callback,
         cancel_event=cancel_event,
         file_filter=is_photo_key,
+        key_filter=key_filter,
         stage="download",
     )
 
