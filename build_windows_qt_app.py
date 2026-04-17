@@ -20,12 +20,6 @@ HELPER_PUBLISH_DIR = (
     / "win-x86"
     / "publish"
 )
-UPDATER_EXE = (
-    PROJECT_ROOT
-    / "dist_updater"
-    / "aliyun_photo_manager_updater"
-    / "aliyun_photo_manager_updater.exe"
-)
 UPDATE_CONFIG_PATH = PROJECT_ROOT / "update_config.json"
 
 
@@ -38,10 +32,15 @@ def write_release_config(channel: str) -> Path:
         except Exception:
             existing = {}
     payload = dict(existing)
+    explicit_show_experimental = existing.get("show_experimental")
     payload.update(
         {
             "channel": channel,
-            "show_experimental": channel == "beta",
+            "show_experimental": (
+                bool(explicit_show_experimental)
+                if explicit_show_experimental is not None
+                else channel == "beta"
+            ),
         }
     )
     config_path.write_text(
@@ -74,10 +73,16 @@ def main(channel: str = "stable") -> None:
         "--hidden-import=PySide6.QtCore",
         "--hidden-import=PySide6.QtGui",
         "--hidden-import=PySide6.QtWidgets",
+        "--hidden-import=PySide6.QtPrintSupport",
         "--hidden-import=PIL",
         "--hidden-import=PIL.Image",
         "--hidden-import=openpyxl",
         "--hidden-import=oss2",
+        "--exclude-module=tkinter",
+        "--exclude-module=_tkinter",
+        "--exclude-module=tkinter.ttk",
+        "--exclude-module=tkinter.filedialog",
+        "--exclude-module=tkinter.messagebox",
         "--exclude-module=PySide6.QtQml",
         "--exclude-module=PySide6.QtQuick",
         "--exclude-module=PySide6.QtPdf",
@@ -93,8 +98,6 @@ def main(channel: str = "stable") -> None:
         for helper_file in HELPER_PUBLISH_DIR.iterdir():
             if helper_file.is_file():
                 args.append(f"--add-binary={helper_file};.")
-    if UPDATER_EXE.exists():
-        args.append(f"--add-binary={UPDATER_EXE};.")
     PyInstaller.__main__.run(args)
 
 

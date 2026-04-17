@@ -1,5 +1,5 @@
 {
   "channel": "stable",
-  "show_experimental": false,
-  "update_base_url": "https://qzpta39.chinasyks.org.cn/bmtj/update"
+  "show_experimental": true,
+  "update_base_url": "https://qzpta39.chinasyks.org.cn/cn_2024xjfybjy/update"
 }

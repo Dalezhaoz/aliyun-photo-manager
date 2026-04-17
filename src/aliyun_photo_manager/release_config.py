@@ -20,7 +20,15 @@ def _app_root() -> Path:
 
 
 def get_release_config_path() -> Path:
-    return _app_root() / "release_config.json"
+    app_root = _app_root()
+    candidates = [
+        app_root / "release_config.json",
+        app_root / "_internal" / "release_config.json",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
 
 
 def load_release_config() -> ReleaseConfig:

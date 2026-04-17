@@ -17,6 +17,7 @@ from . import __version__
 UPDATE_FEED_ENV = "ALIYUN_PHOTO_MANAGER_UPDATE_FEED"
 UPDATE_CONFIG_NAME = "update_config.json"
 UPDATER_EXE_NAME = "aliyun_photo_manager_updater.exe"
+LAUNCHER_EXE_NAME = "aliyun_photo_manager_launcher.exe"
 
 
 class UpdateError(RuntimeError):
@@ -55,9 +56,7 @@ def get_update_feed_url() -> str:
         return env_value
     config_path = _app_root() / UPDATE_CONFIG_NAME
     if not config_path.exists():
-        raise UpdateError(
-            f"未配置更新地址。请设置环境变量 {UPDATE_FEED_ENV} 或在程序目录放置 {UPDATE_CONFIG_NAME}。"
-        )
+        raise UpdateError(f"未配置更新地址。请设置环境变量 {UPDATE_FEED_ENV} 或在程序目录放置 {UPDATE_CONFIG_NAME}。")
     try:
         config = json.loads(config_path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -148,14 +147,17 @@ def download_update_package(package: UpdatePackage) -> Path:
 
 def launch_windows_updater(package_path: Path) -> None:
     if sys.platform != "win32":
-        raise UpdateError("增量更新目前只支持 Windows。")
-    updater_path = _app_root() / UPDATER_EXE_NAME
-    if not updater_path.exists():
-        raise UpdateError(f"未找到更新器：{updater_path.name}")
+        raise UpdateError("在线更新目前只支持 Windows。")
     app_dir = _app_root()
+    launcher_path = app_dir.parent / LAUNCHER_EXE_NAME
+    if not launcher_path.exists():
+        launcher_path = app_dir / UPDATER_EXE_NAME
+    if not launcher_path.exists():
+        raise UpdateError(f"未找到启动器：{LAUNCHER_EXE_NAME}")
     restart_exe = Path(sys.executable).name if getattr(sys, "frozen", False) else ""
     command = [
-        str(updater_path),
+        str(launcher_path),
+        "--apply-update",
         "--app-dir",
         str(app_dir),
         "--package",

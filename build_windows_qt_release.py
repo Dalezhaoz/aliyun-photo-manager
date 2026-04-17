@@ -20,17 +20,15 @@ if str(SRC_PATH) not in sys.path:
 from aliyun_photo_manager import __version__
 from aliyun_photo_manager.release_config import load_release_config
 
-APP_DIR = PROJECT_ROOT / "dist_qt" / "aliyun_photo_manager_qt"
-UPDATER_EXE = (
-    PROJECT_ROOT
-    / "dist_updater"
-    / "aliyun_photo_manager_updater"
-    / "aliyun_photo_manager_updater.exe"
-)
+QT_APP_DIR = PROJECT_ROOT / "dist_qt" / "aliyun_photo_manager_qt"
+LAUNCHER_EXE = PROJECT_ROOT / "dist_launcher" / "aliyun_photo_manager_launcher.exe"
+PORTABLE_DIR = PROJECT_ROOT / "dist_portable" / "aliyun_photo_manager"
+APP_DIR = PORTABLE_DIR / "app"
 RELEASES_DIR = PROJECT_ROOT / "releases" / "windows"
 MANIFEST_NAME = "update_manifest.json"
 UPDATE_CONFIG_NAME = "update_config.json"
 DEPLOY_BUNDLE_NAME = "aliyun_photo_manager_qt_update_site_{version}.zip"
+PORTABLE_BUNDLE_NAME = "aliyun_photo_manager_portable_{version}.zip"
 
 
 def parse_args() -> argparse.Namespace:
@@ -195,10 +193,29 @@ def build_deploy_bundle(version: str, release_dir: Path) -> Path | None:
     return bundle_path
 
 
-def ensure_updater_bundled(app_dir: Path) -> None:
-    if not UPDATER_EXE.exists():
-        raise RuntimeError(f"Updater not found: {UPDATER_EXE}")
-    shutil.copy2(UPDATER_EXE, app_dir / UPDATER_EXE.name)
+def assemble_portable_package() -> None:
+    if not QT_APP_DIR.exists():
+        raise RuntimeError(f"Qt app directory not found: {QT_APP_DIR}")
+    if not LAUNCHER_EXE.exists():
+        raise RuntimeError(f"Launcher not found: {LAUNCHER_EXE}")
+    if PORTABLE_DIR.exists():
+        shutil.rmtree(PORTABLE_DIR)
+    APP_DIR.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(QT_APP_DIR, APP_DIR)
+    shutil.copy2(LAUNCHER_EXE, PORTABLE_DIR / LAUNCHER_EXE.name)
+
+
+def write_portable_bundle(version: str, release_dir: Path) -> Path:
+    bundle_path = release_dir / PORTABLE_BUNDLE_NAME.format(version=version)
+    if bundle_path.exists():
+        bundle_path.unlink()
+    with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for file_path in sorted(PORTABLE_DIR.rglob("*")):
+            if not file_path.is_file():
+                continue
+            relative_path = file_path.relative_to(PORTABLE_DIR).as_posix()
+            archive.write(file_path, relative_path)
+    return bundle_path
 
 
 def main() -> None:
@@ -211,10 +228,7 @@ def main() -> None:
         build_updater_main()
         build_qt_app_main(channel=args.channel)
 
-    if not APP_DIR.exists():
-        raise RuntimeError(f"Qt app directory not found: {APP_DIR}")
-
-    ensure_updater_bundled(APP_DIR)
+    assemble_portable_package()
     write_update_config(APP_DIR, base_url)
 
     manifest = build_manifest(APP_DIR, version)
@@ -239,9 +253,11 @@ def main() -> None:
 
     write_latest_metadata(version, manifest, patch_manifest, base_url)
     deploy_bundle = build_deploy_bundle(version, release_dir)
+    portable_bundle = write_portable_bundle(version, release_dir)
     print(f"Qt release generated at: {release_dir}")
     if deploy_bundle is not None:
         print(f"Upload-ready bundle: {deploy_bundle}")
+    print(f"Portable package: {portable_bundle}")
 
 
 if __name__ == "__main__":
