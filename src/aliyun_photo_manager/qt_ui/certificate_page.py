@@ -188,6 +188,7 @@ class CertificatePage(BaseToolPage):
         self.browser_list = QListWidget()
         self.browser_list.setMinimumHeight(150)
         self.browser_list.itemClicked.connect(self.on_browser_item_clicked)
+        self.browser_list.itemDoubleClicked.connect(self.on_browser_item_double_clicked)
         self._add_row(cloud_form, 7, "", self.browser_list)
 
         self.browser_status_label = QLabel("请先选择 Bucket，再输入前缀后点击搜索。")
@@ -795,7 +796,22 @@ class CertificatePage(BaseToolPage):
             return
         self.selected_prefix = str(entry.key)
         self.selected_path_label.setText(self.selected_prefix)
-        self.browser_status_label.setText(f"已选择下载路径：{self.selected_prefix}")
+        self.browser_status_label.setText(f"已选择下载路径：{self.selected_prefix}（双击进入子目录）")
+        self._save_cached_cloud_settings()
+
+    def on_browser_item_double_clicked(self, item: QListWidgetItem) -> None:
+        entry = item.data(Qt.UserRole)
+        if not entry or entry.entry_type != "folder":
+            return
+        self.selected_prefix = str(entry.key)
+        self.selected_path_label.setText(self.selected_prefix)
+        try:
+            config = self.build_cloud_config()
+        except Exception as exc:
+            self.browser_status_label.setText(f"参数错误：{exc}")
+            return
+        self.browser_status_label.setText(f"正在进入目录：{entry.display_name}")
+        self._load_browser_entries(config, self.selected_prefix, "当前目录：{prefix}")
         self._save_cached_cloud_settings()
 
     def go_to_parent_prefix(self) -> None:
@@ -804,12 +820,18 @@ class CertificatePage(BaseToolPage):
             self.selected_prefix = ""
             self.selected_path_label.setText("未选择下载路径")
             self.browser_status_label.setText("当前已在根目录。")
-        else:
-            parent = "/".join(current.split("/")[:-1]).strip("/")
-            self.selected_prefix = parent + "/" if parent else ""
-            self.selected_path_label.setText(self.selected_prefix or "未选择下载路径")
-            self.browser_status_label.setText(f"已返回上一层：{self.selected_prefix or '/'}")
+            return
+        parent = "/".join(current.split("/")[:-1]).strip("/")
+        self.selected_prefix = parent + "/" if parent else ""
+        self.selected_path_label.setText(self.selected_prefix or "未选择下载路径")
         self._save_cached_cloud_settings()
+        try:
+            config = self.build_cloud_config()
+        except Exception as exc:
+            self.browser_status_label.setText(f"参数错误：{exc}")
+            return
+        self.browser_status_label.setText(f"正在返回：{self.selected_prefix or '/'}")
+        self._load_browser_entries(config, self.selected_prefix, "当前目录：{prefix}")
 
     def _read_settings(self) -> dict:
         if not self.SETTINGS_FILE.exists():
