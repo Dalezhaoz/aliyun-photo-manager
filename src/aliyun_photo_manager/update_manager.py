@@ -7,9 +7,9 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
 from urllib.error import URLError
-from urllib.request import urlopen, urlretrieve
+from urllib.request import urlopen
 
 from . import __version__
 
@@ -135,12 +135,28 @@ def check_for_updates() -> UpdateCheckResult:
     )
 
 
-def download_update_package(package: UpdatePackage) -> Path:
+def download_update_package(
+    package: UpdatePackage,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> Path:
     temp_dir = Path(tempfile.mkdtemp(prefix="aliyun_photo_manager_update_"))
     target_path = temp_dir / f"{package.package_type}_{package.version}.zip"
     try:
-        urlretrieve(package.url, target_path)
+        with urlopen(package.url, timeout=120) as response:
+            total = int(response.headers.get("Content-Length", 0))
+            downloaded = 0
+            with target_path.open("wb") as out_file:
+                while True:
+                    chunk = response.read(256 * 1024)
+                    if not chunk:
+                        break
+                    out_file.write(chunk)
+                    downloaded += len(chunk)
+                    if progress_callback and total > 0:
+                        progress_callback(downloaded, total)
     except Exception as exc:
+        if target_path.exists():
+            target_path.unlink(missing_ok=True)
         raise UpdateError(f"下载更新包失败：{exc}") from exc
     return target_path
 

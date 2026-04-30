@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QDesktopServices, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
+    QProgressDialog,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -90,6 +92,23 @@ NAV_ENTRIES: list[NavEntry] = [
 
 
 DEFAULT_FAVORITES = ["certificate", "template", "phone", "update_sql"]
+FAVORITES_FILE = Path(__file__).resolve().parents[3] / ".favorites.json"
+
+
+def _load_favorites() -> list[str]:
+    if not FAVORITES_FILE.exists():
+        return list(DEFAULT_FAVORITES)
+    try:
+        data = json.loads(FAVORITES_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, str)]
+    except (json.JSONDecodeError, OSError):
+        pass
+    return list(DEFAULT_FAVORITES)
+
+
+def _save_favorites(favorites: list[str]) -> None:
+    FAVORITES_FILE.write_text(json.dumps(favorites, ensure_ascii=False, indent=2), encoding="utf-8")
 
 MANUAL_TEXTS: dict[str, str] = {
     "photo": "适用场景：从本地目录或云存储批量下载照片，生成模板后再按模板分类。\n\n操作步骤：\n1. 先选择数据来源；云存储模式下填写云类型、Endpoint/Region、AccessKey 和 Bucket。\n2. 如需从云端指定目录下载，先加载 Bucket，再点“加载当前层级”，单击文件夹选中，双击进入子目录。\n3. 选择下载目录和分类输出目录。\n4. 如需只下载名单中的照片，可勾选“云下载时按表过滤”，上传过滤表并选择“前缀列”。\n5. 点击“生成模板”后，在 Excel 中补充分类列、名称等信息。\n6. 回到程序执行按模板分类，结果会输出分类目录和结果清单。",
@@ -364,7 +383,6 @@ class HomeLandingPage(QWidget):
         stats_row = QHBoxLayout()
         stats_row.setSpacing(16)
         stats_row.addWidget(self._build_stat_card("全部功能", len(self._tool_entries()), "#2F73FF", "功"), 1)
-        stats_row.addWidget(self._build_stat_card("常用功能", 6, "#16A35F", "常"), 1)
         stats_row.addWidget(
             self._build_stat_card(
                 "收藏功能",
@@ -843,7 +861,7 @@ class QtMainWindow(QMainWindow):
             group for group in NAV_GROUPS if self.release_config.show_experimental or group[0] != "experimental"
         ]
         self.entries_by_key = {entry.key: entry for entry in self.visible_nav_entries}
-        self.favorites: list[str] = list(DEFAULT_FAVORITES)
+        self.favorites: list[str] = _load_favorites()
         self.page_indexes: dict[str, int] = {}
         self.tree_items_by_key: dict[str, QTreeWidgetItem] = {}
         self.page_help_sections: dict[str, QFrame] = {}
@@ -1218,13 +1236,46 @@ class QtMainWindow(QMainWindow):
         if answer != QMessageBox.Yes:
             return
 
+        progress = QProgressDialog("正在下载更新包...", "取消", 0, 100, self)
+        progress.setWindowTitle("在线更新")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        progress.setAutoClose(False)
+        progress.canceled.connect(lambda: None)
+
+        download_result: dict = {"package_path": None, "error": None}
+
+        def download_thread() -> None:
+            try:
+                def on_progress(downloaded: int, total: int) -> None:
+                    pct = int(downloaded * 100 / total)
+                    progress.setLabelText(f"正在下载 {package_label}... {pct}% ({downloaded // 1024}KB / {total // 1024}KB)")
+                    progress.setValue(pct)
+
+                package_path = download_update_package(package, progress_callback=on_progress)
+                download_result["package_path"] = package_path
+            except UpdateError as exc:
+                download_result["error"] = str(exc)
+
+        thread = QThread()
+        thread.run = download_thread
+        thread.finished.connect(lambda: self._on_download_finished(download_result, progress))
+        thread.start()
+
+    def _on_download_finished(self, download_result: dict, progress: QProgressDialog) -> None:
+        progress.close()
+        if download_result["error"]:
+            QMessageBox.critical(self, "更新失败", download_result["error"])
+            return
+        package_path = download_result["package_path"]
+        if package_path is None:
+            return
         try:
-            package_path = download_update_package(package)
             launch_windows_updater(package_path)
         except UpdateError as exc:
             QMessageBox.critical(self, "更新失败", str(exc))
             return
-
         QMessageBox.information(self, "开始更新", "更新包已下载，程序退出后会自动替换文件并重新启动。")
         QApplication.instance().quit()
 
@@ -1306,6 +1357,7 @@ class QtMainWindow(QMainWindow):
             self.favorites.remove(key)
         else:
             self.favorites.insert(0, key)
+        _save_favorites(self.favorites)
         self._replace_home_page()
         self._update_header_state(key)
         self._sync_page_favorite_state(key)

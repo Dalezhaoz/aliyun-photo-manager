@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..result_packer import PackSummary, pack_encrypted_folder, query_pack_history
+from ..result_packer import BatchPackSummary, PackSummary, pack_encrypted_folder, pack_subfolders_separately, query_pack_history
 from .base_page import BaseToolPage
 from .widgets import FormRow, PathInput, PrimaryButton, SecondaryButton, Section
 
@@ -62,6 +62,7 @@ class PackPage(BaseToolPage):
         self.log_fn = log_fn
         self.thread_pool = QThreadPool.globalInstance()
         self.last_summary: PackSummary | None = None
+        self._last_batch: BatchPackSummary | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -92,6 +93,9 @@ class PackPage(BaseToolPage):
         self.output_edit = self.output_input.edit
         self.output_input.button.clicked.connect(lambda: self.choose_directory(self.output_edit))
         file_section.add(FormRow("输出目录", self.output_input))
+
+        self.subfolder_checkbox = QCheckBox("分别打包第一层文件夹（每个子文件夹一个加密 zip，统一密码）")
+        file_section.add(self.subfolder_checkbox)
 
         password_section = Section("密码设置")
         self.custom_password_checkbox = QCheckBox("手动设置密码")
@@ -192,12 +196,21 @@ class PackPage(BaseToolPage):
         output_dir = Path(output_text)
         password = self.password_edit.text().strip() if self.custom_password_checkbox.isChecked() else None
         self.run_button.setEnabled(False)
-        self.result_text.setPlainText("正在打包，请稍候...")
-        worker = SimpleWorker(
-            task=lambda: pack_encrypted_folder(source_path, output_dir, password=password, logger=self.log_fn),
-            on_success=self.on_pack_success,
-            on_error=self.on_error,
-        )
+
+        if self.subfolder_checkbox.isChecked() and source_path.is_dir():
+            self.result_text.setPlainText("正在分别打包子文件夹，请稍候...")
+            worker = SimpleWorker(
+                task=lambda: pack_subfolders_separately(source_path, output_dir, password=password, logger=self.log_fn),
+                on_success=self.on_batch_pack_success,
+                on_error=self.on_error,
+            )
+        else:
+            self.result_text.setPlainText("正在打包，请稍候...")
+            worker = SimpleWorker(
+                task=lambda: pack_encrypted_folder(source_path, output_dir, password=password, logger=self.log_fn),
+                on_success=self.on_pack_success,
+                on_error=self.on_error,
+            )
         self.thread_pool.start(worker)
 
     def on_pack_success(self, summary: PackSummary) -> None:
@@ -216,6 +229,24 @@ class PackPage(BaseToolPage):
                 ]
             )
         )
+
+    def on_batch_pack_success(self, result: BatchPackSummary) -> None:
+        self.run_button.setEnabled(True)
+        self.copy_button.setEnabled(True)
+        self._last_batch = result
+        self.password_edit.setText(result.password)
+        final_zip = result.output_dir / f"{result.source_dir.name}.zip"
+        lines = [
+            f"来源目录：{result.source_dir}",
+            f"最终压缩包：{final_zip}",
+            f"统一密码：{result.password}",
+            f"打包时间：{result.created_at}",
+            "",
+            f"包含 {len(result.summaries)} 个子文件夹：",
+        ]
+        for summary in result.summaries:
+            lines.append(f"  {summary.source_path.name}  ({summary.file_count} 个文件)")
+        self.result_text.setPlainText("\n".join(lines))
 
     def run_query(self) -> None:
         records = query_pack_history(self.query_edit.text().strip())
