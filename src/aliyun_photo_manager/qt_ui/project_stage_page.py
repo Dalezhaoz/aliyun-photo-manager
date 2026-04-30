@@ -10,21 +10,15 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
-    QFileDialog,
     QCheckBox,
-    QComboBox,
-    QFrame,
-    QGridLayout,
+    QFileDialog,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QPlainTextEdit,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
 )
 
 from ..project_stage_report import (
@@ -35,7 +29,9 @@ from ..project_stage_report import (
     query_project_stages,
     summary_from_dict,
 )
+from .base_page import BaseToolPage
 from .common import AppComboBox
+from .widgets import FormRow, PrimaryButton, SecondaryButton, Section
 
 
 class WorkerSignals(QObject):
@@ -60,11 +56,14 @@ class SimpleWorker(QRunnable):
             self.signals.success.emit(result)
 
 
-class ProjectStagePage(QWidget):
-    LABEL_WIDTH = 118
-
+class ProjectStagePage(BaseToolPage):
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="项目阶段汇总",
+            description="一次查看多台 SQL Server 上报名项目的阶段状态，支持服务器配置和结果导出。",
+            show_steps=False,
+            show_log=True,
+        )
         self.log_fn = log_fn
         self.thread_pool = QThreadPool.globalInstance()
         self.server_configs: list[StageServerConfig] = []
@@ -73,66 +72,38 @@ class ProjectStagePage(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
+        if self.left_card.title is not None:
+            self.left_card.title.setText("服务器与查询配置")
 
-        hero = self._card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        title = QLabel("项目阶段汇总")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("一次查看多台 SQL Server 上报名项目的阶段状态，支持服务器配置和结果导出。")
-        intro.setProperty("heroText", True)
-        intro.setWordWrap(True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
-
-        body = QGridLayout()
-        body.setHorizontalSpacing(16)
-        body.setVerticalSpacing(16)
-        root.addLayout(body, 1)
-
-        left = self._card()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(24, 22, 24, 24)
-        left_layout.setSpacing(18)
-
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(14)
+        server_section = Section("服务器配置")
         self.server_name_edit = QLineEdit()
-        self._add_row(form, 0, "服务器名称", self.server_name_edit)
+        server_section.add(FormRow("服务器名称", self.server_name_edit))
         self.server_host_edit = QLineEdit()
-        self._add_row(form, 1, "数据库地址", self.server_host_edit)
+        server_section.add(FormRow("数据库地址", self.server_host_edit))
         self.server_port_edit = QLineEdit("1433")
-        self._add_row(form, 2, "端口", self.server_port_edit)
+        server_section.add(FormRow("端口", self.server_port_edit))
         self.server_user_edit = QLineEdit()
-        self._add_row(form, 3, "用户名", self.server_user_edit)
+        server_section.add(FormRow("用户名", self.server_user_edit))
         self.server_password_edit = QLineEdit()
         self.server_password_edit.setEchoMode(QLineEdit.Password)
-        self._add_row(form, 4, "密码", self.server_password_edit)
+        server_section.add(FormRow("密码", self.server_password_edit))
         self.server_enabled_checkbox = QCheckBox("启用此服务器")
         self.server_enabled_checkbox.setChecked(True)
-        form.addWidget(self.server_enabled_checkbox, 5, 1)
-        left_layout.addLayout(form)
+        server_section.add(self.server_enabled_checkbox)
+        self.left_card.body_layout.addWidget(server_section)
 
         server_actions = QHBoxLayout()
-        save_button = QPushButton("新增/更新")
-        save_button.clicked.connect(self.save_server)
-        clear_button = QPushButton("清空表单")
-        clear_button.clicked.connect(self.clear_server_form)
-        delete_button = QPushButton("删除所选")
-        delete_button.clicked.connect(self.delete_server)
-        test_button = QPushButton("测试连接")
-        test_button.clicked.connect(self.test_server)
-        server_actions.addWidget(save_button)
-        server_actions.addWidget(clear_button)
-        server_actions.addWidget(delete_button)
-        server_actions.addWidget(test_button)
+        for text, handler in [
+            ("新增/更新", self.save_server),
+            ("清空表单", self.clear_server_form),
+            ("删除所选", self.delete_server),
+            ("测试连接", self.test_server),
+        ]:
+            button = QPushButton(text)
+            button.clicked.connect(handler)
+            server_actions.addWidget(button)
         server_actions.addStretch(1)
-        left_layout.addLayout(server_actions)
+        self.left_card.body_layout.addLayout(server_actions)
 
         self.server_table = QTableWidget(0, 3)
         self.server_table.setHorizontalHeaderLabels(["服务器名称", "地址", "启用"])
@@ -140,56 +111,34 @@ class ProjectStagePage(QWidget):
         self.server_table.verticalHeader().setVisible(False)
         self.server_table.setMinimumHeight(140)
         self.server_table.itemSelectionChanged.connect(self.on_server_selected)
-        left_layout.addWidget(self.server_table)
+        self.left_card.body_layout.addWidget(self.server_table)
 
-        filters = QGridLayout()
-        filters.setHorizontalSpacing(14)
-        filters.setVerticalSpacing(14)
+        filter_section = Section("查询筛选")
         self.status_filter_combo = AppComboBox()
         self.status_filter_combo.addItems(["正在进行 + 即将开始", "全部", "只看正在进行", "只看即将开始"])
-        self._add_row(filters, 0, "状态", self.status_filter_combo)
+        filter_section.add(FormRow("状态", self.status_filter_combo))
         self.stage_keyword_edit = QLineEdit()
-        self._add_row(filters, 1, "阶段关键字", self.stage_keyword_edit)
+        filter_section.add(FormRow("阶段关键字", self.stage_keyword_edit))
         self.project_keyword_edit = QLineEdit()
-        self._add_row(filters, 2, "项目关键字", self.project_keyword_edit)
-        left_layout.addLayout(filters)
+        filter_section.add(FormRow("项目关键字", self.project_keyword_edit))
+        self.left_card.body_layout.addWidget(filter_section)
 
         query_actions = QHBoxLayout()
-        self.run_button = QPushButton("开始查询")
-        self.run_button.setProperty("accent", True)
+        self.run_button = PrimaryButton("开始查询")
         self.run_button.clicked.connect(self.start_query)
-        export_button = QPushButton("导出 Excel")
+        export_button = SecondaryButton("导出 Excel")
         export_button.clicked.connect(self.export_result)
         query_actions.addWidget(self.run_button)
         query_actions.addWidget(export_button)
         query_actions.addStretch(1)
-        left_layout.addLayout(query_actions)
-        body.addWidget(left, 0, 0)
+        self.left_card.body_layout.addLayout(query_actions)
 
-        right = self._card()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(24, 22, 24, 24)
-        title = QLabel("查询结果")
-        title.setProperty("sectionTitle", True)
-        right_layout.addWidget(title)
+        if self.right_card.title is not None:
+            self.right_card.title.setText("查询结果")
+
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
-        right_layout.addWidget(self.result_text, 1)
-        body.addWidget(right, 0, 1)
-        body.setColumnStretch(0, 3)
-        body.setColumnStretch(1, 2)
-
-    def _card(self) -> QFrame:
-        frame = QFrame()
-        frame.setProperty("pageCard", True)
-        return frame
-
-    def _add_row(self, layout: QGridLayout, row: int, label_text: str, field: QWidget) -> None:
-        label = QLabel(label_text)
-        label.setProperty("formLabel", True)
-        label.setFixedWidth(self.LABEL_WIDTH)
-        layout.addWidget(label, row, 0)
-        layout.addWidget(field, row, 1)
+        self.right_card.body_layout.addWidget(self.result_text, 1)
 
     def refresh_server_table(self) -> None:
         self.server_table.setRowCount(0)
@@ -266,6 +215,7 @@ class ProjectStagePage(QWidget):
             return
 
         self.run_button.setEnabled(False)
+
         def on_success(summary: ProjectStageSummary) -> None:
             self.run_button.setEnabled(True)
             self.result_text.setPlainText(
@@ -325,14 +275,17 @@ class ProjectStagePage(QWidget):
         ]
         for item in summary.records[:50]:
             lines.append(
-                f"{item.server_name} / {item.database_name} / {item.project_name} / {item.stage_name} / {item.status}"
+                f"{item.server_name} / {item.database_name} / {item.project_name}"
+                f" / {item.stage_name} / {item.status}"
             )
         self.result_text.setPlainText("\n".join(lines))
 
     def export_result(self) -> None:
         if self.last_summary is None or not self.last_summary.records:
             return
-        selected, _ = QFileDialog.getSaveFileName(self, "导出项目阶段汇总", "项目阶段汇总.xlsx", "Excel 文件 (*.xlsx)")
+        selected, _ = QFileDialog.getSaveFileName(
+            self, "导出项目阶段汇总", "项目阶段汇总.xlsx", "Excel 文件 (*.xlsx)"
+        )
         if not selected:
             return
         try:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import traceback
 import json
+import traceback
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import Qt, QObject, QRunnable, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -17,8 +17,9 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QPushButton,
     QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -32,18 +33,24 @@ from ..app import (
 )
 from ..certificate_filter import list_template_headers
 from ..config import OssConfig, validate_oss_config
-from ..downloader import BrowserEntry, list_browser_entries, list_buckets
+from ..downloader import BrowserEntry, list_browser_entries, list_bucket_infos, search_folder_entries
+from .base_page import BaseToolPage
 from .common import AppComboBox
+
+
+EXCEL_FILE_FILTER = "Excel 文件 (*.xlsx *.xls)"
 
 
 class WorkerSignals(QObject):
     success = Signal(object)
     error = Signal(str)
+    progress = Signal(str, int, int, str)
 
 
 class PhotoWorker(QRunnable):
     def __init__(self, task: Callable[[], object], on_success: Callable[[object], None], on_error: Callable[[str], None]) -> None:
         super().__init__()
+        self.setAutoDelete(False)
         self.task = task
         self.signals = WorkerSignals()
         self.signals.success.connect(on_success)
@@ -58,54 +65,48 @@ class PhotoWorker(QRunnable):
             self.signals.success.emit(result)
 
 
-class PhotoPage(QWidget):
+class PhotoPage(BaseToolPage):
     LABEL_WIDTH = 118
     ACTION_WIDTH = 116
     SETTINGS_FILE = Path(__file__).resolve().parents[3] / ".gui_settings.json"
 
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="照片下载与分类",
+            description="支持本地目录直接生成模板并分类，也支持云存储按表过滤下载后再处理。",
+            show_steps=True,
+            show_log=False,
+        )
         self.log_fn = log_fn
         self.thread_pool = QThreadPool.globalInstance()
         self.photo_filter_headers: list[str] = []
         self.browser_entries: list[BrowserEntry] = []
+        self.browser_cache: dict[str, list[BrowserEntry]] = {}
+        self.browser_listing_prefix = ""
+        self.selected_prefix = ""
+        self._loading_bucket_list = False
+        self._browser_request_id = 0
         self._active_action = "download"
+        self.progress_signal = WorkerSignals()
+        self.progress_signal.progress.connect(self.update_progress)
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
-
-        hero = self._create_card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        hero_layout.setSpacing(8)
-        title = QLabel("照片下载与分类")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("支持云存储下载照片、按表过滤下载，以及根据本地目录生成模板后再按模板分类。")
-        intro.setWordWrap(True)
-        intro.setProperty("heroText", True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
-
-        body = self._create_card()
-        body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(24, 22, 24, 24)
-        body_layout.setSpacing(18)
-        root.addWidget(body, 1)
+        body_layout = self.left_card.body_layout
+        if self.left_card.title is not None:
+            self.left_card.title.setText("执行参数")
+        if self.right_card.title is not None:
+            self.right_card.title.setText("执行结果")
 
         title_label = QLabel("执行参数")
         title_label.setProperty("sectionTitle", True)
-        body_layout.addWidget(title_label)
 
         form = QGridLayout()
         form.setHorizontalSpacing(14)
         form.setVerticalSpacing(14)
 
         self.source_mode_combo = AppComboBox()
-        self.source_mode_combo.addItems(["本地目录", "云存储下载后处理"])
+        self.source_mode_combo.addItems(["本地目录", "云存储"])
         self.source_mode_combo.currentIndexChanged.connect(self.update_source_mode_state)
         self._add_row(form, 0, "数据来源", self.source_mode_combo)
 
@@ -123,6 +124,7 @@ class PhotoPage(QWidget):
 
         self.cloud_type_combo = AppComboBox()
         self.cloud_type_combo.addItems(["aliyun", "tencent"])
+        self.cloud_type_combo.currentTextChanged.connect(self._on_cloud_type_changed)
         self._add_row(cloud_form, 0, "云类型", self.cloud_type_combo)
 
         self.endpoint_edit = QLineEdit()
@@ -148,49 +150,53 @@ class PhotoPage(QWidget):
         bucket_layout.addWidget(self.load_bucket_button)
         self._add_row(cloud_form, 4, "Bucket", bucket_row)
 
-        self.prefix_edit = QLineEdit()
-        self.prefix_edit.setPlaceholderText("当前前缀，留空表示根目录")
-        self._add_row(cloud_form, 5, "当前前缀", self.prefix_edit)
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("可留空，留空时搜索全部目录")
+        self._add_row(cloud_form, 5, "前缀搜索", self.search_edit)
 
         browser_controls = QWidget()
         browser_controls_layout = QHBoxLayout(browser_controls)
         browser_controls_layout.setContentsMargins(0, 0, 0, 0)
         browser_controls_layout.setSpacing(10)
-        self.load_prefix_button = QPushButton("加载当前层级")
-        self.load_prefix_button.clicked.connect(self.load_browser_entries)
+        self.load_prefix_button = QPushButton("搜索")
+        self.load_prefix_button.clicked.connect(self.search_browser_entries)
         browser_controls_layout.addWidget(self.load_prefix_button)
-        self.parent_prefix_button = QPushButton("返回上一级")
+        self.parent_prefix_button = QPushButton("返回上一层")
         self.parent_prefix_button.clicked.connect(self.go_to_parent_prefix)
         browser_controls_layout.addWidget(self.parent_prefix_button)
         browser_controls_layout.addStretch(1)
-        self._add_row(cloud_form, 6, "云端目录", browser_controls)
+        self._add_row(cloud_form, 6, "目录搜索", browser_controls)
 
         self.browser_list = QListWidget()
         self.browser_list.setMinimumHeight(150)
         self.browser_list.itemClicked.connect(self.on_browser_item_clicked)
-        self.browser_list.itemDoubleClicked.connect(self.on_browser_item_double_clicked)
         self._add_row(cloud_form, 7, "", self.browser_list)
 
-        self.browser_status_label = QLabel("请先选择 Bucket，再加载当前层级。")
+        self.browser_status_label = QLabel("请先选择 Bucket，再输入前缀后点击搜索。")
         self.browser_status_label.setWordWrap(True)
         self._add_row(cloud_form, 8, "", self.browser_status_label)
+
+        self.selected_path_label = QLabel("未选择下载路径")
+        self.selected_path_label.setWordWrap(True)
+        self._add_row(cloud_form, 9, "已选路径", self.selected_path_label)
 
         cloud_layout.addLayout(cloud_form)
         form.addWidget(self.cloud_section, 1, 0, 1, 2)
 
         self.download_dir_edit = QLineEdit()
-        self._add_row(form, 2, "下载目录", self._with_dir_button(self.download_dir_edit))
+        self.download_dir_label = self._add_row(form, 2, "本地目录", self._with_dir_button(self.download_dir_edit))
 
         self.sorted_dir_edit = QLineEdit()
-        self._add_row(form, 3, "分类目录", self._with_dir_button(self.sorted_dir_edit))
+        self.sorted_dir_label = self._add_row(form, 3, "分类目录", self._with_dir_button(self.sorted_dir_edit))
 
         self.filter_download_checkbox = QCheckBox("云下载时按表过滤")
+        self.filter_download_checkbox.setChecked(True)
         self.filter_download_checkbox.toggled.connect(self.update_filter_state)
         form.addWidget(self.filter_download_checkbox, 4, 1)
 
         self.filter_template_edit = QLineEdit()
         filter_template_row = self._with_file_button(self.filter_template_edit, self.choose_filter_template)
-        self._add_row(form, 5, "过滤表", filter_template_row)
+        self.filter_template_label = self._add_row(form, 5, "过滤表", filter_template_row)
 
         self.filter_column_combo = AppComboBox()
         self.filter_column_combo.setEditable(False)
@@ -202,7 +208,7 @@ class PhotoPage(QWidget):
         filter_column_layout.setSpacing(10)
         filter_column_layout.addWidget(self.filter_column_combo, 1)
         filter_column_layout.addWidget(load_filter_headers_btn)
-        self._add_row(form, 6, "前缀列", filter_column_row)
+        self.filter_column_label = self._add_row(form, 6, "前缀列", filter_column_row)
 
         body_layout.addLayout(form)
 
@@ -235,36 +241,44 @@ class PhotoPage(QWidget):
 
         actions.addStretch(1)
         body_layout.addLayout(actions)
+        body_layout.addStretch(1)
 
-        result_title = QLabel("执行结果")
-        result_title.setProperty("sectionTitle", True)
-        body_layout.addWidget(result_title)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        self.right_card.body_layout.addWidget(self.progress_bar)
+
+        self.progress_label = QLabel("未开始")
+        self.progress_label.setWordWrap(True)
+        self.right_card.body_layout.addWidget(self.progress_label)
 
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
         self.result_text.setMinimumHeight(160)
         self.result_text.setPlaceholderText("这里会显示下载、模板生成和分类结果。")
-        body_layout.addWidget(self.result_text)
-        body_layout.addStretch(1)
+        self.right_card.body_layout.addWidget(self.result_text, 1)
 
-        self.update_source_mode_state()
-        self.update_filter_state()
         self._bind_cloud_cache_events()
         self._load_cached_cloud_settings()
         self._show_browser_placeholder()
+        self.update_source_mode_state()
+        self.update_filter_state()
 
     def _create_card(self) -> QFrame:
         frame = QFrame()
         frame.setProperty("pageCard", True)
         return frame
 
-    def _add_row(self, layout: QGridLayout, row: int, label_text: str, field: QWidget) -> None:
+    def _add_row(self, layout: QGridLayout, row: int, label_text: str, field: QWidget) -> QLabel | None:
+        label = None
         if label_text:
             label = QLabel(label_text)
             label.setProperty("formLabel", True)
             label.setFixedWidth(self.LABEL_WIDTH)
             layout.addWidget(label, row, 0)
         layout.addWidget(field, row, 1)
+        return label
 
     def _with_dir_button(self, line_edit: QLineEdit) -> QWidget:
         row = QWidget()
@@ -296,7 +310,7 @@ class PhotoPage(QWidget):
             line_edit.setText(selected)
 
     def choose_filter_template(self) -> None:
-        selected, _ = QFileDialog.getOpenFileName(self, "选择过滤表", "", "Excel 文件 (*.xlsx)")
+        selected, _ = QFileDialog.getOpenFileName(self, "选择过滤表", "", EXCEL_FILE_FILTER)
         if selected:
             self.filter_template_edit.setText(selected)
             self.load_filter_headers()
@@ -319,46 +333,58 @@ class PhotoPage(QWidget):
     def update_source_mode_state(self) -> None:
         cloud_mode = self.source_mode_combo.currentIndex() == 1
         self.cloud_section.setVisible(cloud_mode)
-        for widget in (
-            self.cloud_type_combo,
-            self.endpoint_edit,
-            self.access_key_id_edit,
-            self.access_key_secret_edit,
-            self.bucket_combo,
-            self.prefix_edit,
-            self.skip_existing_checkbox,
-            self.filter_download_checkbox,
-        ):
-            widget.setVisible(cloud_mode)
-            widget.setEnabled(cloud_mode)
+        self.filter_download_checkbox.setVisible(cloud_mode)
+        self.filter_download_checkbox.setEnabled(cloud_mode)
+        self.skip_existing_checkbox.setVisible(cloud_mode)
+        self.skip_existing_checkbox.setEnabled(cloud_mode)
         self.download_button.setVisible(cloud_mode)
         self.download_button.setEnabled(True)
+        if self.download_dir_label is not None:
+            self.download_dir_label.setText("下载目录" if cloud_mode else "本地目录")
+        if self.sorted_dir_label is not None:
+            self.sorted_dir_label.setText("分类目录")
         self.update_filter_state()
 
     def update_filter_state(self) -> None:
-        enabled = self.source_mode_combo.currentIndex() == 1 and self.filter_download_checkbox.isChecked()
+        cloud_mode = self.source_mode_combo.currentIndex() == 1
+        enabled = cloud_mode and self.filter_download_checkbox.isChecked()
         self.filter_template_edit.setEnabled(enabled)
         self.filter_column_combo.setEnabled(enabled)
+        if self.filter_template_label is not None:
+            self.filter_template_label.setVisible(cloud_mode)
+        if self.filter_column_label is not None:
+            self.filter_column_label.setVisible(cloud_mode)
+        self.filter_template_edit.parentWidget().setVisible(cloud_mode)
+        self.filter_column_combo.parentWidget().setVisible(cloud_mode)
 
-    def _show_browser_placeholder(self, text: str = "请先选择 Bucket，再加载当前层级。") -> None:
+    def _show_browser_placeholder(self, text: str = "请先选择 Bucket，再输入前缀后点击搜索。") -> None:
         self.browser_entries = []
+        self.browser_listing_prefix = ""
         self.browser_list.clear()
         item = QListWidgetItem(text)
         item.setFlags(Qt.NoItemFlags)
         self.browser_list.addItem(item)
         self.browser_status_label.setText(text)
+        self.selected_path_label.setText("未选择下载路径")
+        self.selected_prefix = ""
 
-    def build_options(self) -> RunOptions:
+    def build_options(self, *, require_sorted_dir: bool, require_selected_prefix: bool) -> RunOptions:
         download_dir = self.download_dir_edit.text().strip()
-        sorted_dir = self.sorted_dir_edit.text().strip()
         if not download_dir:
-            raise ValueError("请先选择下载目录。")
-        if not sorted_dir:
+            raise ValueError("请先选择目录。")
+
+        sorted_dir_text = self.sorted_dir_edit.text().strip()
+        sorted_dir = Path(sorted_dir_text) if sorted_dir_text else None
+        if require_sorted_dir and sorted_dir is None:
             raise ValueError("请先选择分类目录。")
+
+        cloud_mode = self.source_mode_combo.currentIndex() == 1
+        if require_selected_prefix and cloud_mode and not self.selected_prefix:
+            raise ValueError("请先从下方搜索结果中选择下载路径。")
 
         filter_template_path = None
         filter_column = ""
-        filter_download = self.source_mode_combo.currentIndex() == 1 and self.filter_download_checkbox.isChecked()
+        filter_download = cloud_mode and self.filter_download_checkbox.isChecked()
         if filter_download:
             filter_template_text = self.filter_template_edit.text().strip()
             if not filter_template_text:
@@ -368,13 +394,13 @@ class PhotoPage(QWidget):
                 raise ValueError("过滤表文件不存在。")
             filter_column = self.filter_column_combo.currentText().strip()
             if not filter_column:
-                raise ValueError("已启用按表过滤下载，请先选择文件名前缀列。")
+                raise ValueError("已启用按表过滤下载，请先选择前缀列。")
 
         return RunOptions(
             download_dir=Path(download_dir),
-            sorted_dir=Path(sorted_dir),
-            prefix=self.prefix_edit.text().strip(),
-            skip_download=self.source_mode_combo.currentIndex() == 0,
+            sorted_dir=sorted_dir,
+            prefix=self.selected_prefix if cloud_mode else "",
+            skip_download=not cloud_mode,
             dry_run=self.dry_run_checkbox.isChecked(),
             skip_existing=self.skip_existing_checkbox.isChecked(),
             filter_download=filter_download,
@@ -383,15 +409,56 @@ class PhotoPage(QWidget):
         )
 
     def build_cloud_config(self) -> OssConfig:
+        cloud_type = self.cloud_type_combo.currentText().strip()
+        endpoint = self.endpoint_edit.text().strip()
+        bucket_location = self.bucket_combo.currentData()
+        if cloud_type == "tencent" and isinstance(bucket_location, str) and bucket_location.strip():
+            endpoint = bucket_location.strip()
         return validate_oss_config(
             OssConfig(
-                cloud_type=self.cloud_type_combo.currentText().strip(),
+                cloud_type=cloud_type,
                 access_key_id=self.access_key_id_edit.text().strip(),
                 access_key_secret=self.access_key_secret_edit.text().strip(),
-                endpoint=self.endpoint_edit.text().strip(),
+                endpoint=endpoint,
                 bucket_name=self.bucket_combo.currentText().strip(),
             )
         )
+
+    def _append_result_log(self, line: str) -> None:
+        current = self.result_text.toPlainText().rstrip()
+        self.result_text.setPlainText(f"{current}\n{line}" if current else line)
+
+    def _format_browser_debug(
+        self,
+        *,
+        action: str,
+        config: OssConfig,
+        prefix: str | None = None,
+        keyword: str | None = None,
+        count: int | None = None,
+        entries: list[BrowserEntry] | None = None,
+    ) -> str:
+        parts = [
+            f"[browser] {action}",
+            f"cloud={config.cloud_type}",
+            f"endpoint={config.endpoint}",
+            f"bucket={config.bucket_name}",
+        ]
+        if prefix is not None:
+            parts.append(f"prefix={prefix or '/'}")
+        if keyword is not None:
+            parts.append(f"keyword={keyword or '<empty>'}")
+        if count is not None:
+            parts.append(f"count={count}")
+        if entries is not None:
+            folder_count = sum(1 for entry in entries if entry.entry_type == "folder")
+            file_count = sum(1 for entry in entries if entry.entry_type == "file")
+            sample = ", ".join(entry.key for entry in entries[:8])
+            parts.append(f"folders={folder_count}")
+            parts.append(f"files={file_count}")
+            if sample:
+                parts.append(f"sample={sample}")
+        return " | ".join(parts)
 
     def load_buckets(self) -> None:
         try:
@@ -400,22 +467,32 @@ class PhotoPage(QWidget):
             access_key_secret = self.access_key_secret_edit.text().strip()
             endpoint = self.endpoint_edit.text().strip()
             if not access_key_id or not access_key_secret or not endpoint:
-                raise ValueError("请先填写云类型、Endpoint / Region、AccessKey。")
+                raise ValueError("请先填写云类型、Endpoint / Region 和 AccessKey。")
         except Exception as exc:
             QMessageBox.critical(self, "参数错误", str(exc))
             return
 
         self.load_bucket_button.setEnabled(False)
-        self.result_text.setPlainText("正在加载 Bucket 列表...")
+        self._loading_bucket_list = True
+        self.result_text.setPlainText(
+            "\n".join(
+                [
+                    "[bucket] start",
+                    f"cloud={cloud_type}",
+                    f"endpoint={endpoint}",
+                    f"access_key_id_len={len(access_key_id)}",
+                ]
+            )
+        )
         worker = PhotoWorker(
-            task=lambda: list_buckets(
+            task=lambda: list_bucket_infos(
                 access_key_id=access_key_id,
                 access_key_secret=access_key_secret,
                 endpoint=endpoint,
                 cloud_type=cloud_type,
             ),
             on_success=self.on_buckets_loaded,
-            on_error=self.on_error,
+            on_error=self.on_bucket_load_error,
         )
         self.thread_pool.start(worker)
 
@@ -423,80 +500,269 @@ class PhotoPage(QWidget):
         self.load_bucket_button.setEnabled(True)
         current = self.bucket_combo.currentText().strip()
         self.bucket_combo.clear()
-        self.bucket_combo.addItems(buckets)
+        bucket_names: list[str] = []
+        bucket_debug: list[str] = []
+        for bucket in buckets:
+            name = getattr(bucket, "name", str(bucket))
+            location = getattr(bucket, "location", "") or ""
+            self.bucket_combo.addItem(name, location)
+            bucket_names.append(name)
+            bucket_debug.append(f"{name}:{location or '-'}")
         if current:
             index = self.bucket_combo.findText(current)
             if index >= 0:
                 self.bucket_combo.setCurrentIndex(index)
+        self._apply_current_bucket_location()
+        self._loading_bucket_list = False
         self._save_cached_cloud_settings()
-        self.result_text.setPlainText(f"已加载 {len(buckets)} 个 Bucket。")
-
-        self._show_browser_placeholder("Bucket 已加载，请点“加载当前层级”选择目录。")
-
-    def load_browser_entries(self) -> None:
+        self.result_text.setPlainText(
+            "\n".join(
+                [
+                    "[bucket] done",
+                    f"count={len(bucket_names)}",
+                    f"buckets={', '.join(bucket_debug[:20])}",
+                ]
+            )
+        )
+        self._show_browser_placeholder("Bucket 已加载，请输入前缀后点击搜索。")
         try:
             config = self.build_cloud_config()
-            prefix = self.prefix_edit.text().strip()
+        except Exception:
+            self.browser_status_label.setText("Bucket 已加载，可直接点搜索查看根层目录，或输入前缀后搜索。")
+            return
+        self._append_result_log(
+            self._format_browser_debug(action="bucket-ready", config=config, prefix=self.selected_prefix)
+        )
+
+    def _load_browser_entries(self, config: OssConfig, prefix: str, status_template: str) -> None:
+        request_id, context = self._start_browser_request(config)
+        self._append_result_log(
+            self._format_browser_debug(action=f"list-start#{request_id}", config=config, prefix=prefix)
+        )
+        worker = PhotoWorker(
+            task=lambda: list_browser_entries(config, prefix),
+            on_success=lambda entries: self._accept_browser_entries_loaded(
+                entries,
+                request_id=request_id,
+                context=context,
+                prefix=prefix,
+                status=status_template.format(prefix=prefix or "/"),
+                is_directory_listing=True,
+            ),
+            on_error=self.on_error,
+        )
+        self._browser_worker = worker
+        self.thread_pool.start(worker)
+
+    def _start_global_browser_search(self, config: OssConfig, keyword: str) -> None:
+        self.browser_status_label.setText("正在搜索目录...")
+        request_id, context = self._start_browser_request(config)
+        self._append_result_log(
+            self._format_browser_debug(action=f"search-start#{request_id}", config=config, keyword=keyword)
+        )
+        worker = PhotoWorker(
+            task=lambda: search_folder_entries(config, keyword),
+            on_success=lambda entries: self._accept_browser_entries_loaded(
+                entries,
+                request_id=request_id,
+                context=context,
+                prefix=None,
+                status=f"找到 {len(entries)} 个匹配条目，请在下方选择目录作为下载路径。",
+                is_directory_listing=False,
+            ),
+            on_error=self.on_error,
+        )
+        self._browser_worker = worker
+        self.thread_pool.start(worker)
+
+    def _cloud_context(self, config: OssConfig) -> tuple[str, str, str]:
+        return (config.cloud_type, config.endpoint, config.bucket_name)
+
+    def _start_browser_request(self, config: OssConfig) -> tuple[int, tuple[str, str, str]]:
+        self._browser_request_id += 1
+        return self._browser_request_id, self._cloud_context(config)
+
+    def _is_current_browser_request(self, request_id: int, context: tuple[str, str, str]) -> bool:
+        if request_id != self._browser_request_id:
+            return False
+        try:
+            current_config = self.build_cloud_config()
+        except Exception:
+            return False
+        return self._cloud_context(current_config) == context
+
+    def _search_in_current_entries(self, config: OssConfig, keyword: str, entries: list[BrowserEntry]) -> None:
+        keyword_lower = keyword.lower()
+        folder_candidates = [
+            entry
+            for entry in entries
+            if entry.entry_type == "folder"
+            and (
+                entry.display_name.lower().startswith(keyword_lower)
+                or entry.key.strip("/").lower().startswith(keyword_lower)
+                or f"/{keyword_lower}" in f"/{entry.key.strip('/').lower()}"
+            )
+        ]
+        exact_matches = [
+            entry
+            for entry in folder_candidates
+            if entry.display_name.lower() == keyword_lower
+            or entry.key.strip("/").lower() == keyword_lower
+        ]
+        matched_folder = None
+        if len(exact_matches) == 1:
+            matched_folder = exact_matches[0]
+        elif len(folder_candidates) == 1:
+            matched_folder = folder_candidates[0]
+
+        if matched_folder is not None:
+            target_prefix = matched_folder.key
+            self.browser_status_label.setText(f"正在进入目录：{target_prefix}")
+            self._load_browser_entries(config, target_prefix, "当前目录：{prefix}")
+            return
+
+        self._start_global_browser_search(config, keyword)
+
+    def search_browser_entries(self) -> None:
+        try:
+            config = self.build_cloud_config()
+            keyword = self.search_edit.text().strip()
         except Exception as exc:
             QMessageBox.critical(self, "参数错误", str(exc))
             return
 
         self.load_prefix_button.setEnabled(False)
-        self.browser_status_label.setText("正在加载当前层级...")
-        worker = PhotoWorker(
-            task=lambda: list_browser_entries(config, prefix),
-            on_success=self.on_browser_entries_loaded,
-            on_error=self.on_error,
-        )
-        self.thread_pool.start(worker)
+        current_prefix = self.selected_prefix
 
-    def on_browser_entries_loaded(self, entries: list[BrowserEntry]) -> None:
+        if not keyword:
+            self.browser_status_label.setText("正在加载目录...")
+            cached_entries = self.browser_cache.get(current_prefix)
+            if cached_entries is not None:
+                self.on_browser_entries_loaded(
+                    cached_entries,
+                    prefix=current_prefix,
+                    status=f"当前目录：{current_prefix or '/'}",
+                    is_directory_listing=True,
+                )
+                return
+            self._load_browser_entries(config, current_prefix, "当前目录：{prefix}")
+            return
+
+        cached_entries = self.browser_cache.get(current_prefix)
+        if cached_entries is not None:
+            self._search_in_current_entries(config, keyword, cached_entries)
+            return
+
+        self._start_global_browser_search(config, keyword)
+
+    def _search_after_loading_current(
+        self,
+        config: OssConfig,
+        keyword: str,
+        current_prefix: str,
+        entries: list[BrowserEntry],
+    ) -> None:
+        try:
+            if self._cloud_context(config) != self._cloud_context(self.build_cloud_config()):
+                return
+        except Exception:
+            return
+        self.browser_cache[current_prefix] = entries
+        self.browser_listing_prefix = current_prefix
+        self._search_in_current_entries(config, keyword, entries)
+
+    def _accept_browser_entries_loaded(
+        self,
+        entries: list[BrowserEntry],
+        *,
+        request_id: int,
+        context: tuple[str, str, str],
+        prefix: str | None = None,
+        status: str | None = None,
+        is_directory_listing: bool = False,
+    ) -> None:
+        if not self._is_current_browser_request(request_id, context):
+            self.load_prefix_button.setEnabled(True)
+            self._append_result_log(
+                f"[browser] stale-response ignored | request_id={request_id} | context={context}"
+            )
+            return
+        self.on_browser_entries_loaded(
+            entries,
+            prefix=prefix,
+            status=status,
+            is_directory_listing=is_directory_listing,
+        )
+
+    def on_browser_entries_loaded(
+        self,
+        entries: list[BrowserEntry],
+        *,
+        prefix: str | None = None,
+        status: str | None = None,
+        is_directory_listing: bool = False,
+    ) -> None:
         self.load_prefix_button.setEnabled(True)
         self.browser_entries = entries
+        if is_directory_listing:
+            cache_prefix = prefix or ""
+            self.browser_cache[cache_prefix] = entries
+            self.browser_listing_prefix = cache_prefix
+        else:
+            self.browser_listing_prefix = ""
         self.browser_list.clear()
+        try:
+            config = self.build_cloud_config()
+            self._append_result_log(
+                self._format_browser_debug(
+                    action="list-done" if is_directory_listing else "search-done",
+                    config=config,
+                    prefix=prefix,
+                    count=len(entries),
+                    entries=entries,
+                )
+            )
+        except Exception:
+            self._append_result_log(f"[browser] done | count={len(entries)}")
         if not entries:
-            self._show_browser_placeholder("当前层级没有子文件夹或文件。")
+            self._show_browser_placeholder("没有找到匹配的条目。")
             return
+        if prefix is not None:
+            self.selected_prefix = prefix
+            self.selected_path_label.setText(prefix or "未选择下载路径")
         for entry in entries:
-            marker = "[目录]" if entry.entry_type == "folder" else "[文件]"
-            item = QListWidgetItem(f"{marker} {entry.display_name}")
-            item.setData(Qt.UserRole, entry.key)
-            item.setData(Qt.UserRole + 1, entry.entry_type)
+            label_prefix = "[目录]" if entry.entry_type == "folder" else "[文件]"
+            item = QListWidgetItem(f"{label_prefix} {entry.display_name}")
+            item.setData(Qt.UserRole, entry)
             self.browser_list.addItem(item)
-        folder_count = len([entry for entry in entries if entry.entry_type == "folder"])
-        file_count = len(entries) - folder_count
-        current_prefix = self.prefix_edit.text().strip() or "/"
-        self.browser_status_label.setText(f"当前：{current_prefix}，找到 {folder_count} 个文件夹，{file_count} 个文件。")
+        self.browser_status_label.setText(status or f"已加载 {len(entries)} 个条目，请在下方选择目录。")
 
     def on_browser_item_clicked(self, item: QListWidgetItem) -> None:
-        entry_key = item.data(Qt.UserRole)
-        entry_type = item.data(Qt.UserRole + 1)
-        if not entry_key or not entry_type:
+        entry = item.data(Qt.UserRole)
+        if not entry:
             return
-        if entry_type == "folder":
-            self.prefix_edit.setText(str(entry_key))
-            self.browser_status_label.setText(f"已选文件夹：{entry_key}")
-            self._save_cached_cloud_settings()
-        else:
-            self.browser_status_label.setText(f"当前文件：{entry_key}")
-
-    def on_browser_item_double_clicked(self, item: QListWidgetItem) -> None:
-        entry_key = item.data(Qt.UserRole)
-        entry_type = item.data(Qt.UserRole + 1)
-        if entry_type != "folder" or not entry_key:
+        if entry.entry_type != "folder":
+            self.browser_status_label.setText("当前选中的是文件，请选择目录作为下载路径。")
             return
-        self.prefix_edit.setText(str(entry_key))
+        self.selected_prefix = str(entry.key)
+        self.selected_path_label.setText(self.selected_prefix)
+        self.browser_status_label.setText(f"已选择下载路径：{self.selected_prefix}")
         self._save_cached_cloud_settings()
-        self.load_browser_entries()
 
     def go_to_parent_prefix(self) -> None:
-        current = self.prefix_edit.text().strip().strip("/")
+        current = self.selected_prefix.strip().strip("/")
         if not current:
-            self.prefix_edit.clear()
+            self.selected_prefix = ""
+            self.selected_path_label.setText("未选择下载路径")
+            self.browser_status_label.setText("当前已在根目录。")
         else:
-            self.prefix_edit.setText("/".join(current.split("/")[:-1]))
+            parent = "/".join(current.split("/")[:-1]).strip("/")
+            self.selected_prefix = parent + "/" if parent else ""
+            self.selected_path_label.setText(self.selected_prefix or "未选择下载路径")
+            self.browser_status_label.setText(
+                f"已返回上一层：{self.selected_prefix or '/'}"
+            )
         self._save_cached_cloud_settings()
-        self.load_browser_entries()
 
     def _read_settings(self) -> dict:
         if not self.SETTINGS_FILE.exists():
@@ -510,17 +776,44 @@ class PhotoPage(QWidget):
         self.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _bind_cloud_cache_events(self) -> None:
-        self.cloud_type_combo.currentTextChanged.connect(self._on_cloud_type_changed)
         for widget in (
             self.endpoint_edit,
             self.access_key_id_edit,
             self.access_key_secret_edit,
-            self.bucket_combo,
-            self.prefix_edit,
+            self.search_edit,
         ):
             if hasattr(widget, "editingFinished"):
                 widget.editingFinished.connect(self._save_cached_cloud_settings)
-        self.bucket_combo.currentTextChanged.connect(self._save_cached_cloud_settings)
+        self.bucket_combo.currentTextChanged.connect(self._on_bucket_changed)
+
+    def _on_bucket_changed(self, bucket_name: str) -> None:
+        if self._loading_bucket_list:
+            return
+        self._apply_current_bucket_location()
+        self._browser_request_id += 1
+        self.browser_cache.clear()
+        self.browser_entries = []
+        self.browser_listing_prefix = ""
+        self.selected_prefix = ""
+        self.selected_path_label.setText("未选择下载路径")
+        self._save_cached_cloud_settings()
+        if not bucket_name.strip():
+            self._show_browser_placeholder("请先选择 Bucket，再输入前缀后点击搜索。")
+            return
+        self._show_browser_placeholder("Bucket 已切换，请输入前缀后点击搜索。")
+        try:
+            config = self.build_cloud_config()
+        except Exception as exc:
+            self.browser_status_label.setText(str(exc))
+            return
+        self._append_result_log(self._format_browser_debug(action="bucket-changed", config=config, prefix=""))
+
+    def _apply_current_bucket_location(self) -> None:
+        if self.cloud_type_combo.currentText().strip() != "tencent":
+            return
+        location = self.bucket_combo.currentData()
+        if isinstance(location, str) and location.strip():
+            self.endpoint_edit.setText(location.strip())
 
     def _save_cached_cloud_settings(self) -> None:
         settings = self._read_settings()
@@ -531,7 +824,8 @@ class PhotoPage(QWidget):
         profile["access_key_secret"] = self.access_key_secret_edit.text().strip()
         profile["endpoint"] = self.endpoint_edit.text().strip()
         profile["bucket_name"] = self.bucket_combo.currentText().strip()
-        profile["prefix"] = self.prefix_edit.text().strip()
+        profile["search_keyword"] = self.search_edit.text().strip()
+        profile["prefix"] = self.selected_prefix
         settings["cloud_type"] = cloud_type
         self._write_settings(settings)
 
@@ -550,22 +844,26 @@ class PhotoPage(QWidget):
         self.access_key_secret_edit.setText(profile.get("access_key_secret", ""))
         self.endpoint_edit.setText(profile.get("endpoint", ""))
         bucket_name = profile.get("bucket_name", "")
+        selected_prefix = profile.get("prefix", "")
         self.bucket_combo.clear()
         if bucket_name:
             self.bucket_combo.addItem(bucket_name)
-        self.prefix_edit.setText(profile.get("prefix", ""))
-        self._show_browser_placeholder("请点“加载当前层级”选择目录。")
+        self.search_edit.setText(profile.get("search_keyword", ""))
+        self._show_browser_placeholder("请输入前缀后点击搜索。")
+        if selected_prefix:
+            self.selected_prefix = selected_prefix
+            self.selected_path_label.setText(selected_prefix)
 
     def _on_cloud_type_changed(self, cloud_type: str) -> None:
+        self._browser_request_id += 1
+        self._loading_bucket_list = True
         self._apply_cached_cloud_profile(cloud_type)
+        self._loading_bucket_list = False
         self._save_cached_cloud_settings()
 
     def start_download(self) -> None:
         try:
-            options = self.build_options()
-            if options.skip_download:
-                QMessageBox.information(self, "本地模式", "本地目录模式不需要下载，直接点击“生成模板”即可。")
-                return
+            options = self.build_options(require_sorted_dir=False, require_selected_prefix=True)
             oss_config = self.build_cloud_config()
         except Exception as exc:
             QMessageBox.critical(self, "参数错误", str(exc))
@@ -573,9 +871,15 @@ class PhotoPage(QWidget):
 
         self._active_action = "download"
         self._set_running(True)
+        self.reset_progress("准备下载...")
         self.result_text.setPlainText("正在下载并生成模板，请稍候...")
         worker = PhotoWorker(
-            task=lambda: run_photo_download_and_template(options, oss_config=oss_config, logger=self.log_fn),
+            task=lambda: run_photo_download_and_template(
+                options,
+                oss_config=oss_config,
+                logger=self.log_fn,
+                progress_callback=self.make_progress_callback(),
+            ),
             on_success=self.on_success,
             on_error=self.on_error,
         )
@@ -583,13 +887,14 @@ class PhotoPage(QWidget):
 
     def start_generate_template(self) -> None:
         try:
-            options = self.build_options()
+            options = self.build_options(require_sorted_dir=False, require_selected_prefix=False)
         except Exception as exc:
             QMessageBox.critical(self, "参数错误", str(exc))
             return
 
         self._active_action = "template"
         self._set_running(True)
+        self.reset_progress("正在生成模板...")
         self.result_text.setPlainText("正在生成模板，请稍候...")
         worker = PhotoWorker(
             task=lambda: run_photo_template_only(options, logger=self.log_fn),
@@ -600,13 +905,14 @@ class PhotoPage(QWidget):
 
     def start_classify(self) -> None:
         try:
-            options = self.build_options()
+            options = self.build_options(require_sorted_dir=True, require_selected_prefix=False)
         except Exception as exc:
             QMessageBox.critical(self, "参数错误", str(exc))
             return
 
         self._active_action = "classify"
         self._set_running(True)
+        self.reset_progress("正在分类...")
         self.result_text.setPlainText("正在按模板分类，请稍候...")
         worker = PhotoWorker(
             task=lambda: run_photo_classification_only(options, logger=self.log_fn),
@@ -619,11 +925,40 @@ class PhotoPage(QWidget):
         self.download_button.setEnabled(not running)
         self.generate_button.setEnabled(not running)
         self.classify_button.setEnabled(not running)
+        self.load_prefix_button.setEnabled(not running)
+
+    def make_progress_callback(self):
+        def progress(stage: str, current: int, total: int, current_file: str) -> None:
+            self.progress_signal.progress.emit(stage, current, total, current_file)
+
+        return progress
+
+    def reset_progress(self, text: str) -> None:
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
+        self.progress_label.setText(text)
+
+    def update_progress(self, stage: str, current: int, total: int, current_file: str) -> None:
+        maximum = max(total, 1)
+        self.progress_bar.setRange(0, maximum)
+        self.progress_bar.setValue(min(current, maximum))
+        filename = Path(current_file).name if current_file else ""
+        if total:
+            self.progress_label.setText(f"下载进度：{current}/{total} {filename}".strip())
+        else:
+            self.progress_label.setText("正在统计下载文件...")
 
     def on_success(self, summary: WorkflowSummary) -> None:
         self._set_running(False)
-        if hasattr(self, "load_prefix_button"):
-            self.load_prefix_button.setEnabled(True)
+        if self._active_action == "download" and summary.download_result is not None:
+            self.update_progress(
+                "download",
+                summary.download_result.total_found,
+                summary.download_result.total_found,
+                "",
+            )
+        else:
+            self.progress_label.setText("任务完成")
         lines = [
             f"下载目录：{summary.download_dir}",
             f"分类目录：{summary.sorted_dir}",
@@ -639,12 +974,14 @@ class PhotoPage(QWidget):
             )
             if self.filter_download_checkbox.isChecked():
                 lines.append(f"下载过滤列：{self.filter_column_combo.currentText().strip()}")
+            if self.selected_prefix:
+                lines.append(f"下载路径：{self.selected_prefix}")
         if self._active_action == "download":
             lines.append(f"模板文件数：{summary.template_file_count}")
             lines.append("本次已完成下载并生成模板。")
         elif self._active_action == "template":
             lines.append(f"模板文件数：{summary.template_file_count}")
-            lines.append("已根据当前下载目录或本地目录生成模板。")
+            lines.append("已根据当前目录生成模板。")
         else:
             lines.append(f"分类完成：{summary.classified_count}")
             if summary.report_path is not None:
@@ -653,7 +990,11 @@ class PhotoPage(QWidget):
 
     def on_error(self, error_text: str) -> None:
         self._set_running(False)
-        if hasattr(self, "load_prefix_button"):
-            self.load_prefix_button.setEnabled(True)
+        self.progress_label.setText("任务失败")
         self.result_text.setPlainText(error_text)
         QMessageBox.critical(self, "执行失败", error_text.splitlines()[0])
+
+    def on_bucket_load_error(self, error_text: str) -> None:
+        self._loading_bucket_list = False
+        self.load_bucket_button.setEnabled(True)
+        self.on_error(error_text)

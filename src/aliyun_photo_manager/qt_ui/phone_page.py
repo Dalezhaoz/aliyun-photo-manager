@@ -4,20 +4,16 @@ import traceback
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QFileDialog,
-    QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QPlainTextEdit,
+    QPushButton,
     QRadioButton,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -27,7 +23,8 @@ from ..phone_decrypt import (
     load_filter_id_cards,
     run_phone_decrypt,
 )
-from .common import AppComboBox
+from .base_page import BaseToolPage
+from .widgets import FormRow, PrimaryButton, SecondaryButton, Section
 
 
 class WorkerSignals(QObject):
@@ -59,77 +56,43 @@ class PhoneWorker(QRunnable):
             self.signals.success.emit(summary)
 
 
-class PhoneDecryptPage(QWidget):
-    LABEL_WIDTH = 118
+class PhoneDecryptPage(BaseToolPage):
     ACTION_WIDTH = 116
 
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="电话解密",
+            description="通过 helper 解密 web_info.info1，并回写到考生表备用3。",
+            show_steps=False,
+            show_log=True,
+        )
         self.log_fn = log_fn
         self.thread_pool = QThreadPool.globalInstance()
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
+        if self.left_card.title is not None:
+            self.left_card.title.setText("解密参数")
 
-        hero = self._create_card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        hero_layout.setSpacing(8)
-        title = QLabel("电话解密")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("通过 helper 解密 `web_info.info1`，并回写到考生表 `备用3`。")
-        intro.setWordWrap(True)
-        intro.setProperty("heroText", True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
-
-        body = QGridLayout()
-        body.setHorizontalSpacing(16)
-        body.setVerticalSpacing(16)
-        root.addLayout(body, 1)
-
-        card = self._create_card()
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(24, 22, 24, 24)
-        card_layout.setSpacing(18)
-        section_title = QLabel("解密参数")
-        section_title.setProperty("sectionTitle", True)
-        card_layout.addWidget(section_title)
-
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(14)
-        form.setColumnStretch(0, 0)
-        form.setColumnStretch(1, 1)
-        row_index = 0
-
+        conn_section = Section("数据库连接")
         self.server_edit = QLineEdit()
-        self._add_form_row(form, row_index, "服务器", self.server_edit)
-        row_index += 1
+        conn_section.add(FormRow("服务器", self.server_edit))
         self.port_edit = QLineEdit("1433")
-        self._add_form_row(form, row_index, "端口", self.port_edit)
-        row_index += 1
+        conn_section.add(FormRow("端口", self.port_edit))
         self.username_edit = QLineEdit()
-        self._add_form_row(form, row_index, "用户名", self.username_edit)
-        row_index += 1
+        conn_section.add(FormRow("用户名", self.username_edit))
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.Password)
-        self._add_form_row(form, row_index, "密码", self.password_edit)
-        row_index += 1
+        conn_section.add(FormRow("密码", self.password_edit))
         self.signup_db_edit = QLineEdit()
-        self._add_form_row(form, row_index, "报名数据库", self.signup_db_edit)
-        row_index += 1
+        conn_section.add(FormRow("报名数据库", self.signup_db_edit))
         self.phone_db_edit = QLineEdit()
-        self._add_form_row(form, row_index, "电话数据库", self.phone_db_edit)
-        row_index += 1
-        self.exam_sort_edit = QLineEdit()
-        self._add_form_row(form, row_index, "考试代码", self.exam_sort_edit)
-        row_index += 1
+        conn_section.add(FormRow("电话数据库", self.phone_db_edit))
+        self.left_card.body_layout.addWidget(conn_section)
 
+        table_section = Section("考生表配置")
+        self.exam_sort_edit = QLineEdit()
+        table_section.add(FormRow("考试代码", self.exam_sort_edit))
         table_row = QWidget()
         table_layout = QHBoxLayout(table_row)
         table_layout.setContentsMargins(0, 0, 0, 0)
@@ -140,9 +103,10 @@ class PhoneDecryptPage(QWidget):
         fill_button.setFixedWidth(self.ACTION_WIDTH)
         fill_button.clicked.connect(self.fill_table_name)
         table_layout.addWidget(fill_button)
-        self._add_form_row(form, row_index, "考生表名", table_row)
-        row_index += 1
+        table_section.add(FormRow("考生表名", table_row))
+        self.left_card.body_layout.addWidget(table_section)
 
+        mode_section = Section("解密模式")
         mode_row = QWidget()
         mode_layout = QHBoxLayout(mode_row)
         mode_layout.setContentsMargins(0, 0, 0, 0)
@@ -154,8 +118,7 @@ class PhoneDecryptPage(QWidget):
         mode_layout.addWidget(self.mode_all)
         mode_layout.addWidget(self.mode_partial)
         mode_layout.addStretch(1)
-        self._add_form_row(form, row_index, "解密模式", mode_row)
-        row_index += 1
+        mode_section.add(FormRow("解密模式", mode_row))
 
         filter_row = QWidget()
         filter_layout = QHBoxLayout(filter_row)
@@ -167,50 +130,25 @@ class PhoneDecryptPage(QWidget):
         self.filter_button.setFixedWidth(self.ACTION_WIDTH)
         self.filter_button.clicked.connect(self.choose_filter_file)
         filter_layout.addWidget(self.filter_button)
-        self._add_form_row(form, row_index, "名单文件", filter_row)
-        row_index += 1
-        card_layout.addLayout(form)
-        card_layout.addStretch(1)
+        mode_section.add(FormRow("名单文件", filter_row))
+        self.left_card.body_layout.addWidget(mode_section)
 
         action_row = QHBoxLayout()
-        action_row.setContentsMargins(0, 8, 0, 0)
-        self.run_button = QPushButton("开始解密")
-        self.run_button.setProperty("accent", True)
-        self.run_button.setFixedWidth(150)
+        self.run_button = PrimaryButton("开始解密")
         self.run_button.clicked.connect(self.start_run)
         action_row.addWidget(self.run_button)
         action_row.addStretch(1)
-        card_layout.addLayout(action_row)
-        body.addWidget(card, 0, 0)
+        self.left_card.body_layout.addLayout(action_row)
+        self.left_card.body_layout.addStretch(1)
 
-        result_card = self._create_card()
-        result_layout = QVBoxLayout(result_card)
-        result_layout.setContentsMargins(24, 22, 24, 24)
-        result_layout.setSpacing(14)
-        result_title = QLabel("解密结果")
-        result_title.setProperty("sectionTitle", True)
-        result_layout.addWidget(result_title)
+        if self.right_card.title is not None:
+            self.right_card.title.setText("解密结果")
+
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
-        result_layout.addWidget(self.result_text)
-        body.addWidget(result_card, 0, 1)
-
-        body.setColumnStretch(0, 3)
-        body.setColumnStretch(1, 2)
+        self.right_card.body_layout.addWidget(self.result_text, 1)
 
         self.update_mode_state()
-
-    def _create_card(self) -> QFrame:
-        frame = QFrame()
-        frame.setProperty("pageCard", True)
-        return frame
-
-    def _add_form_row(self, layout: QGridLayout, row: int, label_text: str, field: QWidget) -> None:
-        label = QLabel(label_text)
-        label.setProperty("formLabel", True)
-        label.setFixedWidth(self.LABEL_WIDTH)
-        layout.addWidget(label, row, 0)
-        layout.addWidget(field, row, 1)
 
     def fill_table_name(self) -> None:
         exam_sort = self.exam_sort_edit.text().strip()

@@ -5,6 +5,7 @@ from .id_card_page import IdCardPage
 from .job_code_audit_page import JobCodeAuditPage
 from .manual_page import ManualPage
 from .match_page import MatchPage
+from .ordered_unit_audit_page import OrderedUnitAuditPage
 from .pack_page import PackPage
 from .phone_page import PhoneDecryptPage
 from .photo_page import PhotoPage
@@ -21,6 +22,7 @@ __all__ = [
     "JobCodeAuditPage",
     "ManualPage",
     "MatchPage",
+    "OrderedUnitAuditPage",
     "PackPage",
     "PhoneDecryptPage",
     "PhotoPage",

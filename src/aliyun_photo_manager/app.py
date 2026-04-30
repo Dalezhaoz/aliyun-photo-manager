@@ -16,7 +16,7 @@ ProgressFn = Optional[Callable[[str, int, int, str], None]]
 @dataclass
 class RunOptions:
     download_dir: Path
-    sorted_dir: Path
+    sorted_dir: Optional[Path] = None
     prefix: str = ""
     skip_download: bool = False
     dry_run: bool = False
@@ -52,6 +52,8 @@ def ensure_child_directory(base_dir: Path, child_name: str) -> Path:
 
 def build_prefixed_directory(base_dir: Path, prefix: str, child_name: str) -> Path:
     normalized = base_dir.expanduser().resolve()
+    if normalized.name == child_name:
+        return normalized
     cleaned_prefix = prefix.strip().strip("/")
     if cleaned_prefix:
         return normalized.joinpath(*cleaned_prefix.split("/"), child_name)
@@ -59,10 +61,12 @@ def build_prefixed_directory(base_dir: Path, prefix: str, child_name: str) -> Pa
 
 
 def resolve_photo_directories(options: RunOptions) -> tuple[Path, Path]:
+    if options.sorted_dir is None:
+        raise ValueError("请先选择分类目录。")
     if options.skip_download:
         return (
             options.download_dir.expanduser().resolve(),
-            options.sorted_dir.expanduser().resolve(),
+            ensure_child_directory(options.sorted_dir, "分类结果"),
         )
     return (
         build_prefixed_directory(options.download_dir, options.prefix, "下载文件"),
@@ -101,7 +105,16 @@ def run_photo_download_and_template(
         if logger is not None:
             logger(message)
 
-    download_dir, sorted_dir = resolve_photo_directories(options)
+    if options.skip_download:
+        download_dir = options.download_dir.expanduser().resolve()
+    else:
+        download_dir = build_prefixed_directory(options.download_dir, options.prefix, "下载文件")
+    if options.sorted_dir is None:
+        sorted_dir = download_dir.parent / "分类结果"
+    elif options.skip_download:
+        sorted_dir = ensure_child_directory(options.sorted_dir, "分类结果")
+    else:
+        sorted_dir = build_prefixed_directory(options.sorted_dir, options.prefix, "分类结果")
     template_path = download_dir / "照片分类模板.xlsx"
 
     log("开始执行照片下载/模板任务。")

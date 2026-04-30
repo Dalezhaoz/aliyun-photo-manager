@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QFrame, QLabel, QPlainTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QPlainTextEdit, QVBoxLayout, QWidget
+
+from .base_page import Card
 
 
 class ManualPage(QWidget):
@@ -15,22 +17,20 @@ class ManualPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(16)
 
-        hero = QFrame()
-        hero.setProperty("pageCard", True)
+        hero = Card()
         hero_layout = QVBoxLayout(hero)
         hero_layout.setContentsMargins(24, 22, 24, 22)
         hero_layout.setSpacing(8)
         title = QLabel("使用说明")
         title.setProperty("heroTitle", True)
-        intro = QLabel("直接展示当前 README 内容，后续再拆成更适合 Qt 的帮助页。")
+        intro = QLabel("查看工具的完整使用说明。")
         intro.setProperty("heroText", True)
         intro.setWordWrap(True)
         hero_layout.addWidget(title)
         hero_layout.addWidget(intro)
         root.addWidget(hero)
 
-        card = QFrame()
-        card.setProperty("pageCard", True)
+        card = Card()
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(24, 22, 24, 24)
         content = QPlainTextEdit()

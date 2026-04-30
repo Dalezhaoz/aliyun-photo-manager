@@ -38,6 +38,12 @@ class BrowserEntry:
 
 
 @dataclass
+class BucketInfo:
+    name: str
+    location: str = ""
+
+
+@dataclass
 class DownloadResult:
     total_found: int
     downloaded_count: int
@@ -117,12 +123,12 @@ def _build_tencent_client(config: OssConfig):
     return CosS3Client(client_config)
 
 
-def list_buckets(
+def list_bucket_infos(
     access_key_id: str,
     access_key_secret: str,
     endpoint: str,
     cloud_type: str = "aliyun",
-) -> List[str]:
+) -> List[BucketInfo]:
     if cloud_type == "aliyun":
         try:
             import oss2
@@ -131,7 +137,10 @@ def list_buckets(
 
         auth = oss2.Auth(access_key_id, access_key_secret)
         service = oss2.Service(auth, endpoint)
-        return [bucket.name for bucket in service.list_buckets().buckets]
+        return [
+            BucketInfo(name=bucket.name, location=getattr(bucket, "location", "") or "")
+            for bucket in service.list_buckets().buckets
+        ]
 
     try:
         from qcloud_cos import CosConfig, CosS3Client
@@ -151,7 +160,28 @@ def list_buckets(
     )
     response = client.list_buckets()
     buckets = response.get("Buckets", {}).get("Bucket", [])
-    return [bucket.get("Name", "") for bucket in buckets if bucket.get("Name")]
+    return [
+        BucketInfo(name=bucket.get("Name", ""), location=bucket.get("Location", "") or "")
+        for bucket in buckets
+        if bucket.get("Name")
+    ]
+
+
+def list_buckets(
+    access_key_id: str,
+    access_key_secret: str,
+    endpoint: str,
+    cloud_type: str = "aliyun",
+) -> List[str]:
+    return [
+        bucket.name
+        for bucket in list_bucket_infos(
+            access_key_id=access_key_id,
+            access_key_secret=access_key_secret,
+            endpoint=endpoint,
+            cloud_type=cloud_type,
+        )
+    ]
 
 
 def _iter_tencent_objects(config: OssConfig, prefix: str = "", delimiter: Optional[str] = None):
@@ -183,11 +213,13 @@ def list_folder_prefixes(config: OssConfig, prefix: str = "") -> List[str]:
     normalized_prefix = normalize_prefix(prefix)
 
     if provider == "aliyun":
+        import oss2
+
         bucket = _build_aliyun_bucket(config)
         folders: List[str] = []
-        result = bucket.list_objects(prefix=normalized_prefix, delimiter="/")
-        for folder in result.prefix_list:
-            folders.append(folder)
+        for result in oss2.ObjectIteratorV2(bucket, prefix=normalized_prefix, delimiter="/", max_keys=1000):
+            for folder in result.prefix_list:
+                folders.append(folder)
         return folders
 
     folders: List[str] = []
@@ -205,32 +237,36 @@ def list_browser_entries(config: OssConfig, prefix: str = "") -> List[BrowserEnt
     entries: List[BrowserEntry] = []
 
     if provider == "aliyun":
+        import oss2
+
         bucket = _build_aliyun_bucket(config)
-        result = bucket.list_objects(prefix=normalized_prefix, delimiter="/")
-
-        for folder in result.prefix_list:
-            entries.append(
-                BrowserEntry(
-                    key=folder,
-                    entry_type="folder",
-                    display_name=folder.rstrip("/").split("/")[-1] or "/",
+        seen_folders: set[str] = set()
+        for result in oss2.ObjectIteratorV2(bucket, prefix=normalized_prefix, delimiter="/", max_keys=1000):
+            for folder in result.prefix_list:
+                if folder in seen_folders:
+                    continue
+                seen_folders.add(folder)
+                entries.append(
+                    BrowserEntry(
+                        key=folder,
+                        entry_type="folder",
+                        display_name=folder.rstrip("/").split("/")[-1] or "/",
+                    )
                 )
-            )
 
-        for obj in result.object_list:
-            if obj.key == normalized_prefix:
-                continue
-            relative = build_local_relative_path(obj.key, normalized_prefix)
-            # 浏览面板只显示当前层级，深层文件要进入子目录后再看。
-            if len(relative.parts) != 1:
-                continue
-            entries.append(
-                BrowserEntry(
-                    key=obj.key,
-                    entry_type="file",
-                    display_name=relative.name,
+            for obj in result.object_list:
+                if obj.key == normalized_prefix:
+                    continue
+                relative = build_local_relative_path(obj.key, normalized_prefix)
+                if len(relative.parts) != 1:
+                    continue
+                entries.append(
+                    BrowserEntry(
+                        key=obj.key,
+                        entry_type="file",
+                        display_name=relative.name,
+                    )
                 )
-            )
         return entries
 
     for response in _iter_tencent_objects(config, prefix=normalized_prefix, delimiter="/"):
@@ -261,6 +297,88 @@ def list_browser_entries(config: OssConfig, prefix: str = "") -> List[BrowserEnt
                 )
             )
     return entries
+
+
+def search_folder_entries(config: OssConfig, keyword: str) -> List[BrowserEntry]:
+    provider = _detect_provider(config)
+    search_prefix = keyword.strip().lstrip("/")
+    entries: dict[str, BrowserEntry] = {}
+
+    if provider == "aliyun":
+        import oss2
+
+        bucket = _build_aliyun_bucket(config)
+        for result in oss2.ObjectIteratorV2(bucket, prefix=search_prefix, delimiter="/", max_keys=1000):
+            for folder in result.prefix_list:
+                entries.setdefault(
+                    folder,
+                    BrowserEntry(
+                        key=folder,
+                        entry_type="folder",
+                        display_name=folder.rstrip("/").split("/")[-1] or "/",
+                    ),
+                )
+
+            for obj in result.object_list:
+                if obj.key in {search_prefix, normalize_prefix(search_prefix)}:
+                    continue
+                entries.setdefault(
+                    obj.key,
+                    BrowserEntry(
+                        key=obj.key,
+                        entry_type="file",
+                        display_name=obj.key.rstrip("/").split("/")[-1] or obj.key,
+                    ),
+                )
+        return [entries[key] for key in sorted(entries)]
+
+    # 腾讯云：直接用关键词作为 Prefix（不加 "/"），匹配所有以关键词开头的对象。
+    client = _build_tencent_client(config)
+    marker = ""
+    while True:
+        kwargs = {
+            "Bucket": config.bucket_name,
+            "Prefix": search_prefix,
+            "Delimiter": "/",
+            "MaxKeys": 1000,
+        }
+        if marker:
+            kwargs["Marker"] = marker
+        response = client.list_objects(**kwargs)
+
+        for folder in response.get("CommonPrefixes", []):
+            folder_prefix = folder.get("Prefix", "")
+            if not folder_prefix:
+                continue
+            entries.setdefault(
+                folder_prefix,
+                BrowserEntry(
+                    key=folder_prefix,
+                    entry_type="folder",
+                    display_name=folder_prefix.rstrip("/").split("/")[-1] or "/",
+                ),
+            )
+
+        for obj in response.get("Contents", []):
+            key = obj.get("Key", "")
+            if not key or key in {search_prefix, normalize_prefix(search_prefix)}:
+                continue
+            entries.setdefault(
+                key,
+                BrowserEntry(
+                    key=key,
+                    entry_type="file",
+                    display_name=key.rstrip("/").split("/")[-1] or key,
+                ),
+            )
+
+        is_truncated = str(response.get("IsTruncated", "false")).lower() == "true"
+        if not is_truncated:
+            break
+        marker = response.get("NextMarker") or ""
+        if not marker:
+            break
+    return [entries[key] for key in sorted(entries)]
 
 
 def _iter_object_keys(config: OssConfig, prefix: str) -> Iterable[str]:

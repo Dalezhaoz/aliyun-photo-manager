@@ -3,21 +3,24 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
+    QScrollArea,
     QSpinBox,
     QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -38,7 +41,9 @@ from ..exam_printing import (
     room_values,
     save_template,
 )
+from .base_page import Card
 from .common import AppComboBox
+from .widgets import FormRow
 
 
 class ExamPrintPage(QWidget):
@@ -58,216 +63,337 @@ class ExamPrintPage(QWidget):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
+        root.setSpacing(10)
 
-        hero = self._card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        title = QLabel("考场文件打印")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("从本地 Excel 和照片目录生成座次表、门贴、桌贴。模板使用占位符，可编辑、可保存、可预览。")
-        intro.setWordWrap(True)
-        intro.setProperty("heroText", True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
+        topbar = Card()
+        topbar.setObjectName("ExamPrintTopbar")
+        topbar_layout = QHBoxLayout(topbar)
+        topbar_layout.setContentsMargins(12, 10, 12, 10)
+        topbar_layout.setSpacing(8)
+        for text, callback in [
+            ("新建模板", self._new_template),
+            ("打开模板", lambda: self._refresh_template_combo()),
+            ("保存模板", self.save_current_template),
+            ("打开Excel", self._choose_excel_and_load),
+            ("选择照片文件夹", self._choose_photo_dir),
+            ("预览", self.render_preview),
+            ("导出HTML", self.export_html),
+            ("打印", self.print_preview),
+        ]:
+            button = QPushButton(text)
+            button.setProperty("toolbarButton", True)
+            button.clicked.connect(callback)
+            topbar_layout.addWidget(button)
+        topbar_layout.addStretch(1)
+        root.addWidget(topbar)
 
-        body = QSplitter()
-        root.addWidget(body, 1)
+        workspace = QSplitter()
+        root.addWidget(workspace, 1)
 
-        left = self._card()
+        left = Card()
+        left.setObjectName("ExamPrintLeftRail")
+        left.setMinimumWidth(210)
+        left.setMaximumWidth(260)
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(24, 22, 24, 24)
-        left_layout.setSpacing(18)
+        left_layout.setContentsMargins(12, 12, 12, 12)
+        left_layout.setSpacing(12)
+        for index, title, subtitle in [
+            ("1", "数据导入", "导入 Excel 并映射字段"),
+            ("2", "照片匹配", "匹配考生照片"),
+            ("3", "模板设计", "设计座次表/门贴/桌贴"),
+            ("4", "打印输出", "预览并打印/导出"),
+        ]:
+            step = self._step_item(index, title, subtitle, active=index == "1")
+            left_layout.addWidget(step)
+        left_layout.addStretch(1)
+        info = Card()
+        info_layout = QVBoxLayout(info)
+        info_layout.setContentsMargins(12, 12, 12, 12)
+        info_layout.setSpacing(8)
+        info_title = QLabel("模板信息")
+        info_title.setProperty("sectionTitle", True)
+        self.template_info_label = QLabel("模板名称：未选择\n模板类型：座次表\n页面大小：A4\n纸张方向：纵向")
+        self.template_info_label.setWordWrap(True)
+        info_layout.addWidget(info_title)
+        info_layout.addWidget(self.template_info_label)
+        left_layout.addWidget(info)
+        workspace.addWidget(left)
 
-        data_title = QLabel("数据与模板")
+        center_scroll = QScrollArea()
+        center_scroll.setWidgetResizable(True)
+        center_scroll.setFrameShape(QFrame.NoFrame)
+        center = QWidget()
+        center_layout = QVBoxLayout(center)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(10)
+        center_scroll.setWidget(center)
+
+        data_card = Card()
+        data_layout = QVBoxLayout(data_card)
+        data_layout.setContentsMargins(16, 14, 16, 14)
+        data_layout.setSpacing(12)
+        data_title = QLabel("数据导入与字段映射")
         data_title.setProperty("sectionTitle", True)
-        left_layout.addWidget(data_title)
+        data_layout.addWidget(data_title)
 
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(14)
-
+        file_row = QHBoxLayout()
         self.excel_edit = QLineEdit()
-        self._add_row(form, 0, "Excel 数据", self._with_file_button(self.excel_edit))
-        self.photo_dir_edit = QLineEdit()
-        self._add_row(form, 1, "照片目录", self._with_folder_button(self.photo_dir_edit))
+        self.excel_edit.setPlaceholderText("选择 Excel 数据文件")
+        excel_button = QPushButton("重新选择")
+        excel_button.clicked.connect(self._choose_excel_and_load)
+        file_row.addWidget(QLabel("Excel文件："))
+        file_row.addWidget(self.excel_edit, 1)
+        file_row.addWidget(excel_button)
+        data_layout.addLayout(file_row)
+
+        data_split = QSplitter()
+        mapping_card = QWidget()
+        mapping_layout = QVBoxLayout(mapping_card)
+        mapping_layout.setContentsMargins(0, 0, 0, 0)
+        mapping_layout.setSpacing(8)
+        mapping_title = QLabel("字段映射（将 Excel 列映射到系统字段）")
+        mapping_title.setProperty("formLabel", True)
+        mapping_layout.addWidget(mapping_title)
 
         self.doc_type_combo = AppComboBox()
         self.doc_type_combo.addItem("座次表", DOC_TYPE_SEAT)
         self.doc_type_combo.addItem("门贴", DOC_TYPE_DOOR)
         self.doc_type_combo.addItem("桌贴", DOC_TYPE_DESK)
         self.doc_type_combo.currentIndexChanged.connect(self._refresh_template_combo)
-        self._add_row(form, 2, "打印类型", self.doc_type_combo)
-
         self.template_combo = AppComboBox()
         self.template_combo.currentIndexChanged.connect(self._apply_selected_template)
-        self._add_row(form, 3, "模板", self.template_combo)
-
         self.template_name_edit = QLineEdit()
         self.template_name_edit.setPlaceholderText("输入模板名称后保存")
-        self._add_row(form, 4, "模板名称", self.template_name_edit)
-
         self.room_column_combo = AppComboBox()
         self.room_column_combo.currentIndexChanged.connect(self._refresh_room_values)
-        self._add_row(form, 5, "考场列", self.room_column_combo)
         self.seat_column_combo = AppComboBox()
-        self._add_row(form, 6, "座号列", self.seat_column_combo)
         self.exam_no_column_combo = AppComboBox()
-        self._add_row(form, 7, "考号列", self.exam_no_column_combo)
         self.site_column_combo = AppComboBox()
-        self._add_row(form, 8, "考点列", self.site_column_combo)
         self.subject_column_combo = AppComboBox()
-        self._add_row(form, 9, "科目列", self.subject_column_combo)
         self.unit_column_combo = AppComboBox()
-        self._add_row(form, 10, "单位列", self.unit_column_combo)
         self.job_column_combo = AppComboBox()
-        self._add_row(form, 11, "岗位列", self.job_column_combo)
         self.photo_match_column_combo = AppComboBox()
-        self._add_row(form, 12, "照片匹配列", self.photo_match_column_combo)
         self.room_value_combo = AppComboBox()
-        self._add_row(form, 13, "预览考场", self.room_value_combo)
+        fields = [
+            ("打印类型", self.doc_type_combo),
+            ("模板", self.template_combo),
+            ("模板名称", self.template_name_edit),
+            ("考场", self.room_column_combo),
+            ("座号", self.seat_column_combo),
+            ("准考证号", self.exam_no_column_combo),
+            ("考点", self.site_column_combo),
+            ("科目", self.subject_column_combo),
+            ("单位", self.unit_column_combo),
+            ("岗位", self.job_column_combo),
+            ("照片匹配", self.photo_match_column_combo),
+            ("预览考场", self.room_value_combo),
+        ]
+        for row, (label, field) in enumerate(fields):
+            form_layout_row = FormRow(label, field)
+            mapping_layout.addWidget(form_layout_row)
+        photo_row = QHBoxLayout()
+        self.photo_dir_edit = QLineEdit()
+        self.photo_dir_edit.setPlaceholderText("可选，选择照片文件夹用于照片匹配")
+        photo_button = QPushButton("选择")
+        photo_button.clicked.connect(self._choose_photo_dir)
+        photo_row.addWidget(QLabel("照片目录："))
+        photo_row.addWidget(self.photo_dir_edit, 1)
+        photo_row.addWidget(photo_button)
+        mapping_layout.addLayout(photo_row)
 
+        settings_row = QHBoxLayout()
         self.columns_spin = QSpinBox()
         self.columns_spin.setRange(1, 12)
         self.columns_spin.setValue(4)
-        self._add_row(form, 14, "每行列数", self.columns_spin)
-
         self.items_per_page_spin = QSpinBox()
         self.items_per_page_spin.setRange(1, 60)
         self.items_per_page_spin.setValue(10)
-        self._add_row(form, 15, "桌贴每页人数", self.items_per_page_spin)
+        settings_row.addWidget(QLabel("每行列数"))
+        settings_row.addWidget(self.columns_spin)
+        settings_row.addWidget(QLabel("桌贴每页人数"))
+        settings_row.addWidget(self.items_per_page_spin)
+        settings_row.addStretch(1)
+        mapping_layout.addLayout(settings_row)
+        data_split.addWidget(mapping_card)
 
-        left_layout.addLayout(form)
+        preview_card = QWidget()
+        preview_layout = QVBoxLayout(preview_card)
+        preview_layout.setContentsMargins(0, 0, 0, 0)
+        preview_layout.setSpacing(8)
+        preview_title = QLabel("数据预览（前 10 条）")
+        preview_title.setProperty("formLabel", True)
+        preview_layout.addWidget(preview_title)
+        self.data_preview_table = QTableWidget(0, 0)
+        self.data_preview_table.setMinimumHeight(220)
+        self.data_preview_table.setAlternatingRowColors(True)
+        preview_layout.addWidget(self.data_preview_table)
+        self.record_count_label = QLabel("未加载数据")
+        self.record_count_label.setProperty("heroText", True)
+        preview_layout.addWidget(self.record_count_label)
+        data_split.addWidget(preview_card)
+        data_split.setStretchFactor(0, 3)
+        data_split.setStretchFactor(1, 5)
+        data_layout.addWidget(data_split)
+        center_layout.addWidget(data_card)
 
-        action_row = QHBoxLayout()
-        load_button = QPushButton("加载列")
-        load_button.clicked.connect(self.load_headers)
-        save_button = QPushButton("保存模板")
-        save_button.clicked.connect(self.save_current_template)
-        preview_button = QPushButton("生成预览")
-        preview_button.setProperty("accent", True)
-        preview_button.clicked.connect(self.render_preview)
-        action_row.addWidget(load_button)
-        action_row.addWidget(save_button)
-        action_row.addWidget(preview_button)
-        left_layout.addLayout(action_row)
+        designer_card = Card()
+        designer_layout = QVBoxLayout(designer_card)
+        designer_layout.setContentsMargins(16, 14, 16, 14)
+        designer_layout.setSpacing(10)
+        designer_title = QLabel("模板设计（座次表模板）")
+        designer_title.setProperty("sectionTitle", True)
+        designer_layout.addWidget(designer_title)
 
-        placeholder_title = QLabel("可用占位符")
-        placeholder_title.setProperty("sectionTitle", True)
-        left_layout.addWidget(placeholder_title)
-        self.placeholder_text = QPlainTextEdit()
-        self.placeholder_text.setReadOnly(True)
-        self.placeholder_text.setPlaceholderText("先选择 Excel 并加载列。")
-        self.placeholder_text.setMinimumHeight(160)
-        left_layout.addWidget(self.placeholder_text, 1)
-
-        body.addWidget(left)
-
-        right = self._card()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(24, 22, 24, 24)
-        right_layout.setSpacing(16)
-
-        editor_title = QLabel("模板编辑与预览")
-        editor_title.setProperty("sectionTitle", True)
-        right_layout.addWidget(editor_title)
-
-        toolbar = QHBoxLayout()
-        bold_button = QPushButton("加粗")
+        editor_toolbar = QHBoxLayout()
+        for text, callback in [
+            ("选择", lambda: None),
+            ("文本", lambda: None),
+            ("图片", lambda: None),
+            ("表格", lambda: None),
+            ("矩形", lambda: None),
+            ("线条", lambda: None),
+            ("删除", lambda: None),
+            ("撤销", lambda: None),
+            ("重做", lambda: None),
+        ]:
+            button = QPushButton(text)
+            button.setProperty("toolbarButton", True)
+            button.clicked.connect(callback)
+            editor_toolbar.addWidget(button)
+        bold_button = QPushButton("B")
         bold_button.clicked.connect(lambda: self._toggle_weight(True))
-        italic_button = QPushButton("斜体")
+        italic_button = QPushButton("I")
         italic_button.clicked.connect(lambda: self._toggle_weight(False, italic=True))
-        underline_button = QPushButton("下划线")
+        underline_button = QPushButton("U")
         underline_button.clicked.connect(self._toggle_underline)
         insert_button = QPushButton("插入占位符")
         insert_button.clicked.connect(self.insert_placeholder)
-        toolbar.addWidget(bold_button)
-        toolbar.addWidget(italic_button)
-        toolbar.addWidget(underline_button)
-        toolbar.addWidget(insert_button)
-        toolbar.addStretch(1)
-        right_layout.addLayout(toolbar)
+        for button in (bold_button, italic_button, underline_button, insert_button):
+            button.setProperty("toolbarButton", True)
+            editor_toolbar.addWidget(button)
+        editor_toolbar.addStretch(1)
+        editor_toolbar.addWidget(QLabel("100%"))
+        designer_layout.addLayout(editor_toolbar)
 
-        editor_splitter = QSplitter()
-        right_layout.addWidget(editor_splitter, 1)
-
-        main_card = self._card()
+        editor_splitter = QSplitter(Qt.Vertical)
+        main_card = QWidget()
         main_layout = QVBoxLayout(main_card)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.addWidget(QLabel("主模板"))
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(QLabel("主模板画布"))
         self.main_editor = QTextEdit()
         self.main_editor.setAcceptRichText(True)
+        self.main_editor.setMinimumHeight(220)
         main_layout.addWidget(self.main_editor)
         editor_splitter.addWidget(main_card)
 
-        item_card = self._card()
+        item_card = QWidget()
         item_layout = QVBoxLayout(item_card)
-        item_layout.setContentsMargins(16, 16, 16, 16)
+        item_layout.setContentsMargins(0, 0, 0, 0)
         self.item_title = QLabel("考生单元模板")
         item_layout.addWidget(self.item_title)
         self.item_editor = QTextEdit()
         self.item_editor.setAcceptRichText(True)
+        self.item_editor.setMinimumHeight(140)
         item_layout.addWidget(self.item_editor)
         editor_splitter.addWidget(item_card)
+        designer_layout.addWidget(editor_splitter, 1)
+        center_layout.addWidget(designer_card, 1)
 
-        preview_card = self._card()
-        preview_layout = QVBoxLayout(preview_card)
-        preview_layout.setContentsMargins(16, 16, 16, 16)
-        preview_layout.addWidget(QLabel("预览"))
+        result_card = Card()
+        result_layout = QVBoxLayout(result_card)
+        result_layout.setContentsMargins(16, 14, 16, 14)
+        result_layout.setSpacing(8)
+        result_layout.addWidget(QLabel("预览与输出"))
         self.preview_edit = QTextEdit()
         self.preview_edit.setReadOnly(True)
-        preview_layout.addWidget(self.preview_edit)
-        preview_actions = QHBoxLayout()
-        print_button = QPushButton("打印")
-        print_button.clicked.connect(self.print_preview)
-        export_button = QPushButton("导出 HTML")
-        export_button.clicked.connect(self.export_html)
-        preview_actions.addWidget(print_button)
-        preview_actions.addWidget(export_button)
-        preview_actions.addStretch(1)
-        preview_layout.addLayout(preview_actions)
-        right_layout.addWidget(preview_card, 1)
+        self.preview_edit.setMinimumHeight(220)
+        result_layout.addWidget(self.preview_edit)
+        center_layout.addWidget(result_card)
+        workspace.addWidget(center_scroll)
 
-        body.addWidget(right)
-        body.setStretchFactor(0, 2)
-        body.setStretchFactor(1, 4)
+        right = Card()
+        right.setObjectName("ExamPrintRightPanel")
+        right.setMinimumWidth(230)
+        right.setMaximumWidth(290)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(12, 12, 12, 12)
+        right_layout.setSpacing(10)
+        fields_title = QLabel("可用字段")
+        fields_title.setProperty("sectionTitle", True)
+        right_layout.addWidget(fields_title)
+        self.placeholder_text = QPlainTextEdit()
+        self.placeholder_text.setReadOnly(True)
+        self.placeholder_text.setPlaceholderText("先选择 Excel 并加载列。")
+        self.placeholder_text.setMinimumHeight(230)
+        right_layout.addWidget(self.placeholder_text, 2)
+        layers_title = QLabel("控件图层")
+        layers_title.setProperty("sectionTitle", True)
+        right_layout.addWidget(layers_title)
+        self.layer_text = QPlainTextEdit()
+        self.layer_text.setReadOnly(True)
+        self.layer_text.setPlainText("标题文本\n考场信息文本\n考生人数文本\n座次表格")
+        right_layout.addWidget(self.layer_text, 1)
+        workspace.addWidget(right)
 
-    def _card(self) -> QFrame:
+        workspace.setStretchFactor(0, 1)
+        workspace.setStretchFactor(1, 6)
+        workspace.setStretchFactor(2, 1)
+
+    def _step_item(self, index: str, title: str, subtitle: str, *, active: bool = False) -> QFrame:
         frame = QFrame()
-        frame.setProperty("pageCard", True)
+        frame.setProperty("workflowStep", True)
+        frame.setProperty("active", active)
+        layout = QHBoxLayout(frame)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+        badge = QLabel(index)
+        badge.setFixedSize(28, 28)
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setProperty("stepBadge", True)
+        text_layout = QVBoxLayout()
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(3)
+        title_label = QLabel(title)
+        title_label.setProperty("formLabel", True)
+        subtitle_label = QLabel(subtitle)
+        subtitle_label.setWordWrap(True)
+        subtitle_label.setProperty("heroText", True)
+        text_layout.addWidget(title_label)
+        text_layout.addWidget(subtitle_label)
+        layout.addWidget(badge)
+        layout.addLayout(text_layout, 1)
         return frame
 
-    def _add_row(self, layout: QGridLayout, row: int, label_text: str, field: QWidget) -> None:
-        label = QLabel(label_text)
-        label.setProperty("formLabel", True)
-        label.setFixedWidth(self.LABEL_WIDTH)
-        layout.addWidget(label, row, 0)
-        layout.addWidget(field, row, 1)
+    def _choose_excel_and_load(self) -> None:
+        self.choose_file(self.excel_edit)
+        if self.excel_edit.text().strip():
+            self.load_headers()
 
-    def _with_file_button(self, line_edit: QLineEdit) -> QWidget:
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(10)
-        row_layout.addWidget(line_edit, 1)
-        button = QPushButton("选择文件")
-        button.setFixedWidth(self.ACTION_WIDTH)
-        button.clicked.connect(lambda: self.choose_file(line_edit))
-        row_layout.addWidget(button)
-        return row
+    def _choose_photo_dir(self) -> None:
+        self.choose_folder(self.photo_dir_edit)
 
-    def _with_folder_button(self, line_edit: QLineEdit) -> QWidget:
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(10)
-        row_layout.addWidget(line_edit, 1)
-        button = QPushButton("选择目录")
-        button.setFixedWidth(self.ACTION_WIDTH)
-        button.clicked.connect(lambda: self.choose_folder(line_edit))
-        row_layout.addWidget(button)
-        return row
+    def _new_template(self) -> None:
+        self.template_name_edit.clear()
+        self.main_editor.setHtml("<h1 style='text-align:center;'>考场座次表</h1><p>考点：${考点}　考场：${考场}</p><p>${座次表格}</p>")
+        self.item_editor.setHtml("<p>${座号}　${姓名}　${准考证号}</p>")
+        self.preview_edit.clear()
+
+    def _refresh_data_preview(self) -> None:
+        visible_headers = self.headers[:8]
+        visible_records = self.records[:10]
+        self.data_preview_table.clear()
+        self.data_preview_table.setRowCount(len(visible_records))
+        self.data_preview_table.setColumnCount(len(visible_headers))
+        self.data_preview_table.setHorizontalHeaderLabels(visible_headers)
+        for row_index, record in enumerate(visible_records):
+            for column_index, header in enumerate(visible_headers):
+                self.data_preview_table.setItem(
+                    row_index,
+                    column_index,
+                    QTableWidgetItem(str(record.get(header, ""))),
+                )
+        self.data_preview_table.resizeColumnsToContents()
+        self.record_count_label.setText(f"共 {len(self.records)} 人" if self.records else "未加载数据")
 
     def choose_file(self, line_edit: QLineEdit) -> None:
         selected, _ = QFileDialog.getOpenFileName(self, "选择 Excel 文件", "", "Excel 文件 (*.xlsx *.xls)")
@@ -306,6 +432,12 @@ class ExamPrintPage(QWidget):
         self.item_editor.setEnabled(not is_door)
         self.columns_spin.setEnabled(template.doc_type in {DOC_TYPE_SEAT, DOC_TYPE_DESK})
         self.items_per_page_spin.setEnabled(template.doc_type == DOC_TYPE_DESK)
+        if hasattr(self, "template_info_label"):
+            type_label = self.doc_type_combo.currentText()
+            source = "内置模板" if template.builtin else "自定义模板"
+            self.template_info_label.setText(
+                f"模板名称：{template.name}\n模板类型：{type_label}\n模板来源：{source}\n页面大小：A4\n纸张方向：纵向"
+            )
 
     def current_template(self) -> PrintTemplate | None:
         data = self.template_combo.currentData()
@@ -324,6 +456,7 @@ class ExamPrintPage(QWidget):
             return
         self._fill_header_combos()
         self.placeholder_text.setPlainText("\n".join(available_placeholders(self.headers)))
+        self._refresh_data_preview()
         self.log_fn(f"已加载考场打印数据：{excel_path.name}，共 {len(self.records)} 条。")
 
     def _fill_header_combos(self) -> None:

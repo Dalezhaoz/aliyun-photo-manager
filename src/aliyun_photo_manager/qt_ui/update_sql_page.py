@@ -6,17 +6,12 @@ from typing import Callable
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
-    QComboBox,
     QFileDialog,
-    QFrame,
-    QGridLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QPlainTextEdit,
-    QVBoxLayout,
+    QPushButton,
     QWidget,
 )
 
@@ -25,159 +20,93 @@ from ..update_sql_generator import (
     load_update_field_mappings,
     render_update_sql,
 )
+from .base_page import BaseToolPage
 from .common import AppComboBox
+from .widgets import FormRow, PathInput, PrimaryButton, SecondaryButton, Section
 
 
-class UpdateSqlPage(QWidget):
-    LABEL_WIDTH = 118
+class UpdateSqlPage(BaseToolPage):
     ACTION_WIDTH = 116
 
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="更新 SQL 生成",
+            description="通过字段映射模板生成标准 UPDATE SQL，可选择忽略空值覆盖正式表。",
+            show_steps=False,
+            show_log=True,
+        )
         self.log_fn = log_fn
         self.last_sql = ""
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
+        if self.left_card.title is not None:
+            self.left_card.title.setText("模板与关联设置")
 
-        hero = self._create_card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        hero_layout.setSpacing(8)
-        title = QLabel("更新 SQL 生成")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("通过字段映射模板生成标准 UPDATE SQL，可选择忽略空值覆盖正式表。")
-        intro.setWordWrap(True)
-        intro.setProperty("heroText", True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
+        mapping_section = Section("字段映射")
+        self.mapping_input = PathInput("请选择字段映射模板", "选择文件")
+        self.mapping_edit = self.mapping_input.edit
+        self.mapping_input.button.clicked.connect(self.choose_mapping)
+        mapping_section.add(FormRow("映射模板", self.mapping_input))
 
-        body = QGridLayout()
-        body.setHorizontalSpacing(16)
-        body.setVerticalSpacing(16)
-        root.addLayout(body, 1)
-
-        left = self._create_card()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(24, 22, 24, 24)
-        left_layout.setSpacing(18)
-        left_title = QLabel("模板与关联设置")
-        left_title.setProperty("sectionTitle", True)
-        left_layout.addWidget(left_title)
-
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(14)
-
-        self.mapping_edit = QLineEdit()
-        mapping_row = self._with_file_button(self.mapping_edit, self.choose_mapping, "选择文件")
-        self._add_row(form, 0, "映射模板", mapping_row)
-
-        template_actions = QWidget()
-        template_actions_layout = QHBoxLayout(template_actions)
-        template_actions_layout.setContentsMargins(0, 0, 0, 0)
-        template_actions_layout.setSpacing(10)
+        btn_row = QWidget()
+        btn_layout = QHBoxLayout(btn_row)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(10)
         load_button = QPushButton("加载字段")
         load_button.setFixedWidth(self.ACTION_WIDTH)
         load_button.clicked.connect(self.load_headers)
         export_button = QPushButton("导出模板")
         export_button.setFixedWidth(self.ACTION_WIDTH)
         export_button.clicked.connect(self.export_template)
-        template_actions_layout.addWidget(load_button)
-        template_actions_layout.addWidget(export_button)
-        template_actions_layout.addStretch(1)
-        self._add_row(form, 1, "", template_actions)
+        btn_layout.addWidget(load_button)
+        btn_layout.addWidget(export_button)
+        btn_layout.addStretch(1)
+        mapping_section.add(FormRow("", btn_row))
+        self.left_card.body_layout.addWidget(mapping_section)
 
+        table_section = Section("表名与关联字段")
         self.target_table_edit = QLineEdit()
-        self._add_row(form, 2, "考生表名称", self.target_table_edit)
+        table_section.add(FormRow("考生表名称", self.target_table_edit))
         self.source_table_edit = QLineEdit()
-        self._add_row(form, 3, "临时表名称", self.source_table_edit)
-
+        table_section.add(FormRow("临时表名称", self.source_table_edit))
         self.target_key_combo = AppComboBox()
-        self._add_row(form, 4, "考生表关联字段", self.target_key_combo)
+        table_section.add(FormRow("考生表关联字段", self.target_key_combo))
         self.source_key_combo = AppComboBox()
-        self._add_row(form, 5, "临时表关联字段", self.source_key_combo)
-
+        table_section.add(FormRow("临时表关联字段", self.source_key_combo))
         self.ignore_empty_checkbox = QCheckBox("忽略空值，不覆盖正式表")
-        form.addWidget(self.ignore_empty_checkbox, 6, 1)
-        left_layout.addLayout(form)
-        left_layout.addStretch(1)
+        table_section.add(self.ignore_empty_checkbox)
+        self.left_card.body_layout.addWidget(table_section)
 
         action_row = QHBoxLayout()
-        self.run_button = QPushButton("生成 SQL")
-        self.run_button.setProperty("accent", True)
-        self.run_button.setFixedWidth(132)
+        self.run_button = PrimaryButton("生成 SQL")
         self.run_button.clicked.connect(self.render_sql)
-        self.copy_button = QPushButton("复制 SQL")
-        self.copy_button.setFixedWidth(132)
+        action_row.addWidget(self.run_button)
+        self.copy_button = SecondaryButton("复制 SQL")
         self.copy_button.setEnabled(False)
         self.copy_button.clicked.connect(self.copy_sql)
-        action_row.addWidget(self.run_button)
         action_row.addWidget(self.copy_button)
         action_row.addStretch(1)
-        left_layout.addLayout(action_row)
-        body.addWidget(left, 0, 0)
+        self.left_card.body_layout.addLayout(action_row)
+        self.left_card.body_layout.addStretch(1)
 
-        right = self._create_card()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(24, 22, 24, 24)
-        right_layout.setSpacing(14)
-        right_title = QLabel("生成结果")
-        right_title.setProperty("sectionTitle", True)
-        right_layout.addWidget(right_title)
+        if self.right_card.title is not None:
+            self.right_card.title.setText("生成结果")
+
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
-        right_layout.addWidget(self.result_text, 1)
-        body.addWidget(right, 0, 1)
-
-        body.setColumnStretch(0, 3)
-        body.setColumnStretch(1, 4)
-
-    def _create_card(self) -> QFrame:
-        frame = QFrame()
-        frame.setProperty("pageCard", True)
-        return frame
-
-    def _add_row(self, layout: QGridLayout, row: int, label_text: str, field: QWidget) -> None:
-        if label_text:
-            label = QLabel(label_text)
-            label.setProperty("formLabel", True)
-            label.setFixedWidth(self.LABEL_WIDTH)
-            layout.addWidget(label, row, 0)
-        layout.addWidget(field, row, 1)
-
-    def _with_file_button(self, line_edit: QLineEdit, callback, button_text: str) -> QWidget:
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(10)
-        row_layout.addWidget(line_edit, 1)
-        button = QPushButton(button_text)
-        button.setFixedWidth(self.ACTION_WIDTH)
-        button.clicked.connect(callback)
-        row_layout.addWidget(button)
-        return row
+        self.right_card.body_layout.addWidget(self.result_text, 1)
 
     def choose_mapping(self) -> None:
         selected, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择映射模板",
-            "",
-            "Excel 文件 (*.xlsx *.xls)",
+            self, "选择映射模板", "", "Excel 文件 (*.xlsx *.xls)"
         )
         if selected:
             self.mapping_edit.setText(selected)
 
     def export_template(self) -> None:
         selected, _ = QFileDialog.getSaveFileName(
-            self,
-            "导出字段映射模板",
-            "更新SQL字段映射模板.xlsx",
-            "Excel 文件 (*.xlsx)",
+            self, "导出字段映射模板", "更新SQL字段映射模板.xlsx", "Excel 文件 (*.xlsx)"
         )
         if not selected:
             return

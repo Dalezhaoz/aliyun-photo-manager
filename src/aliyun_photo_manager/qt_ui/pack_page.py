@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..result_packer import PackSummary, pack_encrypted_folder, query_pack_history
+from .base_page import BaseToolPage
+from .widgets import FormRow, PathInput, PrimaryButton, SecondaryButton, Section
 
 
 class WorkerSignals(QObject):
@@ -46,47 +48,30 @@ class SimpleWorker(QRunnable):
             self.signals.success.emit(result)
 
 
-class PackPage(QWidget):
+class PackPage(BaseToolPage):
     LABEL_WIDTH = 118
     ACTION_WIDTH = 116
 
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="结果打包",
+            description="对任意结果文件或文件夹进行压缩与 AES 加密，并支持历史密码查询。",
+            show_steps=False,
+            show_log=True,
+        )
         self.log_fn = log_fn
         self.thread_pool = QThreadPool.globalInstance()
         self.last_summary: PackSummary | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
-
-        hero = self._card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        title = QLabel("结果打包")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("对任意结果文件或文件夹进行压缩与 AES 加密，并支持历史密码查询。")
-        intro.setProperty("heroText", True)
-        intro.setWordWrap(True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
-
-        body = QGridLayout()
-        body.setHorizontalSpacing(16)
-        body.setVerticalSpacing(16)
-        root.addLayout(body, 1)
-
-        left = self._card()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(24, 22, 24, 24)
-        left_layout.setSpacing(18)
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(14)
-
+        if self.left_card.title is not None:
+            self.left_card.title.setText("打包配置")
+        else:
+            self.left_card.title = QLabel("打包配置")
+            self.left_card.title.setProperty("sectionTitle", True)
+            self.left_card.body_layout.insertWidget(0, self.left_card.title)
+        file_section = Section("文件设置")
         self.source_edit = QLineEdit()
         source_row = QWidget()
         source_layout = QHBoxLayout(source_row)
@@ -101,56 +86,57 @@ class PackPage(QWidget):
         dir_button.setFixedWidth(self.ACTION_WIDTH)
         dir_button.clicked.connect(self.choose_source_dir)
         source_layout.addWidget(dir_button)
-        self._add_row(form, 0, "待打包对象", source_row)
+        file_section.add(FormRow("待打包对象", source_row))
 
-        self.output_edit = QLineEdit()
-        self._add_row(form, 1, "输出目录", self._with_dir_button(self.output_edit))
+        self.output_input = PathInput("请选择输出目录", "选择目录")
+        self.output_edit = self.output_input.edit
+        self.output_input.button.clicked.connect(lambda: self.choose_directory(self.output_edit))
+        file_section.add(FormRow("输出目录", self.output_input))
 
+        password_section = Section("密码设置")
         self.custom_password_checkbox = QCheckBox("手动设置密码")
         self.custom_password_checkbox.toggled.connect(self.update_password_state)
-        form.addWidget(self.custom_password_checkbox, 2, 1)
+        password_section.add(self.custom_password_checkbox)
 
         self.password_edit = QLineEdit()
         self.password_edit.setReadOnly(True)
-        self._add_row(form, 3, "打包密码", self.password_edit)
-        left_layout.addLayout(form)
+        self.password_edit.setPlaceholderText("留空则自动生成密码")
+        password_section.add(FormRow("打包密码", self.password_edit))
 
         actions = QHBoxLayout()
-        self.run_button = QPushButton("一键打包并加密")
-        self.run_button.setProperty("accent", True)
+        self.run_button = PrimaryButton("一键打包并加密")
         self.run_button.clicked.connect(self.start_pack)
         actions.addWidget(self.run_button)
-        self.copy_button = QPushButton("复制密码")
+        self.copy_button = SecondaryButton("复制密码")
         self.copy_button.clicked.connect(self.copy_password)
         self.copy_button.setEnabled(False)
         actions.addWidget(self.copy_button)
         actions.addStretch(1)
-        left_layout.addLayout(actions)
-        body.addWidget(left, 0, 0)
 
-        right = self._card()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(24, 22, 24, 24)
-        right_title = QLabel("打包结果与历史")
-        right_title.setProperty("sectionTitle", True)
-        right_layout.addWidget(right_title)
+        self.left_card.body_layout.addWidget(file_section)
+        self.left_card.body_layout.addWidget(password_section)
+        self.left_card.body_layout.addLayout(actions)
+        self.left_card.body_layout.addStretch(1)
+
+        if self.right_card.title is not None:
+            self.right_card.title.setText("打包结果与历史")
+        else:
+            self.right_card.title = QLabel("打包结果与历史")
+            self.right_card.title.setProperty("sectionTitle", True)
+            self.right_card.body_layout.insertWidget(0, self.right_card.title)
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
-        right_layout.addWidget(self.result_text, 1)
+        self.right_card.body_layout.addWidget(self.result_text, 1)
 
         query_row = QHBoxLayout()
         self.query_edit = QLineEdit()
         self.query_edit.setPlaceholderText("按文件名、来源名或密码查询")
         query_row.addWidget(self.query_edit, 1)
-        query_button = QPushButton("查询历史")
+        query_button = SecondaryButton("查询历史")
         query_button.setFixedWidth(self.ACTION_WIDTH)
         query_button.clicked.connect(self.run_query)
         query_row.addWidget(query_button)
-        right_layout.addLayout(query_row)
-        body.addWidget(right, 0, 1)
-
-        body.setColumnStretch(0, 3)
-        body.setColumnStretch(1, 2)
+        self.right_card.body_layout.addLayout(query_row)
 
     def _card(self) -> QFrame:
         frame = QFrame()

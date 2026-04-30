@@ -4,23 +4,19 @@ import traceback
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
-    QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMessageBox,
-    QPushButton,
     QPlainTextEdit,
-    QSplitter,
-    QVBoxLayout,
-    QWidget,
 )
 
 from ..word_to_html import WordExportResult, export_word_to_html
+from .base_page import BaseToolPage
+from .widgets import FormRow, PathInput, PrimaryButton, SecondaryButton, Section
 
 
 class WorkerSignals(QObject):
@@ -54,101 +50,54 @@ class TemplateWorker(QRunnable):
             self.signals.success.emit(result)
 
 
-class TemplateConvertPage(QWidget):
+class TemplateConvertPage(BaseToolPage):
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="表样转换",
+            description="将 Word / Excel 表样转换为 HTML，支持 Net 版和 Java 版占位符。",
+            show_steps=False,
+            show_log=False,
+        )
         self.log_fn = log_fn
         self.thread_pool = QThreadPool.globalInstance()
         self.last_result: WordExportResult | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
+        if self.left_card.title is not None:
+            self.left_card.title.setText("转换参数")
 
-        hero = self._create_card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        hero_layout.setSpacing(8)
-        title = QLabel("表样转换")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("将 Word / Excel 表样转换为 HTML。第一版先提供代码结果和浏览器预览入口。")
-        intro.setWordWrap(True)
-        intro.setProperty("heroText", True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
-
-        controls = self._create_card()
-        controls_layout = QVBoxLayout(controls)
-        controls_layout.setContentsMargins(24, 22, 24, 24)
-        controls_layout.setSpacing(18)
-        controls_title = QLabel("转换参数")
-        controls_title.setProperty("sectionTitle", True)
-        controls_layout.addWidget(controls_title)
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        self.source_edit = QLineEdit()
-        row.addWidget(self.source_edit, 1)
-        choose_button = QPushButton("选择文件")
-        choose_button.setFixedWidth(144)
-        choose_button.clicked.connect(self.choose_source)
-        row.addWidget(choose_button)
-        controls_layout.addLayout(row)
+        source_section = Section("文件选择")
+        self.source_input = PathInput("请选择表样文件 (.doc/.docx/.xlsx)", "选择文件")
+        self.source_edit = self.source_input.edit
+        self.source_input.button.clicked.connect(self.choose_source)
+        source_section.add(FormRow("表样文件", self.source_input))
+        self.left_card.body_layout.addWidget(source_section)
 
         action_row = QHBoxLayout()
-        action_row.setSpacing(10)
-        self.net_button = QPushButton("Net版导出")
-        self.net_button.setProperty("accent", True)
-        self.net_button.setFixedWidth(132)
+        self.net_button = PrimaryButton("Net版导出")
         self.net_button.clicked.connect(lambda: self.start_export("net"))
         action_row.addWidget(self.net_button)
-        self.java_button = QPushButton("Java版导出")
-        self.java_button.setFixedWidth(132)
+        self.java_button = SecondaryButton("Java版导出")
         self.java_button.clicked.connect(lambda: self.start_export("java"))
         action_row.addWidget(self.java_button)
-        self.copy_button = QPushButton("复制 HTML")
-        self.copy_button.setFixedWidth(132)
+        self.copy_button = SecondaryButton("复制 HTML")
         self.copy_button.clicked.connect(self.copy_html)
         self.copy_button.setEnabled(False)
         action_row.addWidget(self.copy_button)
         action_row.addStretch(1)
-        controls_layout.addLayout(action_row)
-        root.addWidget(controls)
+        self.left_card.body_layout.addLayout(action_row)
+        self.left_card.body_layout.addStretch(1)
 
-        splitter = QSplitter()
-        code_card = self._create_card()
-        code_layout = QVBoxLayout(code_card)
-        code_layout.setContentsMargins(24, 22, 24, 24)
-        code_layout.setSpacing(14)
-        code_title = QLabel("HTML 代码")
-        code_title.setProperty("sectionTitle", True)
-        code_layout.addWidget(code_title)
+        if self.right_card.title is not None:
+            self.right_card.title.setText("HTML 代码")
+
         self.code_text = QPlainTextEdit()
-        code_layout.addWidget(self.code_text)
+        self.right_card.body_layout.addWidget(self.code_text, 1)
 
-        preview_card = self._create_card()
-        preview_layout = QVBoxLayout(preview_card)
-        preview_layout.setContentsMargins(24, 22, 24, 24)
-        preview_layout.setSpacing(14)
-        preview_title = QLabel("预览说明")
-        preview_title.setProperty("sectionTitle", True)
-        preview_layout.addWidget(preview_title)
-        self.preview_text = QPlainTextEdit()
-        self.preview_text.setReadOnly(True)
-        preview_layout.addWidget(self.preview_text)
-
-        splitter.addWidget(code_card)
-        splitter.addWidget(preview_card)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
-        root.addWidget(splitter, 1)
-
-    def _create_card(self) -> QFrame:
-        frame = QFrame()
-        frame.setProperty("pageCard", True)
-        return frame
+        self.status_label = QLabel("选择文件后点击 Net版导出 或 Java版导出")
+        self.status_label.setWordWrap(True)
+        self.right_card.body_layout.addWidget(self.status_label)
 
     def choose_source(self) -> None:
         selected, _ = QFileDialog.getOpenFileName(
@@ -170,7 +119,7 @@ class TemplateConvertPage(QWidget):
         self.java_button.setEnabled(False)
         self.copy_button.setEnabled(False)
         self.code_text.setPlainText("正在导出 HTML...")
-        self.preview_text.setPlainText("处理中...")
+        self.status_label.setText("处理中...")
         self.log_fn(f"启动表样转换：{source_path.name} ({variant})")
         worker = TemplateWorker(source_path, variant, self.log_fn, self.on_success, self.on_error)
         self.thread_pool.start(worker)
@@ -181,18 +130,14 @@ class TemplateConvertPage(QWidget):
         self.java_button.setEnabled(True)
         self.copy_button.setEnabled(True)
         self.code_text.setPlainText(result.html_content)
-        self.preview_text.setPlainText(
-            f"源文件：{result.source_path}\n"
-            f"导出类型：{result.variant}\n\n"
-            "第一版 Qt 页面先显示 HTML 和说明，浏览器预览入口后续补。"
-        )
+        self.status_label.setText(f"源文件：{result.source_path}\n导出类型：{result.variant}")
 
     def on_error(self, error_text: str) -> None:
         self.net_button.setEnabled(True)
         self.java_button.setEnabled(True)
         self.copy_button.setEnabled(False)
         self.code_text.setPlainText(error_text)
-        self.preview_text.setPlainText("导出失败。")
+        self.status_label.setText("导出失败。")
         QMessageBox.critical(self, "导出失败", error_text.splitlines()[0])
 
     def copy_html(self) -> None:

@@ -5,10 +5,7 @@ from typing import Callable
 
 from PySide6.QtWidgets import (
     QFileDialog,
-    QFrame,
-    QGridLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
@@ -26,51 +23,32 @@ from ..job_code_audit import (
     run_job_code_audit,
     validate_required_columns,
 )
+from .base_page import BaseToolPage
+from .widgets import FormRow, PathInput, PrimaryButton, SecondaryButton, Section
 
 
-class JobCodeAuditPage(QWidget):
-    LABEL_WIDTH = 118
-    ACTION_WIDTH = 110
-
+class JobCodeAuditPage(BaseToolPage):
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="岗位表核对",
+            description="导入岗位表后，校验编码格式、上下级绑定，以及地市下主管、主管下单位、单位下岗位的顺延规则。",
+            show_steps=False,
+            show_log=True,
+        )
         self.log_fn = log_fn
         self.result: AuditResult | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
+        if self.left_card.title is not None:
+            self.left_card.title.setText("核对参数")
 
-        hero = self._card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        title = QLabel("岗位表核对")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("导入岗位表后，校验编码格式、上下级绑定，以及地市下主管、主管下单位、单位下岗位的顺延规则。")
-        intro.setWordWrap(True)
-        intro.setProperty("heroText", True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
-
-        body = QGridLayout()
-        body.setHorizontalSpacing(16)
-        body.setVerticalSpacing(16)
-        root.addLayout(body, 1)
-
-        left = self._card()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(24, 22, 24, 24)
-        left_layout.setSpacing(18)
-
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(14)
-        self.excel_edit = QLineEdit()
-        self._add_row(form, 0, "岗位表", self._with_file_button(self.excel_edit))
-        left_layout.addLayout(form)
+        file_section = Section("岗位表")
+        self.excel_input = PathInput("请选择岗位表文件", "选择文件")
+        self.excel_edit = self.excel_input.edit
+        self.excel_input.button.clicked.connect(self.choose_file)
+        file_section.add(FormRow("岗位表", self.excel_input))
+        self.left_card.body_layout.addWidget(file_section)
 
         tips = QPlainTextEdit()
         tips.setReadOnly(True)
@@ -82,87 +60,46 @@ class JobCodeAuditPage(QWidget):
             "4. 主管部门、报考单位、报考岗位名称允许为空，但空名称也占一个编码位。"
         )
         tips.setMinimumHeight(160)
-        left_layout.addWidget(tips)
+        self.left_card.body_layout.addWidget(tips)
 
         action_row = QHBoxLayout()
-        run_button = QPushButton("开始核对")
-        run_button.setProperty("accent", True)
+        run_button = PrimaryButton("开始核对")
         run_button.clicked.connect(self.run_audit)
-        export_button = QPushButton("导出问题")
+        export_button = SecondaryButton("导出问题")
         export_button.clicked.connect(self.export_result)
         action_row.addWidget(run_button)
         action_row.addWidget(export_button)
         action_row.addStretch(1)
-        left_layout.addLayout(action_row)
+        self.left_card.body_layout.addLayout(action_row)
 
         self.summary_text = QPlainTextEdit()
         self.summary_text.setReadOnly(True)
         self.summary_text.setPlaceholderText("核对完成后，这里会显示摘要。")
         self.summary_text.setMinimumHeight(180)
-        left_layout.addWidget(self.summary_text, 1)
-        body.addWidget(left, 0, 0)
+        self.left_card.body_layout.addWidget(self.summary_text, 1)
 
-        right = self._card()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(24, 22, 24, 24)
-        right_layout.setSpacing(16)
-        title = QLabel("问题明细")
-        title.setProperty("sectionTitle", True)
-        right_layout.addWidget(title)
+        if self.right_card.title is not None:
+            self.right_card.title.setText("问题明细")
 
         self.issue_table = QTableWidget(0, 12)
         self.issue_table.setHorizontalHeaderLabels(
             [
-                "问题类型",
-                "层级",
-                "Excel行号",
-                "地市",
-                "地市代码",
-                "主管部门",
-                "主管部门编码",
-                "报考单位",
-                "报考单位编码",
-                "报考岗位",
-                "报考岗位编码",
-                "问题说明",
+                "问题类型", "层级", "Excel行号", "地市", "地市代码",
+                "主管部门", "主管部门编码", "报考单位", "报考单位编码",
+                "报考岗位", "报考岗位编码", "问题说明",
             ]
         )
         self.issue_table.horizontalHeader().setStretchLastSection(True)
         self.issue_table.verticalHeader().setVisible(False)
         self.issue_table.setAlternatingRowColors(True)
-        right_layout.addWidget(self.issue_table, 1)
-        body.addWidget(right, 0, 1)
-        body.setColumnStretch(0, 2)
-        body.setColumnStretch(1, 4)
+        self.right_card.body_layout.addWidget(self.issue_table, 1)
 
-    def _card(self) -> QFrame:
-        frame = QFrame()
-        frame.setProperty("pageCard", True)
-        return frame
-
-    def _add_row(self, layout: QGridLayout, row: int, label_text: str, field: QWidget) -> None:
-        label = QLabel(label_text)
-        label.setProperty("formLabel", True)
-        label.setFixedWidth(self.LABEL_WIDTH)
-        layout.addWidget(label, row, 0)
-        layout.addWidget(field, row, 1)
-
-    def _with_file_button(self, line_edit: QLineEdit) -> QWidget:
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(10)
-        row_layout.addWidget(line_edit, 1)
-        button = QPushButton("选择文件")
-        button.setFixedWidth(self.ACTION_WIDTH)
-        button.clicked.connect(lambda: self.choose_file(line_edit))
-        row_layout.addWidget(button)
-        return row
-
-    def choose_file(self, line_edit: QLineEdit) -> None:
-        selected, _ = QFileDialog.getOpenFileName(self, "选择 Excel 文件", "", "Excel 文件 (*.xlsx *.xls)")
+    def choose_file(self) -> None:
+        selected, _ = QFileDialog.getOpenFileName(
+            self, "选择 Excel 文件", "", "Excel 文件 (*.xlsx *.xls)"
+        )
         if selected:
-            line_edit.setText(selected)
+            self.excel_edit.setText(selected)
 
     def run_audit(self) -> None:
         excel_path = Path(self.excel_edit.text().strip())
@@ -182,7 +119,9 @@ class JobCodeAuditPage(QWidget):
 
         self._render_summary(self.result)
         self._render_issues(self.result)
-        self.log_fn(f"岗位表核对完成：{excel_path.name}，共 {self.result.total_rows} 行，发现 {self.result.issue_count} 条问题。")
+        self.log_fn(
+            f"岗位表核对完成：{excel_path.name}，共 {self.result.total_rows} 行，发现 {self.result.issue_count} 条问题。"
+        )
 
     def _render_summary(self, result: AuditResult) -> None:
         if result.issue_count == 0:
@@ -213,17 +152,11 @@ class JobCodeAuditPage(QWidget):
             row = self.issue_table.rowCount()
             self.issue_table.insertRow(row)
             values = [
-                issue.issue_type,
-                issue.level,
-                issue.excel_rows,
-                issue.city,
-                issue.city_code,
-                issue.department,
-                issue.department_code,
-                issue.unit,
-                issue.unit_code,
-                issue.job,
-                issue.job_code,
+                issue.issue_type, issue.level, issue.excel_rows,
+                issue.city, issue.city_code,
+                issue.department, issue.department_code,
+                issue.unit, issue.unit_code,
+                issue.job, issue.job_code,
                 issue.description,
             ]
             for column, value in enumerate(values):
@@ -235,11 +168,7 @@ class JobCodeAuditPage(QWidget):
             QMessageBox.information(self, "提示", "请先完成一次核对。")
             return
         default_dir = str(self.result.source_path.parent / f"{self.result.source_path.stem}_岗位核对结果")
-        selected = QFileDialog.getExistingDirectory(
-            self,
-            "选择导出目录",
-            default_dir,
-        )
+        selected = QFileDialog.getExistingDirectory(self, "选择导出目录", default_dir)
         if not selected:
             return
         try:

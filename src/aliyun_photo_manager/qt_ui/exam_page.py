@@ -7,18 +7,13 @@ from typing import Callable
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
-    QFrame,
-    QGridLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QPlainTextEdit,
-    QComboBox,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -29,7 +24,9 @@ from ..exam_arranger import (
     export_exam_templates,
     run_exam_arrangement,
 )
+from .base_page import BaseToolPage
 from .common import AppComboBox
+from .widgets import FormRow, PathInput, PrimaryButton, SecondaryButton, Section
 
 
 class WorkerSignals(QObject):
@@ -54,71 +51,51 @@ class ExamWorker(QRunnable):
             self.signals.success.emit(result)
 
 
-class ExamPage(QWidget):
-    LABEL_WIDTH = 118
+class ExamPage(BaseToolPage):
     ACTION_WIDTH = 116
 
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="考场编排",
+            description="按考生明细、岗位归组和编排片段生成考号、考点、考场与座号。",
+            show_steps=False,
+            show_log=True,
+        )
         self.log_fn = log_fn
         self.thread_pool = QThreadPool.globalInstance()
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
+        if self.left_card.title is not None:
+            self.left_card.title.setText("编排参数")
 
-        hero = self._card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        title = QLabel("考场编排")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("按考生明细、岗位归组和编排片段生成考号、考点、考场与座号。")
-        intro.setProperty("heroText", True)
-        intro.setWordWrap(True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
+        files_section = Section("数据文件")
+        self._add_file_row(files_section, "考生明细表", self._make_file_edit("candidate"))
+        self._add_file_row(files_section, "岗位归组表", self._make_file_edit("group"))
+        self._add_file_row(files_section, "编排片段表", self._make_file_edit("plan"))
+        self.output_input = PathInput("选择输出文件路径", "选择文件")
+        self.output_edit = self.output_input.edit
+        self.output_input.button.clicked.connect(self._choose_output_file)
+        files_section.add(FormRow("输出文件", self.output_input))
+        self.left_card.body_layout.addWidget(files_section)
 
-        body = QGridLayout()
-        body.setHorizontalSpacing(16)
-        body.setVerticalSpacing(16)
-        root.addLayout(body, 1)
-
-        left = self._card()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(24, 22, 24, 24)
-        left_layout.setSpacing(18)
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(14)
-        self.candidate_edit = QLineEdit()
-        self._add_row(form, 0, "考生明细表", self._with_file_button(self.candidate_edit))
-        self.group_edit = QLineEdit()
-        self._add_row(form, 1, "岗位归组表", self._with_file_button(self.group_edit))
-        self.plan_edit = QLineEdit()
-        self._add_row(form, 2, "编排片段表", self._with_file_button(self.plan_edit))
-        self.output_edit = QLineEdit()
-        self._add_row(form, 3, "输出文件", self._with_file_button(self.output_edit, save_mode=True))
+        digits_section = Section("位数设置")
         self.point_digits_edit = QLineEdit("2")
-        self._add_row(form, 4, "考点位数", self.point_digits_edit)
+        digits_section.add(FormRow("考点位数", self.point_digits_edit))
         self.room_digits_edit = QLineEdit("3")
-        self._add_row(form, 5, "考场位数", self.room_digits_edit)
+        digits_section.add(FormRow("考场位数", self.room_digits_edit))
         self.seat_digits_edit = QLineEdit("2")
-        self._add_row(form, 6, "座号位数", self.seat_digits_edit)
+        digits_section.add(FormRow("座号位数", self.seat_digits_edit))
         self.serial_digits_edit = QLineEdit("3")
-        self._add_row(form, 7, "流水号位数", self.serial_digits_edit)
+        digits_section.add(FormRow("流水号位数", self.serial_digits_edit))
         self.sort_mode_combo = AppComboBox()
         self.sort_mode_combo.addItem("按原顺序", "original")
         self.sort_mode_combo.addItem("随机打乱", "random")
         self.sort_mode_combo.setCurrentIndex(1)
-        self._add_row(form, 8, "组内顺序", self.sort_mode_combo)
-        left_layout.addLayout(form)
+        digits_section.add(FormRow("组内顺序", self.sort_mode_combo))
+        self.left_card.body_layout.addWidget(digits_section)
 
-        rule_title = QLabel("考号规则")
-        rule_title.setProperty("sectionTitle", True)
-        left_layout.addWidget(rule_title)
+        rule_section = Section("考号规则")
         rule_row = QHBoxLayout()
         self.rule_type_combo = AppComboBox()
         self.rule_type_combo.addItems(["考点", "考场", "座号", "流水号", "岗位编码", "科目号", "自定义"])
@@ -131,13 +108,13 @@ class ExamPage(QWidget):
         rule_row.addWidget(self.rule_type_combo, 1)
         rule_row.addWidget(self.rule_custom_edit, 1)
         rule_row.addWidget(add_rule_button)
-        left_layout.addLayout(rule_row)
+        rule_section.body_layout.addLayout(rule_row)
         self.rule_table = QTableWidget(0, 2)
         self.rule_table.setHorizontalHeaderLabels(["项目", "自定义内容"])
         self.rule_table.horizontalHeader().setStretchLastSection(True)
         self.rule_table.verticalHeader().setVisible(False)
         self.rule_table.setMinimumHeight(140)
-        left_layout.addWidget(self.rule_table)
+        rule_section.add(self.rule_table)
         rule_actions = QHBoxLayout()
         up_button = QPushButton("上移")
         up_button.clicked.connect(self.move_rule_up)
@@ -149,65 +126,48 @@ class ExamPage(QWidget):
         rule_actions.addWidget(down_button)
         rule_actions.addWidget(del_button)
         rule_actions.addStretch(1)
-        left_layout.addLayout(rule_actions)
+        rule_section.body_layout.addLayout(rule_actions)
+        self.left_card.body_layout.addWidget(rule_section)
+
         action_row = QHBoxLayout()
         export_button = QPushButton("导出标准模板")
         export_button.clicked.connect(self.export_templates)
-        run_button = QPushButton("开始编排")
-        run_button.setProperty("accent", True)
-        run_button.clicked.connect(self.start_run)
-        self.run_button = run_button
+        self.run_button = PrimaryButton("开始编排")
+        self.run_button.clicked.connect(self.start_run)
         action_row.addWidget(export_button)
-        action_row.addWidget(run_button)
+        action_row.addWidget(self.run_button)
         action_row.addStretch(1)
-        left_layout.addLayout(action_row)
-        body.addWidget(left, 0, 0)
+        self.left_card.body_layout.addLayout(action_row)
+        self.left_card.body_layout.addStretch(1)
 
-        right = self._card()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(24, 22, 24, 24)
-        title = QLabel("编排结果")
-        title.setProperty("sectionTitle", True)
-        right_layout.addWidget(title)
+        if self.right_card.title is not None:
+            self.right_card.title.setText("编排结果")
+
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
-        right_layout.addWidget(self.result_text, 1)
-        body.addWidget(right, 0, 1)
-        body.setColumnStretch(0, 3)
-        body.setColumnStretch(1, 2)
+        self.right_card.body_layout.addWidget(self.result_text, 1)
+
         self.update_rule_custom_state(self.rule_type_combo.currentText())
 
-    def _card(self) -> QFrame:
-        frame = QFrame()
-        frame.setProperty("pageCard", True)
-        return frame
+    def _make_file_edit(self, key: str) -> PathInput:
+        input_widget = PathInput(f"选择{key}表", "选择文件")
+        setattr(self, f"{key}_edit", input_widget.edit)
+        input_widget.button.clicked.connect(lambda checked=False, k=key: self._choose_input_file(k))
+        return input_widget
 
-    def _add_row(self, layout: QGridLayout, row: int, label_text: str, field: QWidget) -> None:
-        label = QLabel(label_text)
-        label.setProperty("formLabel", True)
-        label.setFixedWidth(self.LABEL_WIDTH)
-        layout.addWidget(label, row, 0)
-        layout.addWidget(field, row, 1)
+    def _add_file_row(self, section: Section, label: str, input_widget: PathInput) -> None:
+        section.add(FormRow(label, input_widget))
 
-    def _with_file_button(self, line_edit: QLineEdit, save_mode: bool = False) -> QWidget:
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(10)
-        row_layout.addWidget(line_edit, 1)
-        button = QPushButton("选择文件")
-        button.setFixedWidth(self.ACTION_WIDTH)
-        button.clicked.connect(lambda: self.choose_file(line_edit, save_mode))
-        row_layout.addWidget(button)
-        return row
-
-    def choose_file(self, line_edit: QLineEdit, save_mode: bool = False) -> None:
-        if save_mode:
-            selected, _ = QFileDialog.getSaveFileName(self, "选择输出文件", "", "Excel 文件 (*.xlsx)")
-        else:
-            selected, _ = QFileDialog.getOpenFileName(self, "选择 Excel 文件", "", "Excel 文件 (*.xlsx *.xls)")
+    def _choose_input_file(self, key: str) -> None:
+        selected, _ = QFileDialog.getOpenFileName(self, "选择 Excel 文件", "", "Excel 文件 (*.xlsx *.xls)")
         if selected:
-            line_edit.setText(selected)
+            edit: QLineEdit = getattr(self, f"{key}_edit")
+            edit.setText(selected)
+
+    def _choose_output_file(self) -> None:
+        selected, _ = QFileDialog.getSaveFileName(self, "选择输出文件", "", "Excel 文件 (*.xlsx)")
+        if selected:
+            self.output_edit.setText(selected)
 
     def add_rule(self) -> None:
         rule_type = self.rule_type_combo.currentText().strip()
@@ -266,13 +226,11 @@ class ExamPage(QWidget):
         self.group_edit.setText(str(summary.group_template_path))
         self.plan_edit.setText(str(summary.plan_template_path))
         self.result_text.setPlainText(
-            "\n".join(
-                [
-                    f"考生模板：{summary.candidate_template_path}",
-                    f"岗位归组模板：{summary.group_template_path}",
-                    f"编排片段模板：{summary.plan_template_path}",
-                ]
-            )
+            "\n".join([
+                f"考生模板：{summary.candidate_template_path}",
+                f"岗位归组模板：{summary.group_template_path}",
+                f"编排片段模板：{summary.plan_template_path}",
+            ])
         )
 
     def _collect_rules(self) -> list[ExamRuleItem]:
@@ -319,17 +277,15 @@ class ExamPage(QWidget):
     def on_success(self, summary: ExamArrangeSummary) -> None:
         self.run_button.setEnabled(True)
         self.result_text.setPlainText(
-            "\n".join(
-                [
-                    f"结果文件：{summary.output_path}",
-                    f"总人数：{summary.total_candidates}",
-                    f"成功编排：{summary.arranged_candidates}",
-                    f"未找到岗位归组：{summary.missing_groups}",
-                    f"未找到编排片段：{summary.missing_plan_groups}",
-                    f"重复岗位归组：{summary.duplicate_group_rows}",
-                    f"剩余空座：{summary.unused_plan_slots}",
-                ]
-            )
+            "\n".join([
+                f"结果文件：{summary.output_path}",
+                f"总人数：{summary.total_candidates}",
+                f"成功编排：{summary.arranged_candidates}",
+                f"未找到岗位归组：{summary.missing_groups}",
+                f"未找到编排片段：{summary.missing_plan_groups}",
+                f"重复岗位归组：{summary.duplicate_group_rows}",
+                f"剩余空座：{summary.unused_plan_slots}",
+            ])
         )
 
     def on_error(self, error_text: str) -> None:

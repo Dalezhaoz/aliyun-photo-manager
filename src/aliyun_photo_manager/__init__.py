@@ -1,3 +1,3 @@
 """Aliyun OSS photo downloader and sorter."""
 
-__version__ = "3.0.27"
+__version__ = "3.0.28"

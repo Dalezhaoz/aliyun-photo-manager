@@ -23,7 +23,9 @@ from PySide6.QtWidgets import (
 )
 
 from ..data_matcher import ColumnMapping, DataMatchOptions, DataMatchSummary, list_headers, run_data_match
+from .base_page import BaseToolPage
 from .common import AppComboBox
+from .widgets import FormRow, PathInput, PrimaryButton, SecondaryButton, Section
 
 
 class WorkerSignals(QObject):
@@ -49,12 +51,17 @@ class MatchWorker(QRunnable):
             self.signals.success.emit(summary)
 
 
-class MatchPage(QWidget):
+class MatchPage(BaseToolPage):
     LABEL_WIDTH = 118
     ACTION_WIDTH = 116
 
     def __init__(self, log_fn: Callable[[str], None]) -> None:
-        super().__init__()
+        super().__init__(
+            title="数据匹配",
+            description="按主键和附加匹配列把来源表字段补回目标表，输出带匹配结果清单的新文件。",
+            show_steps=True,
+            show_log=True,
+        )
         self.log_fn = log_fn
         self.thread_pool = QThreadPool.globalInstance()
         self.target_headers: list[str] = []
@@ -62,129 +69,99 @@ class MatchPage(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(16)
+        if self.left_card.title is None:
+            self.left_card.title = QLabel("匹配配置")
+            self.left_card.title.setProperty("sectionTitle", True)
+            self.left_card.body_layout.insertWidget(0, self.left_card.title)
+        else:
+            self.left_card.title.setText("匹配配置")
 
-        hero = self._card()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        title = QLabel("数据匹配")
-        title.setProperty("heroTitle", True)
-        intro = QLabel("按主键和附加匹配列把来源表字段补回目标表，输出带匹配结果清单的新文件。")
-        intro.setProperty("heroText", True)
-        intro.setWordWrap(True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(intro)
-        root.addWidget(hero)
-
-        body = QGridLayout()
-        body.setHorizontalSpacing(16)
-        body.setVerticalSpacing(16)
-        root.addLayout(body, 1)
-
-        left = self._card()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(24, 22, 24, 24)
-        left_layout.setSpacing(18)
-        form = QGridLayout()
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(14)
-
-        self.target_edit = QLineEdit()
-        self._add_row(form, 0, "目标表", self._with_file_button(self.target_edit))
-        self.source_edit = QLineEdit()
-        self._add_row(form, 1, "来源表", self._with_file_button(self.source_edit))
-        self.output_edit = QLineEdit()
-        self._add_row(form, 2, "输出文件", self._with_file_button(self.output_edit, save_mode=True))
-
-        header_action = QWidget()
-        header_layout = QHBoxLayout(header_action)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(10)
-        load_button = QPushButton("加载表头")
-        load_button.setFixedWidth(self.ACTION_WIDTH)
+        file_section = Section("文件设置")
+        self.target_input = PathInput("请选择目标表文件", "选择文件")
+        self.target_edit = self.target_input.edit
+        self.target_input.button.clicked.connect(lambda: self.choose_file(self.target_edit))
+        self.source_input = PathInput("请选择来源表文件", "选择文件")
+        self.source_edit = self.source_input.edit
+        self.source_input.button.clicked.connect(lambda: self.choose_file(self.source_edit))
+        self.output_input = PathInput("请选择输出文件路径", "选择文件")
+        self.output_edit = self.output_input.edit
+        self.output_input.button.clicked.connect(lambda: self.choose_file(self.output_edit, True))
+        file_section.add(FormRow("目标表", self.target_input))
+        file_section.add(FormRow("来源表", self.source_input))
+        file_section.add(FormRow("输出文件", self.output_input))
+        load_button = SecondaryButton("加载表头")
         load_button.clicked.connect(self.load_headers)
-        header_layout.addWidget(load_button)
-        header_layout.addStretch(1)
-        self._add_row(form, 3, "", header_action)
+        file_section.add(load_button)
+        self.left_card.body_layout.addWidget(file_section)
 
+        match_section = Section("主键匹配")
         self.target_key_combo = AppComboBox()
-        self._add_row(form, 4, "目标表匹配列", self.target_key_combo)
         self.source_key_combo = AppComboBox()
-        self._add_row(form, 5, "来源表匹配列", self.source_key_combo)
-        left_layout.addLayout(form)
+        match_section.add(FormRow("目标表匹配列", self.target_key_combo))
+        match_section.add(FormRow("来源表匹配列", self.source_key_combo))
+        self.left_card.body_layout.addWidget(match_section)
 
-        extra_title = QLabel("附加匹配列")
-        extra_title.setProperty("sectionTitle", True)
-        left_layout.addWidget(extra_title)
+        extra_section = Section("附加匹配列")
         extra_editor = QHBoxLayout()
         self.extra_target_combo = AppComboBox()
         self.extra_target_combo.setPlaceholderText("目标表列")
         self.extra_source_combo = AppComboBox()
         self.extra_source_combo.setPlaceholderText("来源表列")
-        add_extra = QPushButton("添加映射")
+        add_extra = SecondaryButton("添加映射")
         add_extra.clicked.connect(self.add_extra_mapping)
         extra_editor.addWidget(self.extra_target_combo, 1)
         extra_editor.addWidget(self.extra_source_combo, 1)
         extra_editor.addWidget(add_extra)
-        left_layout.addLayout(extra_editor)
+        extra_section.body_layout.addLayout(extra_editor)
         self.extra_table = self._mapping_table("目标表列", "来源表列")
-        left_layout.addWidget(self.extra_table)
+        extra_section.add(self.extra_table)
 
         extra_actions = QHBoxLayout()
-        del_extra = QPushButton("删除所选")
+        del_extra = SecondaryButton("删除所选")
         del_extra.clicked.connect(lambda: self._remove_selected_row(self.extra_table))
         extra_actions.addWidget(del_extra)
         extra_actions.addStretch(1)
-        left_layout.addLayout(extra_actions)
+        extra_section.body_layout.addLayout(extra_actions)
+        self.left_card.body_layout.addWidget(extra_section)
 
-        transfer_title = QLabel("补充列映射")
-        transfer_title.setProperty("sectionTitle", True)
-        left_layout.addWidget(transfer_title)
+        transfer_section = Section("补充列映射")
         transfer_editor = QHBoxLayout()
         self.transfer_name_edit = QLineEdit()
         self.transfer_name_edit.setPlaceholderText("结果列名")
         self.transfer_source_combo = AppComboBox()
         self.transfer_source_combo.setPlaceholderText("来源表列")
-        add_transfer = QPushButton("添加补充列")
+        add_transfer = SecondaryButton("添加补充列")
         add_transfer.clicked.connect(self.add_transfer_mapping)
         transfer_editor.addWidget(self.transfer_name_edit, 1)
         transfer_editor.addWidget(self.transfer_source_combo, 1)
         transfer_editor.addWidget(add_transfer)
-        left_layout.addLayout(transfer_editor)
+        transfer_section.body_layout.addLayout(transfer_editor)
         self.transfer_table = self._mapping_table("结果列名", "来源表列")
-        left_layout.addWidget(self.transfer_table)
+        transfer_section.add(self.transfer_table)
         transfer_actions = QHBoxLayout()
-        del_transfer = QPushButton("删除所选")
+        del_transfer = SecondaryButton("删除所选")
         del_transfer.clicked.connect(lambda: self._remove_selected_row(self.transfer_table))
         transfer_actions.addWidget(del_transfer)
         transfer_actions.addStretch(1)
-        left_layout.addLayout(transfer_actions)
+        transfer_section.body_layout.addLayout(transfer_actions)
+        self.left_card.body_layout.addWidget(transfer_section)
 
         run_row = QHBoxLayout()
-        self.run_button = QPushButton("开始匹配")
-        self.run_button.setProperty("accent", True)
-        self.run_button.setFixedWidth(132)
+        self.run_button = PrimaryButton("开始匹配")
         self.run_button.clicked.connect(self.start_run)
         run_row.addWidget(self.run_button)
         run_row.addStretch(1)
-        left_layout.addLayout(run_row)
-        body.addWidget(left, 0, 0)
+        self.left_card.body_layout.addLayout(run_row)
 
-        right = self._card()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(24, 22, 24, 24)
-        right_title = QLabel("匹配结果")
-        right_title.setProperty("sectionTitle", True)
-        right_layout.addWidget(right_title)
+        if self.right_card.title is None:
+            self.right_card.title = QLabel("匹配结果")
+            self.right_card.title.setProperty("sectionTitle", True)
+            self.right_card.body_layout.insertWidget(0, self.right_card.title)
+        else:
+            self.right_card.title.setText("匹配结果")
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
-        right_layout.addWidget(self.result_text, 1)
-        body.addWidget(right, 0, 1)
-
-        body.setColumnStretch(0, 3)
-        body.setColumnStretch(1, 2)
+        self.right_card.body_layout.addWidget(self.result_text, 1)
 
     def _card(self) -> QFrame:
         frame = QFrame()

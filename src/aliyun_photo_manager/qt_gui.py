@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QAction, QBrush, QColor, QDesktopServices, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -35,6 +36,7 @@ from .qt_ui import (
     IdCardPage,
     JobCodeAuditPage,
     MatchPage,
+    OrderedUnitAuditPage,
     PackPage,
     PhoneDecryptPage,
     PhotoPage,
@@ -80,13 +82,14 @@ NAV_ENTRIES: list[NavEntry] = [
     NavEntry("about", "关于", "settings", "查看版本与工具说明。", True),
     NavEntry("exam_print", "考场文件打印", "experimental", "实验功能：按本地 Excel 和模板生成座次表、门贴、桌贴。", True),
     NavEntry("job_code_audit", "岗位表核对", "experimental", "实验功能：核对地市、主管部门、报考单位、报考岗位编码及顺延关系。", True),
+    NavEntry("ordered_name_audit", "单列顺序核对", "experimental", "实验功能：按原表顺序检查指定列的上下相似与分段重复。", True),
     NavEntry("exam", "考场编排", "experimental", "实验功能：按模板和规则生成考号、考场与座号。", True),
     NavEntry("sql_exec", "SQL 配置执行", "experimental", "实验功能：按 SQL 模板参数生成可执行脚本。", True),
     NavEntry("project_stage", "项目阶段汇总", "experimental", "实验功能：汇总多台 SQL Server 上的报名项目阶段状态。", True),
 ]
 
 
-DEFAULT_FAVORITES = ["certificate", "template", "phone"]
+DEFAULT_FAVORITES = ["certificate", "template", "phone", "update_sql"]
 
 MANUAL_TEXTS: dict[str, str] = {
     "photo": "适用场景：从本地目录或云存储批量下载照片，生成模板后再按模板分类。\n\n操作步骤：\n1. 先选择数据来源；云存储模式下填写云类型、Endpoint/Region、AccessKey 和 Bucket。\n2. 如需从云端指定目录下载，先加载 Bucket，再点“加载当前层级”，单击文件夹选中，双击进入子目录。\n3. 选择下载目录和分类输出目录。\n4. 如需只下载名单中的照片，可勾选“云下载时按表过滤”，上传过滤表并选择“前缀列”。\n5. 点击“生成模板”后，在 Excel 中补充分类列、名称等信息。\n6. 回到程序执行按模板分类，结果会输出分类目录和结果清单。",
@@ -177,6 +180,46 @@ class PaintedIconButton(QPushButton):
         painter.drawPath(path)
 
 
+class InteractiveFrame(QFrame):
+    clicked = Signal()
+
+    def __init__(self, object_name: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName(object_name)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setProperty("pressed", False)
+        self.setProperty("hovered", False)
+
+    def enterEvent(self, event) -> None:
+        self.setProperty("hovered", True)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self.setProperty("hovered", False)
+        self.setProperty("pressed", False)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self.setProperty("pressed", True)
+            self.style().unpolish(self)
+            self.style().polish(self)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        was_pressed = bool(self.property("pressed"))
+        self.setProperty("pressed", False)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        if was_pressed and self.rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
 class PlaceholderPage(QWidget):
     def __init__(self, title: str, description: str) -> None:
         super().__init__()
@@ -256,7 +299,7 @@ class HomePage(QWidget):
 
         preferred_keys = ["photo", "certificate", "template", "match", "pack", "phone", "update_sql", "id_card"]
         if self.show_experimental:
-            preferred_keys.extend(["exam_print", "job_code_audit", "exam", "sql_exec", "project_stage"])
+            preferred_keys.extend(["exam_print", "job_code_audit", "ordered_name_audit", "exam", "sql_exec", "project_stage"])
         visible_map = {entry.key: entry for entry in self.visible_entries}
         for key in preferred_keys:
             entry = visible_map.get(key)
@@ -291,6 +334,10 @@ class HomeLandingPage(QWidget):
         self.entries_by_key = entries_by_key
         self.favorites = favorites
         self.show_experimental = show_experimental
+        self.current_filter = "全部"
+        self.current_view = "grid"
+        self.filter_buttons: dict[str, QPushButton] = {}
+        self.view_buttons: dict[str, QPushButton] = {}
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -300,32 +347,55 @@ class HomeLandingPage(QWidget):
 
         hero = QFrame()
         hero.setProperty("pageCard", True)
+        hero.setObjectName("HomeHero")
         hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 22, 24, 22)
-        hero_layout.setSpacing(8)
+        hero_layout.setContentsMargins(32, 28, 32, 28)
+        hero_layout.setSpacing(18)
 
-        title = QLabel("报名系统工具箱")
+        title = QLabel("欢迎使用 报名系统工具箱")
         title.setProperty("heroTitle", True)
-        intro = QLabel("首页只显示收藏功能和快捷入口，全部功能请从左侧导航按分类查看。")
+        title.setObjectName("HomeWelcomeTitle")
+        intro = QLabel("首页已为您展示常用功能，您也可以通过左侧导航快速访问全部功能。")
         intro.setWordWrap(True)
         intro.setProperty("heroText", True)
         hero_layout.addWidget(title)
         hero_layout.addWidget(intro)
+
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(16)
+        stats_row.addWidget(self._build_stat_card("全部功能", len(self._tool_entries()), "#2F73FF", "功"), 1)
+        stats_row.addWidget(self._build_stat_card("常用功能", 6, "#16A35F", "常"), 1)
+        stats_row.addWidget(
+            self._build_stat_card(
+                "收藏功能",
+                len([key for key in self.favorites if key in self.entries_by_key]),
+                "#F59E0B",
+                "藏",
+            ),
+            1,
+        )
+        hero_layout.addLayout(stats_row)
         root.addWidget(hero)
 
         favorites_card = QFrame()
         favorites_card.setProperty("pageCard", True)
+        favorites_card.setObjectName("HomeSectionCard")
         favorites_layout = QVBoxLayout(favorites_card)
-        favorites_layout.setContentsMargins(24, 22, 24, 24)
-        favorites_layout.setSpacing(14)
-        favorites_title = QLabel("收藏功能")
-        favorites_title.setProperty("sectionTitle", True)
-        favorites_layout.addWidget(favorites_title)
+        favorites_layout.setContentsMargins(22, 20, 22, 22)
+        favorites_layout.setSpacing(16)
+        favorites_layout.addWidget(self._build_section_header("收藏功能", "快速访问您收藏的常用功能"))
 
-        favorite_entries = [self.entries_by_key[key] for key in self.favorites if key in self.entries_by_key]
+        favorite_entries = self._favorite_entries()
         if favorite_entries:
-            for entry in favorite_entries:
-                favorites_layout.addWidget(self._build_entry_row(entry))
+            grid = QGridLayout()
+            grid.setHorizontalSpacing(14)
+            grid.setVerticalSpacing(14)
+            cols = min(len(favorite_entries), 3)
+            for index, entry in enumerate(favorite_entries):
+                grid.addWidget(self._build_feature_card(entry, favorite=True), index // cols, index % cols)
+            for column in range(cols):
+                grid.setColumnStretch(column, 1)
+            favorites_layout.addLayout(grid)
         else:
             empty = QLabel("还没有收藏功能，可以在功能页右上角点击星标加入收藏。")
             empty.setWordWrap(True)
@@ -333,55 +403,337 @@ class HomeLandingPage(QWidget):
             favorites_layout.addWidget(empty)
         root.addWidget(favorites_card)
 
-        shortcuts_card = QFrame()
-        shortcuts_card.setProperty("pageCard", True)
-        shortcuts_layout = QVBoxLayout(shortcuts_card)
-        shortcuts_layout.setContentsMargins(24, 22, 24, 24)
-        shortcuts_layout.setSpacing(14)
-        shortcuts_title = QLabel("快捷开始")
-        shortcuts_title.setProperty("sectionTitle", True)
-        shortcuts_layout.addWidget(shortcuts_title)
+        all_card = QFrame()
+        all_card.setProperty("pageCard", True)
+        all_card.setObjectName("HomeSectionCard")
+        all_layout = QVBoxLayout(all_card)
+        all_layout.setContentsMargins(22, 20, 22, 22)
+        all_layout.setSpacing(14)
+        all_layout.addWidget(self._build_section_header("全部功能", "所有可用功能分类展示"))
 
-        shortcut_keys = ["certificate", "template", "phone", "update_sql"]
+        tab_row = QHBoxLayout()
+        tab_row.setSpacing(8)
+        for text in ("全部", "文件处理", "数据处理", "数据库工具", "查询与辅助", "实验功能"):
+            button = QPushButton(text)
+            button.setObjectName("HomeFilterButton")
+            button.setCheckable(True)
+            button.clicked.connect(lambda _checked=False, value=text: self._set_filter(value))
+            self.filter_buttons[text] = button
+            tab_row.addWidget(button)
+        tab_row.addStretch(1)
+        grid_button = QPushButton("◫")
+        grid_button.setObjectName("HomeViewToggle")
+        grid_button.setCheckable(True)
+        grid_button.clicked.connect(lambda _checked=False: self._set_view("grid"))
+        grid_button.setFixedSize(36, 36)
+        list_button = QPushButton("☰")
+        list_button.setObjectName("HomeViewToggle")
+        list_button.setCheckable(True)
+        list_button.clicked.connect(lambda _checked=False: self._set_view("list"))
+        list_button.setFixedSize(36, 36)
+        self.view_buttons["grid"] = grid_button
+        self.view_buttons["list"] = list_button
+        tab_row.addWidget(grid_button)
+        tab_row.addWidget(list_button)
+        all_layout.addLayout(tab_row)
+
+        self.all_content_host = QWidget()
+        self.all_content_layout = QVBoxLayout(self.all_content_host)
+        self.all_content_layout.setContentsMargins(0, 0, 0, 0)
+        self.all_content_layout.setSpacing(0)
+        all_layout.addWidget(self.all_content_host)
+        self._sync_controls()
+        self._rebuild_all_entries()
+
+        root.addWidget(all_card)
+
+    def _tool_entries(self) -> list[NavEntry]:
+        keys = [
+            "certificate",
+            "template",
+            "photo",
+            "pack",
+            "match",
+            "phone",
+            "update_sql",
+            "id_card",
+        ]
         if self.show_experimental:
-            shortcut_keys.append("exam")
-        for key in shortcut_keys:
+            keys.extend(["exam_print", "job_code_audit", "ordered_name_audit", "exam", "sql_exec", "project_stage"])
+        return [self.entries_by_key[key] for key in keys if key in self.entries_by_key]
+
+    def _favorite_entries(self) -> list[NavEntry]:
+        keys: list[str] = []
+        for key in self.favorites:
+            if key in self.entries_by_key and key not in keys:
+                keys.append(key)
+        if not keys:
+            for key in ["certificate", "template", "phone", "update_sql"]:
+                if key in self.entries_by_key and key not in keys:
+                    keys.append(key)
+        return [self.entries_by_key[key] for key in keys]
+
+    def _landing_entries(self) -> list[dict[str, object]]:
+        entries: list[dict[str, object]] = []
+        mapping = [
+            ("certificate", "证件资料筛选", "支持云端按表过滤下载，并按模板动态分层导出。", "文件处理"),
+            ("template", "表样转换", "将 Word / Excel 表样转换成 HTML。", "文件处理"),
+            ("photo", "照片下载与分类", "批量下载照片并按规则分类整理。", "文件处理"),
+            ("pack", "结果打包", "将处理结果按规则打包成压缩文件。", "文件处理"),
+            ("match", "数据匹配", "按主键和附加匹配列补充来源表字段。", "数据处理"),
+            ("phone", "电话解密", "通过 helper 解密电话并回写备用3。", "数据库工具"),
+            ("update_sql", "更新 SQL 生成", "通过字段映射模板生成标准 UPDATE SQL。", "数据库工具"),
+            ("id_card", "身份证工具", "校验并生成 18 位大陆居民身份证。", "查询与辅助"),
+        ]
+        if self.show_experimental:
+            mapping.extend([
+                ("exam_print", "考场文件打印", "按本地 Excel 和模板生成座次表、门贴、桌贴。", "实验功能"),
+                ("job_code_audit", "岗位表核对", "校验岗位编码格式、绑定关系和顺延规则。", "实验功能"),
+                ("ordered_name_audit", "单列顺序核对", "按原表顺序检查指定列的上下相似与分段重复。", "实验功能"),
+                ("exam", "考场编排", "按模板和规则编排考号、考场和座号。", "实验功能"),
+                ("sql_exec", "SQL 配置执行", "按 SQL 模板参数生成可执行脚本。", "实验功能"),
+                ("project_stage", "项目阶段汇总", "汇总多台 SQL Server 的项目阶段状态。", "实验功能"),
+            ])
+        mapping.append(("about", "关于", f"报名系统工具箱 v{__version__}，查看版本与工具说明。", "设置"))
+        for key, title, description, category in mapping:
             entry = self.entries_by_key.get(key)
-            if entry is not None:
-                shortcuts_layout.addWidget(self._build_entry_row(entry))
+            if entry is None:
+                continue
+            entries.append({"entry": entry, "title": title, "description": description, "category": category})
+        return entries
 
-        root.addWidget(shortcuts_card)
+    def _filtered_landing_entries(self) -> list[dict[str, object]]:
+        entries = self._landing_entries()
+        if self.current_filter == "全部":
+            return entries
+        return [item for item in entries if item["category"] == self.current_filter]
 
-    def _build_entry_row(self, entry: NavEntry) -> QWidget:
+    def _set_filter(self, value: str) -> None:
+        self.current_filter = value
+        self._sync_controls()
+        self._rebuild_all_entries()
+
+    def _set_view(self, value: str) -> None:
+        self.current_view = value
+        self._sync_controls()
+        self._rebuild_all_entries()
+
+    def _sync_controls(self) -> None:
+        for key, button in self.filter_buttons.items():
+            button.setChecked(key == self.current_filter)
+        for key, button in self.view_buttons.items():
+            button.setChecked(key == self.current_view)
+
+    def _clear_layout(self, layout: QVBoxLayout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            child_layout = item.layout()
+            if widget is not None:
+                widget.deleteLater()
+            elif child_layout is not None:
+                self._clear_nested_layout(child_layout)
+
+    def _clear_nested_layout(self, layout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            nested = item.layout()
+            if widget is not None:
+                widget.deleteLater()
+            elif nested is not None:
+                self._clear_nested_layout(nested)
+
+    def _rebuild_all_entries(self) -> None:
+        self._clear_layout(self.all_content_layout)
+        entries = self._filtered_landing_entries()
+        if self.current_view == "grid":
+            grid = QGridLayout()
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(14)
+            grid.setVerticalSpacing(12)
+            for index, item in enumerate(entries):
+                grid.addWidget(
+                    self._build_feature_row(item["entry"], item["title"], item["description"]),
+                    index // 2,
+                    index % 2,
+                )
+            self.all_content_layout.addLayout(grid)
+        else:
+            column = QVBoxLayout()
+            column.setContentsMargins(0, 0, 0, 0)
+            column.setSpacing(12)
+            for item in entries:
+                column.addWidget(self._build_feature_row(item["entry"], item["title"], item["description"]))
+            self.all_content_layout.addLayout(column)
+
+    def _build_section_header(self, title_text: str, desc_text: str) -> QWidget:
         row = QWidget()
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(12)
+        row_layout.setSpacing(10)
+        marker = QLabel("")
+        marker.setObjectName("HomeSectionMarker")
+        marker.setFixedSize(10, 18)
+        row_layout.addWidget(marker)
+        title = QLabel(title_text)
+        title.setObjectName("HomeSectionTitle")
+        desc = QLabel(desc_text)
+        desc.setProperty("heroText", True)
+        row_layout.addWidget(title)
+        row_layout.addWidget(desc)
+        row_layout.addStretch(1)
+        return row
 
+    def _build_stat_card(self, label: str, value: int, color: str, icon_text: str) -> QWidget:
+        card = QFrame()
+        card.setObjectName("HomeStatCard")
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(12)
+        icon = QLabel(icon_text)
+        icon.setObjectName("HomeStatIcon")
+        icon.setStyleSheet(f"color: {color};")
+        icon.setAlignment(Qt.AlignCenter)
+        icon.setFixedSize(38, 38)
+        icon.setMinimumSize(32, 32)
+        layout.addWidget(icon)
+        text_box = QVBoxLayout()
+        text_box.setSpacing(2)
+        value_label = QLabel(str(value))
+        value_label.setObjectName("HomeStatValue")
+        value_label.setStyleSheet(f"color: {color};")
+        label_widget = QLabel(label)
+        label_widget.setObjectName("HomeStatLabel")
+        text_box.addWidget(value_label)
+        text_box.addWidget(label_widget)
+        layout.addLayout(text_box, 1)
+        return card
+
+    def _build_feature_card(self, entry: NavEntry, *, favorite: bool = False) -> QWidget:
+        card = InteractiveFrame("HomeFeatureCard")
+        card.clicked.connect(lambda target=entry.key: self.open_callback(target))
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 14, 16, 12)
+        layout.setSpacing(10)
+        accent = self._entry_accent(entry.key)
+        top = QHBoxLayout()
+        top.setSpacing(12)
+        icon = QLabel(self._entry_icon(entry))
+        icon.setObjectName("HomeFeatureIcon")
+        icon.setStyleSheet(
+            f"color: {accent};"
+            f"background: {self._alpha_color(accent, 0.10)};"
+            f"border: 1px solid {self._alpha_color(accent, 0.18)};"
+        )
+        icon.setAlignment(Qt.AlignCenter)
+        icon.setFixedSize(42, 42)
+        top.addWidget(icon)
         text_block = QVBoxLayout()
-        text_block.setContentsMargins(0, 0, 0, 0)
-        text_block.setSpacing(4)
-
+        text_block.setSpacing(3)
         title = QLabel(entry.label)
-        title.setProperty("sectionTitle", True)
+        title.setObjectName("HomeFeatureTitle")
         desc = QLabel(entry.description)
         desc.setWordWrap(True)
         desc.setProperty("heroText", True)
         text_block.addWidget(title)
         text_block.addWidget(desc)
-
-        row_layout.addLayout(text_block, 1)
+        top.addLayout(text_block, 1)
+        if favorite:
+            star = QLabel("★")
+            star.setObjectName("HomeFavoriteStar")
+            top.addWidget(star, 0, Qt.AlignTop)
+        layout.addLayout(top)
         button = QPushButton("打开")
-        button.setFixedWidth(96)
+        button.setObjectName("HomeOpenButton")
+        button.setCursor(Qt.PointingHandCursor)
         button.clicked.connect(lambda _=False, target=entry.key: self.open_callback(target))
-        row_layout.addWidget(button, 0, Qt.AlignVCenter)
+        layout.addWidget(button)
+        return card
+
+    def _build_feature_row(self, entry: NavEntry, title_text: str | None = None, desc_text: str | None = None) -> QWidget:
+        row = InteractiveFrame("HomeFeatureRow")
+        row.clicked.connect(lambda target=entry.key: self.open_callback(target))
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(14, 12, 14, 12)
+        row_layout.setSpacing(12)
+        accent = self._entry_accent(entry.key)
+        icon = QLabel(self._entry_icon(entry))
+        icon.setObjectName("HomeFeatureIconSmall")
+        icon.setStyleSheet(
+            f"color: {accent};"
+            f"background: {self._alpha_color(accent, 0.10)};"
+            f"border: 1px solid {self._alpha_color(accent, 0.18)};"
+        )
+        icon.setAlignment(Qt.AlignCenter)
+        icon.setFixedSize(38, 38)
+        row_layout.addWidget(icon)
+        text_block = QVBoxLayout()
+        text_block.setSpacing(3)
+        title = QLabel(title_text or entry.label)
+        title.setObjectName("HomeFeatureTitle")
+        desc = QLabel(desc_text or entry.description)
+        desc.setWordWrap(True)
+        desc.setProperty("heroText", True)
+        text_block.addWidget(title)
+        text_block.addWidget(desc)
+        row_layout.addLayout(text_block, 1)
+        arrow = QLabel("›")
+        arrow.setObjectName("HomeRowArrow")
+        row_layout.addWidget(arrow)
         return row
+
+    def _entry_icon(self, entry: NavEntry) -> str:
+        icons = {
+            "certificate": "证",
+            "template": "表",
+            "photo": "图",
+            "pack": "包",
+            "match": "数",
+            "phone": "电",
+            "update_sql": "SQL",
+            "id_card": "证",
+            "exam_print": "印",
+            "job_code_audit": "核",
+            "ordered_name_audit": "序",
+            "exam": "考",
+            "sql_exec": "库",
+            "project_stage": "项",
+        }
+        return icons.get(entry.key, "工")
+
+    def _entry_accent(self, key: str) -> str:
+        accents = {
+            "certificate": "#2F73FF",
+            "template": "#16A35F",
+            "photo": "#3B82F6",
+            "pack": "#F59E0B",
+            "match": "#2563EB",
+            "phone": "#9333EA",
+            "update_sql": "#F97316",
+            "id_card": "#4F46E5",
+            "exam_print": "#0F766E",
+            "job_code_audit": "#B45309",
+            "ordered_name_audit": "#7C3AED",
+            "exam": "#DC2626",
+            "sql_exec": "#1D4ED8",
+            "project_stage": "#059669",
+        }
+        return accents.get(key, "#2F73FF")
+
+    def _alpha_color(self, color: str, alpha: float) -> str:
+        qcolor = QColor(color)
+        qcolor.setAlphaF(alpha)
+        return qcolor.name(QColor.HexArgb)
 
 
 class AboutPage(QWidget):
-    def __init__(self, show_experimental: bool) -> None:
+    def __init__(self, show_experimental: bool, update_callback=None) -> None:
         super().__init__()
         self.show_experimental = show_experimental
+        self.update_callback = update_callback
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -403,6 +755,26 @@ class AboutPage(QWidget):
         hero_layout.addWidget(title)
         hero_layout.addWidget(intro)
         root.addWidget(hero)
+
+        if self.update_callback and sys.platform == "win32":
+            update_card = QFrame()
+            update_card.setProperty("pageCard", True)
+            update_layout = QVBoxLayout(update_card)
+            update_layout.setContentsMargins(24, 22, 24, 24)
+            update_layout.setSpacing(14)
+            update_title = QLabel("检查更新")
+            update_title.setProperty("sectionTitle", True)
+            update_layout.addWidget(update_title)
+            update_btn = QPushButton("检查更新")
+            update_btn.setProperty("accent", True)
+            update_btn.setFixedWidth(150)
+            update_btn.clicked.connect(self.update_callback)
+            update_layout.addWidget(update_btn)
+            update_hint = QLabel("点击检查是否有新版本可用，支持增量更新和整包更新。")
+            update_hint.setWordWrap(True)
+            update_hint.setProperty("heroText", True)
+            update_layout.addWidget(update_hint)
+            root.addWidget(update_card)
 
         capability = QFrame()
         capability.setProperty("pageCard", True)
@@ -430,6 +802,8 @@ class AboutPage(QWidget):
                     "考场编排：按模板和规则编排考号、考场和座号。",
                     "SQL 配置执行：按模板参数生成可执行 SQL。",
                     "项目阶段汇总：汇总多台 SQL Server 上的项目阶段状态。",
+                    "岗位表核对：校验岗位编码格式和层级顺延关系。",
+                    "单列顺序核对：检查指定列上下相似和分段重复。",
                 ]
             )
         for feature in features:
@@ -437,22 +811,6 @@ class AboutPage(QWidget):
             label.setWordWrap(True)
             capability_layout.addWidget(label)
         root.addWidget(capability)
-
-        update_card = QFrame()
-        update_card.setProperty("pageCard", True)
-        update_layout = QVBoxLayout(update_card)
-        update_layout.setContentsMargins(24, 22, 24, 24)
-        update_layout.setSpacing(14)
-        update_title = QLabel("更新说明")
-        update_title.setProperty("sectionTitle", True)
-        update_layout.addWidget(update_title)
-
-        update_text = QLabel(
-            "Windows 版支持检查更新。首页和关于页右上角保留更新按钮，点击后会检查远端版本并按增量包或整包执行更新。"
-        )
-        update_text.setWordWrap(True)
-        update_layout.addWidget(update_text)
-        root.addWidget(update_card)
 
 
 class QtMainWindow(QMainWindow):
@@ -489,6 +847,7 @@ class QtMainWindow(QMainWindow):
         self.page_indexes: dict[str, int] = {}
         self.tree_items_by_key: dict[str, QTreeWidgetItem] = {}
         self.page_help_sections: dict[str, QFrame] = {}
+        self.page_action_buttons: dict[str, QPushButton] = {}
         self.sidebar_collapsed = False
 
         central = QWidget()
@@ -522,6 +881,11 @@ class QtMainWindow(QMainWindow):
         sidebar_top_row = QHBoxLayout()
         sidebar_top_row.setContentsMargins(0, 0, 0, 0)
         sidebar_top_row.setSpacing(10)
+        self.sidebar_brand_icon = QLabel("工")
+        self.sidebar_brand_icon.setObjectName("SidebarBrandIcon")
+        self.sidebar_brand_icon.setAlignment(Qt.AlignCenter)
+        self.sidebar_brand_icon.setFixedSize(56, 56)
+        sidebar_top_row.addWidget(self.sidebar_brand_icon, 0, Qt.AlignTop)
         title_block = QVBoxLayout()
         title_block.setSpacing(2)
         self.sidebar_app_title = QLabel("报名系统工具箱")
@@ -556,6 +920,7 @@ class QtMainWindow(QMainWindow):
         self.sidebar_title = QLabel("导航")
         self.sidebar_title.setProperty("sectionTitle", True)
         sidebar_body_layout.addWidget(self.sidebar_title)
+        self.sidebar_title.hide()
 
         nav_title_row = QHBoxLayout()
         self.nav_title = QLabel("全部功能")
@@ -563,6 +928,7 @@ class QtMainWindow(QMainWindow):
         nav_title_row.addWidget(self.nav_title)
         nav_title_row.addStretch(1)
         sidebar_body_layout.addLayout(nav_title_row)
+        self.nav_title.hide()
         self.nav_tree = QTreeWidget()
         self.nav_tree.setHeaderHidden(True)
         self.nav_tree.setIndentation(14)
@@ -572,6 +938,10 @@ class QtMainWindow(QMainWindow):
         self.nav_tree.itemClicked.connect(self.on_tree_item_clicked)
         sidebar_body_layout.addWidget(self.nav_tree, 1)
         sidebar_layout.addWidget(self.sidebar_body, 1)
+        self.sidebar_footer_button = QPushButton("收藏夹")
+        self.sidebar_footer_button.setObjectName("SidebarFooterButton")
+        self.sidebar_footer_button.clicked.connect(lambda: self.open_entry("home"))
+        sidebar_layout.addWidget(self.sidebar_footer_button)
 
         content_wrapper = QWidget()
         content_layout = QVBoxLayout(content_wrapper)
@@ -582,27 +952,54 @@ class QtMainWindow(QMainWindow):
         container_layout = QVBoxLayout(self.content_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(12)
-        self.header_update_button = QPushButton("更新", self.content_container)
+        self.header_toolbar = QWidget(self.content_container)
+        self.header_toolbar.setObjectName("HeaderToolbar")
+        toolbar_layout = QHBoxLayout(self.header_toolbar)
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        toolbar_layout.setSpacing(10)
+        toolbar_layout.addStretch(1)
+        self.header_update_button = QPushButton("检查更新", self.content_container)
         self.header_update_button.setObjectName("HelpButton")
         self.header_update_button.setCursor(Qt.PointingHandCursor)
-        self.header_update_button.setFixedSize(72, 32)
+        self.header_update_button.setFixedSize(104, 32)
         self.header_update_button.clicked.connect(self.run_update_check)
-        self.header_star_button = PaintedIconButton("star", self.content_container)
-        self.header_star_button.setObjectName("StarButton")
-        self.header_star_button.clicked.connect(self.toggle_current_favorite)
-        self.header_star_button.setFixedSize(28, 28)
+        self.header_back_button = QPushButton("返回首页", self.content_container)
+        self.header_back_button.setObjectName("HelpButton")
+        self.header_back_button.setCursor(Qt.PointingHandCursor)
+        self.header_back_button.setFixedSize(104, 32)
+        self.header_back_button.clicked.connect(lambda: self.open_entry("home"))
+        self.header_favorite_button = QPushButton("收藏", self.content_container)
+        self.header_favorite_button.setObjectName("HelpButton")
+        self.header_favorite_button.setCursor(Qt.PointingHandCursor)
+        self.header_favorite_button.setFixedSize(84, 32)
+        self.header_favorite_button.clicked.connect(self.toggle_current_favorite)
+        self.header_settings_button = QPushButton("设置", self.content_container)
+        self.header_settings_button.setObjectName("HelpButton")
+        self.header_settings_button.setCursor(Qt.PointingHandCursor)
+        self.header_settings_button.setFixedSize(84, 32)
+        self.header_settings_button.clicked.connect(lambda: self.open_entry("about"))
+        toolbar_layout.addWidget(self.header_back_button)
+        toolbar_layout.addWidget(self.header_favorite_button)
+        toolbar_layout.addWidget(self.header_settings_button)
+        toolbar_layout.addWidget(self.header_update_button)
         self.stack = QStackedWidget()
+        container_layout.addWidget(self.header_toolbar)
         container_layout.addWidget(self.stack)
-        self.header_update_button.raise_()
-        self.header_star_button.raise_()
+        self.header_toolbar.hide()
         content_layout.addWidget(self.content_container, 1)
 
         splitter.addWidget(self.sidebar)
         splitter.addWidget(content_wrapper)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([300, 1100])
+        splitter.setHandleWidth(0)
+        self.sidebar.hide()
+        self.sidebar.setMinimumWidth(0)
+        self.sidebar.setMaximumWidth(0)
+        splitter.setSizes([0, 1400])
         self.main_splitter = splitter
+
+        self.sidebar_overlay_button.hide()
 
         self._build_navigation_tree()
         self._build_pages()
@@ -610,14 +1007,12 @@ class QtMainWindow(QMainWindow):
         self._apply_styles()
 
         self.open_entry("home")
-        QTimer.singleShot(0, self._position_overlay_buttons)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         if not self._initial_window_placed:
             self._ensure_reasonable_window_geometry()
             self._initial_window_placed = True
-        QTimer.singleShot(0, self._position_overlay_buttons)
 
     def _build_pages(self) -> None:
         for entry in self.visible_nav_entries:
@@ -643,6 +1038,8 @@ class QtMainWindow(QMainWindow):
                 page = ExamPrintPage(self.emit_log)
             elif entry.key == "job_code_audit":
                 page = JobCodeAuditPage(self.emit_log)
+            elif entry.key == "ordered_name_audit":
+                page = OrderedUnitAuditPage(self.emit_log)
             elif entry.key == "exam":
                 page = ExamPage(self.emit_log)
             elif entry.key == "sql_exec":
@@ -650,9 +1047,17 @@ class QtMainWindow(QMainWindow):
             elif entry.key == "project_stage":
                 page = ProjectStagePage(self.emit_log)
             elif entry.key == "about":
-                page = AboutPage(self.release_config.show_experimental)
+                page = AboutPage(self.release_config.show_experimental, update_callback=self.run_update_check)
             else:
                 page = PlaceholderPage(entry.label, entry.description)
+            if hasattr(page, "set_home_callback"):
+                page.set_home_callback(lambda target="home": self.open_entry(target))
+            if hasattr(page, "set_favorite_callback"):
+                page.set_favorite_callback(lambda target=entry.key: self._toggle_favorite_for_key(target))
+            if hasattr(page, "set_favorite_state"):
+                page.set_favorite_state(entry.key in self.favorites)
+            elif entry.key != "home":
+                self._attach_page_actions(entry, page)
             self._attach_page_help(entry, page)
             self.page_indexes[entry.key] = self.stack.addWidget(self._wrap_page(page))
 
@@ -670,14 +1075,14 @@ class QtMainWindow(QMainWindow):
             return
         old_widget = self.stack.widget(home_index)
         new_widget = self._wrap_page(self._create_home_page())
+        self.stack.removeWidget(old_widget)
+        old_widget.deleteLater()
         self.stack.insertWidget(home_index, new_widget)
-        if old_widget is not None:
-            self.stack.removeWidget(old_widget)
-            old_widget.deleteLater()
+        if self.stack.currentIndex() == home_index:
+            self.stack.setCurrentIndex(home_index)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._position_overlay_buttons()
 
     def _ensure_reasonable_window_geometry(self) -> None:
         screen = self.screen() or QApplication.primaryScreen()
@@ -714,21 +1119,58 @@ class QtMainWindow(QMainWindow):
         self.nav_tree.clear()
         self.tree_items_by_key.clear()
         group_nodes: dict[str, QTreeWidgetItem] = {}
+        home_entry = next((entry for entry in self.visible_nav_entries if entry.key == "home"), None)
+        if home_entry is not None:
+            item = QTreeWidgetItem([self._nav_entry_label(home_entry)])
+            item.setData(0, Qt.UserRole, ("entry", home_entry.key))
+            self.nav_tree.addTopLevelItem(item)
+            self.tree_items_by_key[home_entry.key] = item
 
         for group_key, group_label in self.visible_nav_groups:
+            if group_key == "start":
+                continue
             node = QTreeWidgetItem([group_label])
             node.setData(0, Qt.UserRole, ("group", group_key))
-            node.setExpanded(group_key in {"start", "files", "db"})
+            node.setExpanded(True)
+            node.setFlags(Qt.ItemIsEnabled)
+            node.setForeground(0, QBrush(QColor("#5B6B7E")))
             group_nodes[group_key] = node
             self.nav_tree.addTopLevelItem(node)
 
         for entry in self.visible_nav_entries:
-            item = QTreeWidgetItem([entry.label])
+            if entry.key == "home" or entry.group == "start":
+                continue
+            item = QTreeWidgetItem([self._nav_entry_label(entry)])
             item.setData(0, Qt.UserRole, ("entry", entry.key))
             if not entry.migrated:
                 item.setForeground(0, Qt.gray)
-            group_nodes[entry.group].addChild(item)
+            parent = group_nodes.get(entry.group)
+            if parent is not None:
+                parent.addChild(item)
+            else:
+                self.nav_tree.addTopLevelItem(item)
             self.tree_items_by_key[entry.key] = item
+
+    def _nav_entry_label(self, entry: NavEntry) -> str:
+        icons = {
+            "home": "⌂",
+            "certificate": "证",
+            "template": "表",
+            "photo": "图",
+            "pack": "包",
+            "match": "数",
+            "phone": "电",
+            "update_sql": "库",
+            "id_card": "查",
+            "about": "设",
+            "exam_print": "印",
+            "job_code_audit": "核",
+            "ordered_name_audit": "序",
+            "exam": "考",
+            "sql_exec": "执",
+            "project_stage": "项",
+        }
+        return f"{icons.get(entry.key, '•')}  {entry.label}"
 
     def _build_menu(self) -> None:
         menu = self.menuBar().addMenu("工具")
@@ -802,35 +1244,7 @@ class QtMainWindow(QMainWindow):
         return scroll
 
     def _position_overlay_buttons(self) -> None:
-        if hasattr(self, "content_container"):
-            anchor_right = self.content_container.width() - 16
-            anchor_y = 18
-
-            current_scroll = self.stack.currentWidget()
-            if current_scroll is not None:
-                host = current_scroll.widget()
-                if host is not None and host.layout() is not None and host.layout().count() > 0:
-                    page = host.layout().itemAt(0).widget()
-                    if page is not None and page.layout() is not None and page.layout().count() > 0:
-                        hero = page.layout().itemAt(0).widget()
-                        if hero is not None:
-                            hero_top_right = hero.mapTo(self.content_container, hero.rect().topRight())
-                            anchor_right = hero_top_right.x() - 18
-                            anchor_y = hero_top_right.y() + 18
-
-            right = anchor_right
-            y = anchor_y
-
-            if self.header_star_button.isVisible():
-                right -= self.header_star_button.width()
-                self.header_star_button.move(max(0, right), max(0, y))
-                right -= 10
-
-            if self.header_update_button.isVisible():
-                right -= self.header_update_button.width()
-                self.header_update_button.move(max(0, right), max(0, y - 2))
-        if hasattr(self, "central_panel"):
-            self.sidebar_overlay_button.move(18, 28)
+        return
 
     def _set_current_tree_item(self, key: str) -> None:
         item = self.tree_items_by_key.get(key)
@@ -844,10 +1258,13 @@ class QtMainWindow(QMainWindow):
 
     def _update_header_state(self, key: str) -> None:
         is_favorite = key in self.favorites
-        self.header_star_button.setChecked(is_favorite)
-        self.header_star_button.setEnabled(key not in {"home", "about"})
+        self.header_favorite_button.setText("已收藏" if is_favorite else "收藏")
+        self.header_favorite_button.setEnabled(key not in {"home", "about"})
+        self.header_favorite_button.setVisible(key not in {"home", "about"})
         self.header_update_button.setVisible(key in {"home", "about"})
-        self.header_star_button.update()
+        self.header_settings_button.setVisible(key in {"home", "about"})
+        self.header_back_button.setVisible(key != "home")
+        self.header_toolbar.hide()
 
     def open_entry(self, key: str) -> None:
         index = self.page_indexes.get(key)
@@ -863,7 +1280,6 @@ class QtMainWindow(QMainWindow):
             return
         kind, value = data
         if kind == "group":
-            item.setExpanded(not item.isExpanded())
             self.nav_tree.clearSelection()
             return
         self.open_entry(value)
@@ -881,12 +1297,76 @@ class QtMainWindow(QMainWindow):
         current_key = next((key for key, index in self.page_indexes.items() if index == current_index), None)
         if current_key is None or current_key in {"home", "about"}:
             return
-        if current_key in self.favorites:
-            self.favorites.remove(current_key)
+        self._toggle_favorite_for_key(current_key)
+
+    def _toggle_favorite_for_key(self, key: str) -> None:
+        if key in {"home", "about"}:
+            return
+        if key in self.favorites:
+            self.favorites.remove(key)
         else:
-            self.favorites.insert(0, current_key)
+            self.favorites.insert(0, key)
         self._replace_home_page()
-        self._update_header_state(current_key)
+        self._update_header_state(key)
+        self._sync_page_favorite_state(key)
+
+    def _sync_page_favorite_state(self, key: str) -> None:
+        favorite_button = self.page_action_buttons.get(key)
+        if favorite_button is not None:
+            is_favorite = key in self.favorites
+            favorite_button.setChecked(is_favorite)
+            favorite_button.setText("已收藏" if is_favorite else "收藏")
+        index = self.page_indexes.get(key)
+        if index is None:
+            return
+        scroll = self.stack.widget(index)
+        if scroll is None:
+            return
+        host = scroll.widget()
+        if host is None or host.layout() is None or host.layout().count() == 0:
+            return
+        page = host.layout().itemAt(0).widget()
+        if page is not None and hasattr(page, "set_favorite_state"):
+            page.set_favorite_state(key in self.favorites)
+
+    def _attach_page_actions(self, entry: NavEntry, page: QWidget) -> None:
+        layout = page.layout()
+        if layout is None or layout.count() == 0:
+            return
+        hero = layout.itemAt(0).widget()
+        if hero is None or hero.layout() is None:
+            return
+
+        hero_layout = hero.layout()
+        action_row = QWidget()
+        action_layout = QHBoxLayout(action_row)
+        action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.setSpacing(10)
+        action_layout.addStretch(1)
+
+        home_button = QPushButton("返回首页")
+        home_button.setObjectName("HelpButton")
+        home_button.clicked.connect(lambda: self.open_entry("home"))
+        action_layout.addWidget(home_button)
+
+        guide_button = QPushButton("使用指南")
+        guide_button.setObjectName("HelpButton")
+        guide_button.clicked.connect(lambda _=False, target=entry.key: self._toggle_help_for_key(target))
+        action_layout.addWidget(guide_button)
+
+        history_button = QPushButton("历史记录")
+        history_button.setObjectName("HelpButton")
+        action_layout.addWidget(history_button)
+
+        favorite_button = QPushButton("收藏")
+        favorite_button.setObjectName("HelpButton")
+        favorite_button.setCheckable(True)
+        favorite_button.clicked.connect(lambda: self._toggle_favorite_for_key(entry.key))
+        action_layout.addWidget(favorite_button)
+        self.page_action_buttons[entry.key] = favorite_button
+        self._sync_page_favorite_state(entry.key)
+
+        hero_layout.insertWidget(0, action_row)
 
     def _attach_page_help(self, entry: NavEntry, page: QWidget) -> None:
         layout = page.layout()
@@ -941,12 +1421,12 @@ class QtMainWindow(QMainWindow):
     def toggle_sidebar(self) -> None:
         self.sidebar_collapsed = not self.sidebar_collapsed
         if self.sidebar_collapsed:
+            self.sidebar_brand_icon.hide()
             self.sidebar_app_title.hide()
             self.sidebar_app_subtitle.hide()
             self.search_edit.hide()
-            self.sidebar_title.hide()
-            self.nav_title.hide()
             self.sidebar_body.hide()
+            self.sidebar_footer_button.hide()
             self.sidebar_toggle_button.hide()
             self.sidebar_overlay_button.show()
             self.sidebar_toggle_button.setProperty("collapsed", True)
@@ -964,12 +1444,12 @@ class QtMainWindow(QMainWindow):
             self.sidebar.setMaximumWidth(30)
             self.main_splitter.setSizes([30, max(800, self.width() - 30)])
         else:
+            self.sidebar_brand_icon.show()
             self.sidebar_app_title.show()
             self.sidebar_app_subtitle.show()
             self.search_edit.show()
-            self.sidebar_title.show()
-            self.nav_title.show()
             self.sidebar_body.show()
+            self.sidebar_footer_button.show()
             self.sidebar_overlay_button.hide()
             self.sidebar_toggle_button.show()
             self.sidebar_toggle_button.setProperty("collapsed", False)
@@ -1058,13 +1538,20 @@ class QtMainWindow(QMainWindow):
                 background: transparent;
             }
             QLabel[appTitle="true"] {
-                font-size: 24px;
+                font-size: 22px;
                 font-weight: 700;
                 color: #172033;
             }
             QLabel[appSubtitle="true"] {
                 color: #607086;
                 font-size: 12px;
+            }
+            QLabel#SidebarBrandIcon {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2F73FF, stop:1 #6AD0FF);
+                color: #FFFFFF;
+                border-radius: 16px;
+                font-size: 24px;
+                font-weight: 800;
             }
             QLabel[formLabel="true"] {
                 color: #314155;
@@ -1076,6 +1563,13 @@ class QtMainWindow(QMainWindow):
                 color: #172033;
                 font-size: 14px;
                 font-weight: 700;
+            }
+            QLabel#SectionTitle {
+                color: #172033;
+                font-size: 14px;
+                font-weight: 700;
+                border-left: 4px solid #3E7BFA;
+                padding-left: 8px;
             }
             QLabel[heroTitle="true"] {
                 font-size: 19px;
@@ -1091,18 +1585,68 @@ class QtMainWindow(QMainWindow):
                 min-height: 30px;
                 padding: 3px 12px;
                 color: #314155;
-                background: #FFFFFF;
-                border: 1px solid #CBD5E1;
-                border-radius: 10px;
+                background: rgba(255, 255, 255, 0.92);
+                border: 1px solid #DDE6F2;
+                border-radius: 14px;
                 font-weight: 600;
             }
             QPushButton#HelpButton:hover {
                 background: #F7FAFD;
+                border-color: #C7D8EF;
+            }
+            QPushButton#HelpButton:checked {
+                background: #F5B301;
+                border-color: #F5B301;
+                color: #FFFFFF;
+            }
+            #HeaderToolbar {
+                background: transparent;
+                min-height: 36px;
             }
             QFrame[pageCard="true"] {
                 background: #FFFFFF;
                 border: 1px solid #D9E2EC;
                 border-radius: 14px;
+            }
+            #ExamPrintTopbar {
+                border-radius: 10px;
+            }
+            QLabel#StepItem {
+                background: #F4F8FF;
+                border: 1px solid #D9E8FF;
+                border-radius: 16px;
+                padding: 7px 12px;
+                color: #2F73FF;
+                font-weight: 700;
+            }
+            #ExamPrintLeftRail, #ExamPrintRightPanel {
+                background: #FFFFFF;
+                border: 1px solid #D9E2EC;
+                border-radius: 10px;
+            }
+            QFrame[workflowStep="true"] {
+                background: transparent;
+                border: 1px solid transparent;
+                border-radius: 8px;
+            }
+            QFrame[workflowStep="true"][active="true"] {
+                background: #2F80FF;
+                border-color: #2F80FF;
+            }
+            QFrame[workflowStep="true"][active="true"] QLabel {
+                color: #FFFFFF;
+            }
+            QLabel[stepBadge="true"] {
+                background: #EEF5FF;
+                color: #2F80FF;
+                border: 1px solid #CFE0FF;
+                border-radius: 14px;
+                font-weight: 800;
+            }
+            QFrame[workflowStep="true"][active="true"] QLabel[stepBadge="true"] {
+                background: #FFFFFF;
+                color: #2F80FF;
+                border-color: #FFFFFF;
             }
             QLineEdit, QComboBox, QDateEdit, QSpinBox {
                 color: #172033;
@@ -1149,6 +1693,30 @@ class QtMainWindow(QMainWindow):
                 color: #172033;
                 border: 1px solid #CBD5E1;
                 border-radius: 10px;
+                background: #FFFFFF;
+                selection-background-color: #DCE8FF;
+                selection-color: #173052;
+            }
+            QListWidget, QListView {
+                color: #172033;
+                background: #FFFFFF;
+                border: 1px solid #CBD5E1;
+                border-radius: 10px;
+                outline: none;
+                selection-background-color: #DCE8FF;
+                selection-color: #173052;
+            }
+            QListWidget::item, QListView::item {
+                min-height: 24px;
+                padding: 4px 8px;
+                border-radius: 7px;
+            }
+            QListWidget::item:selected, QListView::item:selected {
+                background: #DCE8FF;
+                color: #173052;
+            }
+            QListWidget::item:disabled, QListView::item:disabled {
+                color: #607086;
                 background: #FFFFFF;
             }
             QTableWidget {
@@ -1218,6 +1786,20 @@ class QtMainWindow(QMainWindow):
                 border-color: #3E7BFA;
                 font-weight: 700;
             }
+            QPushButton[toolbarButton="true"] {
+                min-height: 30px;
+                padding: 0 10px;
+                border: 1px solid transparent;
+                border-radius: 8px;
+                background: transparent;
+                color: #1F3147;
+                font-weight: 600;
+            }
+            QPushButton[toolbarButton="true"]:hover {
+                background: #EEF5FF;
+                border-color: #CFE0FF;
+                color: #1465E8;
+            }
             #StarButton {
                 min-height: 28px;
                 min-width: 28px;
@@ -1244,6 +1826,147 @@ class QtMainWindow(QMainWindow):
                 border-radius: 10px;
                 font-size: 16px;
             }
+            #HomeHero {
+                border-radius: 18px;
+            }
+            QLabel#HomeWelcomeTitle {
+                font-size: 22px;
+                font-weight: 800;
+                color: #0F1F3A;
+            }
+            #HomeSectionCard {
+                border-radius: 18px;
+            }
+            QLabel#HomeSectionMarker {
+                background: #2F73FF;
+                border-radius: 3px;
+            }
+            QLabel#HomeSectionTitle {
+                font-size: 16px;
+                font-weight: 800;
+                color: #13223A;
+            }
+            #HomeStatCard {
+                background: #FFFFFF;
+                border: 1px solid #E0E8F2;
+                border-radius: 16px;
+            }
+            QLabel#HomeStatIcon {
+                background: #EEF5FF;
+                border: 1px solid #D9E8FF;
+                border-radius: 12px;
+                font-size: 17px;
+                font-weight: 800;
+            }
+            QLabel#HomeStatValue {
+                font-size: 18px;
+                font-weight: 800;
+            }
+            QLabel#HomeStatLabel {
+                color: #506178;
+                font-size: 12px;
+            }
+            #HomeFeatureCard {
+                background: #FFFFFF;
+                border: 1px solid #DDE7F3;
+                border-radius: 16px;
+            }
+            #HomeFeatureCard[hovered="true"] {
+                border-color: #9DBEFF;
+                background: #FBFDFF;
+            }
+            #HomeFeatureCard[pressed="true"] {
+                background: #F4F8FF;
+                border-color: #7EA8F8;
+            }
+            QLabel#HomeFeatureIcon {
+                border-radius: 12px;
+                font-size: 15px;
+                font-weight: 800;
+            }
+            QLabel#HomeFeatureIconSmall {
+                border-radius: 11px;
+                font-size: 13px;
+                font-weight: 800;
+            }
+            QLabel#HomeFeatureTitle {
+                color: #13223A;
+                font-size: 14px;
+                font-weight: 800;
+            }
+            QLabel#HomeFavoriteStar {
+                color: #F5A400;
+                font-size: 16px;
+                font-weight: 900;
+            }
+            QPushButton#HomeOpenButton {
+                min-height: 32px;
+                color: #2F73FF;
+                background: #FFFFFF;
+                border: 1px solid #D9E2EC;
+                border-radius: 10px;
+            }
+            QPushButton#HomeOpenButton:hover {
+                background: #F4F8FF;
+                border-color: #9DBEFF;
+            }
+            QPushButton#HomeOpenButton:pressed {
+                background: #EAF2FF;
+                border-color: #7EA8F8;
+            }
+            QPushButton#HomeFilterButton {
+                min-height: 30px;
+                padding: 0 14px;
+                border-radius: 8px;
+                background: #FFFFFF;
+                border: 1px solid #D9E2EC;
+                color: #506178;
+                font-weight: 700;
+            }
+            QPushButton#HomeFilterButton:hover {
+                background: #F8FBFF;
+                border-color: #C9D9ED;
+            }
+            QPushButton#HomeFilterButton:checked {
+                background: #2F73FF;
+                border-color: #2F73FF;
+                color: #FFFFFF;
+            }
+            QPushButton#HomeViewToggle {
+                background: #FFFFFF;
+                border: 1px solid #D9E2EC;
+                border-radius: 10px;
+                color: #7990AA;
+                font-size: 15px;
+                font-weight: 700;
+            }
+            QPushButton#HomeViewToggle:hover {
+                border-color: #C9D9ED;
+                background: #F8FBFF;
+            }
+            QPushButton#HomeViewToggle:checked {
+                background: #EEF5FF;
+                border-color: #CFE0FF;
+                color: #2F73FF;
+            }
+            #HomeFeatureRow {
+                background: #FFFFFF;
+                border: 1px solid #DDE7F3;
+                border-radius: 14px;
+            }
+            #HomeFeatureRow[hovered="true"] {
+                background: #FBFDFF;
+                border-color: #9DBEFF;
+            }
+            #HomeFeatureRow[pressed="true"] {
+                background: #F4F8FF;
+                border-color: #7EA8F8;
+            }
+            QLabel#HomeRowArrow {
+                color: #8DA2BB;
+                font-size: 24px;
+                font-weight: 300;
+            }
             #QuickList {
                 border: 1px solid #D9E2EC;
                 border-radius: 12px;
@@ -1261,22 +1984,21 @@ class QtMainWindow(QMainWindow):
                 font-weight: 700;
             }
             #NavTree {
-                border: 1px solid #D9E2EC;
-                border-radius: 14px;
-                background: #FFFFFF;
-                padding: 10px 8px;
+                border: none;
+                background: transparent;
+                padding: 0;
                 outline: none;
                 show-decoration-selected: 0;
             }
             #NavTree::item {
                 min-height: 34px;
                 padding: 4px 10px 4px 12px;
-                margin: 2px 8px 2px 14px;
+                margin: 2px 0 2px 10px;
                 border-radius: 10px;
             }
             #NavTree::item:selected {
-                background: #DCE8FF;
-                color: #173052;
+                background: #2F73FF;
+                color: #FFFFFF;
                 font-weight: 700;
             }
             #NavTree::branch:selected {
@@ -1309,6 +2031,20 @@ class QtMainWindow(QMainWindow):
             }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
                 background: transparent;
+            }
+            QPushButton#SidebarFooterButton {
+                min-height: 44px;
+                padding: 0 16px;
+                text-align: left;
+                color: #4E617B;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F5F8FC, stop:1 #EEF3FA);
+                border: 1px solid #DCE5F0;
+                border-radius: 14px;
+                font-weight: 700;
+            }
+            QPushButton#SidebarFooterButton:hover {
+                border-color: #C9D8EB;
+                color: #1B4ECC;
             }
             """
         )

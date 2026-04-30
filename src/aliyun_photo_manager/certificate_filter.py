@@ -75,10 +75,16 @@ def _load_openpyxl():
     try:
         from openpyxl import Workbook, load_workbook
     except ImportError as exc:
-        raise ImportError(
-            "缺少依赖 openpyxl，请先执行 `pip install -r requirements.txt`。"
-        ) from exc
+        raise ImportError("Missing dependency openpyxl. Run `pip install -r requirements.txt`.") from exc
     return Workbook, load_workbook
+
+
+def _load_xlrd():
+    try:
+        import xlrd
+    except ImportError as exc:
+        raise ImportError("Missing dependency xlrd. Run `pip install -r requirements.txt`.") from exc
+    return xlrd
 
 
 def _normalize_cell(value) -> str:
@@ -87,16 +93,49 @@ def _normalize_cell(value) -> str:
     return str(value).strip()
 
 
+def _read_sheet_matrix(template_path: Path) -> List[List[str]]:
+    suffix = template_path.suffix.lower()
+    if suffix == ".xlsx":
+        _, load_workbook = _load_openpyxl()
+        workbook = load_workbook(template_path, data_only=True)
+        worksheet = workbook.worksheets[0]
+        return [[_normalize_cell(value) for value in row] for row in worksheet.iter_rows(values_only=True)]
+    if suffix == ".xls":
+        xlrd = _load_xlrd()
+        workbook = xlrd.open_workbook(template_path)
+        sheet = workbook.sheet_by_index(0)
+        matrix: List[List[str]] = []
+        for row_index in range(sheet.nrows):
+            matrix.append([_normalize_cell(sheet.cell_value(row_index, col)) for col in range(sheet.ncols)])
+        return matrix
+    raise ValueError("仅支持 `.xlsx` 或 `.xls` 文件。")
+
+
 def list_template_headers(template_path: Path) -> List[str]:
-    _, load_workbook = _load_openpyxl()
-    workbook = load_workbook(template_path, data_only=True)
-    worksheet = workbook.worksheets[0]
-    headers: List[str] = []
-    for cell in worksheet[1]:
-        header = _normalize_cell(cell.value)
-        if header:
-            headers.append(header)
-    return headers
+    matrix = _read_sheet_matrix(template_path)
+    if not matrix:
+        return []
+    return [header for header in (_normalize_cell(cell) for cell in matrix[0]) if header]
+
+
+def _read_template_rows(template_path: Path) -> List[Dict[str, str]]:
+    matrix = _read_sheet_matrix(template_path)
+    if not matrix:
+        return []
+    headers = [_normalize_cell(cell) for cell in matrix[0]]
+    rows: List[Dict[str, str]] = []
+    for row in matrix[1:]:
+        item: Dict[str, str] = {}
+        has_value = False
+        for index, header in enumerate(headers):
+            if not header:
+                continue
+            value = _normalize_cell(row[index] if len(row) > index else "")
+            item[header] = value
+            has_value = has_value or bool(value)
+        if has_value:
+            rows.append(item)
+    return rows
 
 
 def load_match_values(template_path: Path, match_column: str) -> List[str]:
@@ -104,11 +143,9 @@ def load_match_values(template_path: Path, match_column: str) -> List[str]:
     headers = list(rows[0].keys()) if rows else list_template_headers(template_path)
     if match_column not in headers:
         raise ValueError(f"模板中不存在匹配列：{match_column}")
-
     values: List[str] = []
     seen = set()
     for row in rows:
-        # 模板下载和筛选都依赖这份名单，先在这里去重，避免重复处理同一个人。
         value = row.get(match_column, "").strip()
         if not value or value in seen:
             continue
@@ -122,7 +159,6 @@ def load_column_values(template_path: Path, column_name: str) -> List[str]:
     headers = list(rows[0].keys()) if rows else list_template_headers(template_path)
     if column_name not in headers:
         raise ValueError(f"模板中不存在匹配列：{column_name}")
-
     values: List[str] = []
     seen = set()
     for row in rows:
@@ -134,45 +170,14 @@ def load_column_values(template_path: Path, column_name: str) -> List[str]:
     return values
 
 
-def _read_template_rows(template_path: Path) -> List[Dict[str, str]]:
-    _, load_workbook = _load_openpyxl()
-    workbook = load_workbook(template_path, data_only=True)
-    worksheet = workbook.worksheets[0]
-
-    headers = [_normalize_cell(cell.value) for cell in worksheet[1]]
-    rows: List[Dict[str, str]] = []
-    for row in worksheet.iter_rows(min_row=2, values_only=True):
-        if not row:
-            continue
-        item: Dict[str, str] = {}
-        has_value = False
-        for index, header in enumerate(headers):
-            if not header:
-                continue
-            value = _normalize_cell(row[index] if len(row) > index else "")
-            item[header] = value
-            if value:
-                has_value = True
-        if has_value:
-            rows.append(item)
-    return rows
-
-
 def _iter_files(directory: Path) -> List[Path]:
     return [path for path in directory.rglob("*") if path.is_file()]
 
 
-def _copy_person_folder(
-    source_dir: Path,
-    destination_dir: Path,
-    keyword: str,
-    dry_run: bool,
-) -> int:
+def _copy_person_folder(source_dir: Path, destination_dir: Path, keyword: str, dry_run: bool) -> int:
     copied_files = 0
     normalized_keyword = keyword.strip().lower()
-
     for source_file in _iter_files(source_dir):
-        # 关键词模式本质上还是复制整个人员目录，只是只保留命中的文件。
         if normalized_keyword and normalized_keyword not in source_file.name.lower():
             continue
         relative_path = source_file.relative_to(source_dir)
@@ -182,29 +187,15 @@ def _copy_person_folder(
             continue
         destination_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_file, destination_path)
-
     return copied_files
 
 
-def _export_certificate_report(
-    output_dir: Path,
-    records: List[CertificateRecord],
-    classify_columns: List[str],
-) -> Path:
+def _export_certificate_report(output_dir: Path, records: List[CertificateRecord], classify_columns: List[str]) -> Path:
     Workbook, _ = _load_openpyxl()
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = "筛选结果清单"
-    worksheet.append(
-        [
-            "匹配值",
-            *classify_columns,
-            "输出相对目录",
-            "复制文件数",
-            "状态",
-            "备注",
-        ]
-    )
+    worksheet.append(["匹配值", *classify_columns, "输出相对目录", "复制文件数", "状态", "备注"])
     for record in records:
         worksheet.append(
             [
@@ -246,8 +237,6 @@ def generate_certificate_template(
             worksheet = workbook.worksheets[0]
             headers = [_normalize_cell(cell.value) for cell in worksheet[1]]
             for row in worksheet.iter_rows(min_row=2, values_only=True):
-                if not row:
-                    continue
                 item: Dict[str, str] = {}
                 has_value = False
                 for index, header in enumerate(headers):
@@ -255,8 +244,7 @@ def generate_certificate_template(
                         continue
                     value = _normalize_cell(row[index] if len(row) > index else "")
                     item[header] = value
-                    if value:
-                        has_value = True
+                    has_value = has_value or bool(value)
                 match_value = item.get("匹配值", "")
                 if has_value and match_value:
                     existing_rows[match_value] = item
@@ -314,7 +302,7 @@ def run_certificate_filter(
     if options.match_column not in headers:
         raise ValueError(f"模板中不存在匹配列：{options.match_column}")
     if options.rename_folder and options.folder_name_column not in headers:
-        raise ValueError(f"模板中不存在导出后文件夹名称列：{options.folder_name_column}")
+        raise ValueError(f"模板中不存在导出名称列：{options.folder_name_column}")
     if options.classify_output:
         for column in options.classify_columns:
             if column not in headers:
@@ -365,7 +353,6 @@ def run_certificate_filter(
                 progress_callback("certificate", index, total_rows, "")
             continue
         if match_value in seen_matches:
-            _log(logger, f"[SKIP] 模板中重复匹配值，已跳过：{match_value}")
             records.append(
                 CertificateRecord(
                     match_value=match_value,
@@ -402,7 +389,6 @@ def run_certificate_filter(
 
         output_folder_name = match_value
         if options.rename_folder:
-            # 匹配列负责“找到源目录”，名称列只负责“导出后目录叫什么”。
             output_folder_name = row.get(options.folder_name_column, "").strip() or match_value
 
         destination_dir = options.output_dir
@@ -434,12 +420,8 @@ def run_certificate_filter(
                 )
             )
             if index == 1 or index % 50 == 0 or index == total_rows:
-                _log(
-                    logger,
-                    f"证件资料进度 {index}/{total_rows}：{match_value}，复制 {current_file_count} 个文件。",
-                )
+                _log(logger, f"证件资料进度 {index}/{total_rows}：{match_value}，复制 {current_file_count} 个文件。")
         else:
-            _log(logger, f"[SKIP] {match_value} 下没有匹配文件。")
             records.append(
                 CertificateRecord(
                     match_value=match_value,
@@ -456,13 +438,13 @@ def run_certificate_filter(
 
     _log(
         logger,
-        f"证件资料筛选完成：匹配 {matched_people} 人，"
-        f"缺失 {missing_people} 人，复制 {copied_people} 人的 {copied_files} 个文件。",
+        f"证件资料筛选完成：匹配 {matched_people} 人，缺失 {missing_people} 人，复制 {copied_people} 人的 {copied_files} 个文件。",
     )
     report_path = None
     if not options.dry_run:
         report_path = _export_certificate_report(options.output_dir, records, list(options.classify_columns))
         _log(logger, f"已导出结果清单：{report_path}")
+
     return CertificateFilterSummary(
         template_path=options.template_path,
         source_dir=options.source_dir,
