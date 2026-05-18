@@ -88,6 +88,28 @@ def _build_aliyun_bucket(config: OssConfig):
     return oss2.Bucket(auth, config.endpoint, config.bucket_name)
 
 
+def _iter_aliyun_current_level(config: OssConfig, prefix: str):
+    try:
+        import oss2
+    except ImportError as exc:
+        raise ImportError("缺少依赖 oss2，请先执行 `pip install -r requirements.txt`。") from exc
+
+    bucket = _build_aliyun_bucket(config)
+    for result in oss2.ObjectIteratorV2(bucket, prefix=prefix, delimiter="/", max_keys=1000):
+        prefix_list = getattr(result, "prefix_list", None)
+        object_list = getattr(result, "object_list", None)
+        if prefix_list is not None or object_list is not None:
+            for folder in prefix_list or []:
+                yield folder, True
+            for obj in object_list or []:
+                yield getattr(obj, "key", ""), False
+            continue
+
+        key = getattr(result, "key", "")
+        if key:
+            yield key, result.is_prefix()
+
+
 def _extract_cos_region(endpoint: str) -> str:
     cleaned = endpoint.strip()
     if not cleaned:
@@ -213,13 +235,10 @@ def list_folder_prefixes(config: OssConfig, prefix: str = "") -> List[str]:
     normalized_prefix = normalize_prefix(prefix)
 
     if provider == "aliyun":
-        import oss2
-
-        bucket = _build_aliyun_bucket(config)
         folders: List[str] = []
-        for result in oss2.ObjectIteratorV2(bucket, prefix=normalized_prefix, delimiter="/", max_keys=1000):
-            for folder in result.prefix_list:
-                folders.append(folder)
+        for key, is_prefix in _iter_aliyun_current_level(config, normalized_prefix):
+            if is_prefix:
+                folders.append(key)
         return folders
 
     folders: List[str] = []
@@ -237,36 +256,34 @@ def list_browser_entries(config: OssConfig, prefix: str = "") -> List[BrowserEnt
     entries: List[BrowserEntry] = []
 
     if provider == "aliyun":
-        import oss2
-
-        bucket = _build_aliyun_bucket(config)
         seen_folders: set[str] = set()
-        for result in oss2.ObjectIteratorV2(bucket, prefix=normalized_prefix, delimiter="/", max_keys=1000):
-            for folder in result.prefix_list:
-                if folder in seen_folders:
+        for key, is_prefix in _iter_aliyun_current_level(config, normalized_prefix):
+            if is_prefix:
+                if key in seen_folders:
                     continue
-                seen_folders.add(folder)
+                seen_folders.add(key)
                 entries.append(
                     BrowserEntry(
-                        key=folder,
+                        key=key,
                         entry_type="folder",
-                        display_name=folder.rstrip("/").split("/")[-1] or "/",
+                        display_name=key.rstrip("/").split("/")[-1] or "/",
                     )
                 )
+                continue
 
-            for obj in result.object_list:
-                if obj.key == normalized_prefix:
-                    continue
-                relative = build_local_relative_path(obj.key, normalized_prefix)
-                if len(relative.parts) != 1:
-                    continue
-                entries.append(
-                    BrowserEntry(
-                        key=obj.key,
-                        entry_type="file",
-                        display_name=relative.name,
-                    )
+            if key == normalized_prefix:
+                continue
+            relative = build_local_relative_path(key, normalized_prefix)
+            # 浏览面板只显示当前层级，深层文件要进入子目录后再看。
+            if len(relative.parts) != 1:
+                continue
+            entries.append(
+                BrowserEntry(
+                    key=key,
+                    entry_type="file",
+                    display_name=relative.name,
                 )
+            )
         return entries
 
     for response in _iter_tencent_objects(config, prefix=normalized_prefix, delimiter="/"):
@@ -305,31 +322,28 @@ def search_folder_entries(config: OssConfig, keyword: str) -> List[BrowserEntry]
     entries: dict[str, BrowserEntry] = {}
 
     if provider == "aliyun":
-        import oss2
-
-        bucket = _build_aliyun_bucket(config)
-        for result in oss2.ObjectIteratorV2(bucket, prefix=search_prefix, delimiter="/", max_keys=1000):
-            for folder in result.prefix_list:
+        for key, is_prefix in _iter_aliyun_current_level(config, search_prefix):
+            if is_prefix:
                 entries.setdefault(
-                    folder,
+                    key,
                     BrowserEntry(
-                        key=folder,
+                        key=key,
                         entry_type="folder",
-                        display_name=folder.rstrip("/").split("/")[-1] or "/",
+                        display_name=key.rstrip("/").split("/")[-1] or "/",
                     ),
                 )
+                continue
 
-            for obj in result.object_list:
-                if obj.key in {search_prefix, normalize_prefix(search_prefix)}:
-                    continue
-                entries.setdefault(
-                    obj.key,
-                    BrowserEntry(
-                        key=obj.key,
-                        entry_type="file",
-                        display_name=obj.key.rstrip("/").split("/")[-1] or obj.key,
-                    ),
-                )
+            if key in {search_prefix, normalize_prefix(search_prefix)}:
+                continue
+            entries.setdefault(
+                key,
+                BrowserEntry(
+                    key=key,
+                    entry_type="file",
+                    display_name=key.rstrip("/").split("/")[-1] or key,
+                ),
+            )
         return [entries[key] for key in sorted(entries)]
 
     # 腾讯云：直接用关键词作为 Prefix（不加 "/"），匹配所有以关键词开头的对象。
