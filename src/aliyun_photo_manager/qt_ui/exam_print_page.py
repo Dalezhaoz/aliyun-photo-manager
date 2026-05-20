@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import base64
 import re
+import tempfile
+import uuid
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QByteArray, Qt, QUrl
-from PySide6.QtGui import QFont, QImage, QTextCursor, QTextDocument
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QDialog,
@@ -47,7 +49,14 @@ from .common import AppComboBox
 from .widgets import FormRow
 
 
-DATA_IMAGE_PATTERN = re.compile(r'src="(data:image/[^;]+;base64,([^"]+))"')
+DATA_IMAGE_PATTERN = re.compile(r'src="data:image/([^;]+);base64,([^"]+)"')
+IMAGE_SUFFIX_BY_MIME = {
+    "jpeg": ".jpg",
+    "jpg": ".jpg",
+    "png": ".png",
+    "bmp": ".bmp",
+    "webp": ".webp",
+}
 
 
 class HtmlModeEditor(QWidget):
@@ -131,6 +140,7 @@ class ExamPrintPage(QWidget):
         self.records: list[dict[str, str]] = []
         self.headers: list[str] = []
         self.rendered_html = ""
+        self._preview_image_files: list[Path] = []
         self._build_ui()
         self._refresh_template_combo()
 
@@ -720,27 +730,34 @@ class ExamPrintPage(QWidget):
         self.log_fn("已发送考场打印任务。")
 
     def _set_preview_html(self, html_text: str) -> None:
-        resources: list[tuple[QUrl, QImage]] = []
+        self._clear_preview_image_files()
 
         def replace_data_image(match: re.Match[str]) -> str:
-            image_index = len(resources)
-            url = QUrl(f"aliyun-photo-preview://image/{image_index}")
+            image_type = match.group(1).lower()
+            suffix = IMAGE_SUFFIX_BY_MIME.get(image_type, ".img")
             try:
                 image_data = base64.b64decode(match.group(2))
             except Exception:
                 return match.group(0)
-            image = QImage.fromData(QByteArray(image_data))
-            if not image.isNull():
-                resources.append((url, image))
-                return f'src="{url.toString()}"'
-            return match.group(0)
+            image_path = Path(tempfile.gettempdir()) / f"aliyun_photo_preview_{uuid.uuid4().hex}{suffix}"
+            try:
+                image_path.write_bytes(image_data)
+            except OSError:
+                return match.group(0)
+            self._preview_image_files.append(image_path)
+            return f'src="{QUrl.fromLocalFile(str(image_path)).toString()}"'
 
         preview_html = DATA_IMAGE_PATTERN.sub(replace_data_image, html_text)
         self.preview_edit.clear()
-        document = self.preview_edit.document()
-        for url, image in resources:
-            document.addResource(QTextDocument.ImageResource, url, image)
         self.preview_edit.setHtml(preview_html)
+
+    def _clear_preview_image_files(self) -> None:
+        for image_path in self._preview_image_files:
+            try:
+                image_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        self._preview_image_files = []
 
     def _print_preview_document(self, printer: QPrinter) -> None:
         print_method = getattr(self.preview_edit, "print_", None) or getattr(self.preview_edit, "print", None)
