@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import base64
 import re
-import tempfile
 import uuid
 from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtGui import QFont, QImage, QTextCursor, QTextDocument
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QDialog,
@@ -49,14 +48,7 @@ from .common import AppComboBox
 from .widgets import FormRow
 
 
-DATA_IMAGE_PATTERN = re.compile(r'src="data:image/([^;]+);base64,([^"]+)"')
-IMAGE_SUFFIX_BY_MIME = {
-    "jpeg": ".jpg",
-    "jpg": ".jpg",
-    "png": ".png",
-    "bmp": ".bmp",
-    "webp": ".webp",
-}
+DATA_IMAGE_PATTERN = re.compile(r'src="data:image/[^;]+;base64,([^"]+)"')
 
 
 class HtmlModeEditor(QWidget):
@@ -129,6 +121,36 @@ class HtmlModeEditor(QWidget):
             self._syncing = False
 
 
+class PreviewTextEdit(QTextEdit):
+    def __init__(self) -> None:
+        super().__init__()
+        self._images: dict[str, QImage] = {}
+
+    def set_image_html(self, html_text: str) -> None:
+        self._images = {}
+
+        def replace_data_image(match: re.Match[str]) -> str:
+            try:
+                image_data = base64.b64decode(match.group(1))
+            except Exception:
+                return match.group(0)
+            image = QImage.fromData(image_data)
+            if image.isNull():
+                return match.group(0)
+            image_id = f"aliyun-photo-preview://image/{uuid.uuid4().hex}"
+            self._images[image_id] = image
+            return f'src="{image_id}"'
+
+        self.setHtml(DATA_IMAGE_PATTERN.sub(replace_data_image, html_text))
+
+    def loadResource(self, resource_type: int, name: QUrl):  # noqa: N802
+        if resource_type == QTextDocument.ImageResource:
+            key = name.toString()
+            if key in self._images:
+                return self._images[key]
+        return super().loadResource(resource_type, name)
+
+
 class ExamPrintPage(QWidget):
     LABEL_WIDTH = 118
     ACTION_WIDTH = 110
@@ -140,7 +162,6 @@ class ExamPrintPage(QWidget):
         self.records: list[dict[str, str]] = []
         self.headers: list[str] = []
         self.rendered_html = ""
-        self._preview_image_files: list[Path] = []
         self._build_ui()
         self._refresh_template_combo()
 
@@ -385,7 +406,7 @@ class ExamPrintPage(QWidget):
         result_layout.setContentsMargins(16, 14, 16, 14)
         result_layout.setSpacing(8)
         result_layout.addWidget(QLabel("预览与输出"))
-        self.preview_edit = QTextEdit()
+        self.preview_edit = PreviewTextEdit()
         self.preview_edit.setReadOnly(True)
         self.preview_edit.setMinimumHeight(220)
         result_layout.addWidget(self.preview_edit)
@@ -730,34 +751,8 @@ class ExamPrintPage(QWidget):
         self.log_fn("已发送考场打印任务。")
 
     def _set_preview_html(self, html_text: str) -> None:
-        self._clear_preview_image_files()
-
-        def replace_data_image(match: re.Match[str]) -> str:
-            image_type = match.group(1).lower()
-            suffix = IMAGE_SUFFIX_BY_MIME.get(image_type, ".img")
-            try:
-                image_data = base64.b64decode(match.group(2))
-            except Exception:
-                return match.group(0)
-            image_path = Path(tempfile.gettempdir()) / f"aliyun_photo_preview_{uuid.uuid4().hex}{suffix}"
-            try:
-                image_path.write_bytes(image_data)
-            except OSError:
-                return match.group(0)
-            self._preview_image_files.append(image_path)
-            return f'src="{QUrl.fromLocalFile(str(image_path)).toString()}"'
-
-        preview_html = DATA_IMAGE_PATTERN.sub(replace_data_image, html_text)
         self.preview_edit.clear()
-        self.preview_edit.setHtml(preview_html)
-
-    def _clear_preview_image_files(self) -> None:
-        for image_path in self._preview_image_files:
-            try:
-                image_path.unlink(missing_ok=True)
-            except OSError:
-                pass
-        self._preview_image_files = []
+        self.preview_edit.set_image_html(html_text)
 
     def _print_preview_document(self, printer: QPrinter) -> None:
         print_method = getattr(self.preview_edit, "print_", None) or getattr(self.preview_edit, "print", None)
