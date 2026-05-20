@@ -192,6 +192,11 @@ body { font-family: 'Microsoft YaHei UI'; margin: 20px; color: #1f2937; }
 .header { text-align: center; margin-bottom: 16px; }
 .header h1 { margin: 0 0 8px; font-size: 28px; }
 .meta { font-size: 14px; line-height: 1.8; }
+.signin-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.signin-table th, .signin-table td { border: 1px solid #111827; padding: 6px 5px; text-align: center; vertical-align: middle; }
+.signin-table th { font-weight: 700; background: #f8fafc; }
+.signin-photo { width: 54px; height: 72px; object-fit: cover; border: 1px solid #cbd5e1; }
+.signin-signature { height: 36px; }
 .seat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .seat-table td { border: 1px solid #cbd5e1; vertical-align: top; padding: 10px; height: 138px; }
 .seat-card { font-size: 13px; line-height: 1.7; }
@@ -203,11 +208,8 @@ body { font-family: 'Microsoft YaHei UI'; margin: 20px; color: #1f2937; }
 </head>
 <body>
   <div class="header">
-    <h1>考场座次表</h1>
+    <h1>面试签到表</h1>
     <div class="meta">
-      考点：${考点}　
-      考场：${考场}　
-      科目：${考试科目}　
       报到时间：${面试报到时间}　
       人数：${考生人数}
     </div>
@@ -283,9 +285,7 @@ body { font-family: 'Microsoft YaHei UI'; margin: 18px; color: #111827; }
 """.strip()
     return {
         DOC_TYPE_SEAT: [
-            PrintTemplate("标准 7788", DOC_TYPE_SEAT, seat_main, seat_item, {"columns": 4}, builtin=True),
-            PrintTemplate("标准 8877", DOC_TYPE_SEAT, seat_main, seat_item, {"columns": 4}, builtin=True),
-            PrintTemplate("五列座次表", DOC_TYPE_SEAT, seat_main, seat_item, {"columns": 5}, builtin=True),
+            PrintTemplate("面试签到表", DOC_TYPE_SEAT, seat_main, seat_item, {"columns": 1, "layout": "signin"}, builtin=True),
         ],
         DOC_TYPE_DOOR: [
             PrintTemplate("标准门贴", DOC_TYPE_DOOR, door_main, "", {}, builtin=True),
@@ -354,7 +354,10 @@ def render_document(
 ) -> str:
     context, room_records = build_room_context(records, config, room_value)
     if template.doc_type == DOC_TYPE_SEAT:
-        context["座次表表格"] = _build_seat_table(room_records, template.item_html, context, columns)
+        if str(template.settings.get("layout", "")) == "signin":
+            context["座次表表格"] = _build_signin_table(room_records, room_context=context)
+        else:
+            context["座次表表格"] = _build_seat_table(room_records, template.item_html, context, columns)
     elif template.doc_type == DOC_TYPE_DESK:
         context["桌贴列表"] = _build_desk_pages(room_records, template.item_html, context, columns, items_per_page)
     return render_html_template(template.main_html, context)
@@ -442,6 +445,41 @@ def _build_seat_table(records: list[dict[str, str]], item_html: str, room_contex
             cells.append("<td></td>")
         rows.append("<tr>" + "".join(cells) + "</tr>")
     return '<table class="seat-table">' + "".join(rows) + "</table>"
+
+
+def _build_signin_table(records: list[dict[str, str]], room_context: dict[str, str]) -> str:
+    header = """
+<tr>
+  <th style="width: 7%;">序号</th>
+  <th style="width: 9%;">照片</th>
+  <th style="width: 9%;">姓名</th>
+  <th style="width: 11%;">考号</th>
+  <th style="width: 15%;">报考单位</th>
+  <th style="width: 15%;">报考岗位</th>
+  <th style="width: 18%;">身份证号</th>
+  <th style="width: 9%;">报到时间</th>
+  <th style="width: 7%;">签到</th>
+</tr>
+""".strip()
+    rows: list[str] = []
+    for index, record in enumerate(records, start=1):
+        merged = _merge_context(record, room_context)
+        photo_url = record.get("照片", "")
+        photo_cell = f'<img class="signin-photo" src="{photo_url}" />' if photo_url else ""
+        rows.append(
+            "<tr>"
+            f"<td>{index}</td>"
+            f"<td>{photo_cell}</td>"
+            f"<td>{merged.get('姓名', '')}</td>"
+            f"<td>{merged.get('考号', '')}</td>"
+            f"<td>{merged.get('报考单位', '')}</td>"
+            f"<td>{merged.get('报考岗位', '')}</td>"
+            f"<td>{merged.get('身份证号', '')}</td>"
+            f"<td>{merged.get('面试报到时间', '')}</td>"
+            '<td class="signin-signature"></td>'
+            "</tr>"
+        )
+    return '<table class="signin-table">' + header + "".join(rows) + "</table>"
 
 
 def _build_desk_pages(

@@ -100,7 +100,7 @@ class ExamPrintPage(QWidget):
         for index, title, subtitle in [
             ("1", "数据导入", "导入 Excel 并映射字段"),
             ("2", "照片匹配", "匹配考生照片"),
-            ("3", "模板设计", "设计座次表"),
+            ("3", "模板设计", "设计签到表"),
             ("4", "打印输出", "预览并打印/导出"),
         ]:
             step = self._step_item(index, title, subtitle, active=index == "1")
@@ -112,7 +112,7 @@ class ExamPrintPage(QWidget):
         info_layout.setSpacing(8)
         info_title = QLabel("模板信息")
         info_title.setProperty("sectionTitle", True)
-        self.template_info_label = QLabel("模板名称：未选择\n模板类型：座次表\n页面大小：A4\n纸张方向：纵向")
+        self.template_info_label = QLabel("模板名称：未选择\n模板类型：面试签到表\n页面大小：A4\n纸张方向：纵向")
         self.template_info_label.setWordWrap(True)
         info_layout.addWidget(info_title)
         info_layout.addWidget(self.template_info_label)
@@ -132,7 +132,7 @@ class ExamPrintPage(QWidget):
         data_layout = data_card.body_layout
         data_layout.setContentsMargins(16, 14, 16, 14)
         data_layout.setSpacing(12)
-        data_title = QLabel("数据导入与字段映射")
+        data_title = QLabel("面试签到数据导入与字段映射")
         data_title.setProperty("sectionTitle", True)
         data_layout.addWidget(data_title)
 
@@ -156,7 +156,7 @@ class ExamPrintPage(QWidget):
         mapping_layout.addWidget(mapping_title)
 
         self.doc_type_combo = AppComboBox()
-        self.doc_type_combo.addItem("座次表", DOC_TYPE_SEAT)
+        self.doc_type_combo.addItem("面试签到表", DOC_TYPE_SEAT)
         self.doc_type_combo.currentIndexChanged.connect(self._refresh_template_combo)
         self.template_combo = AppComboBox()
         self.template_combo.currentIndexChanged.connect(self._apply_selected_template)
@@ -177,8 +177,8 @@ class ExamPrintPage(QWidget):
             ("模板", self.template_combo),
             ("模板名称", self.template_name_edit),
             ("考场/分组", self.room_column_combo),
-            ("座号", self.seat_column_combo),
-            ("准考证号", self.exam_no_column_combo),
+            ("序号/座号", self.seat_column_combo),
+            ("考号", self.exam_no_column_combo),
             ("考点", self.site_column_combo),
             ("科目", self.subject_column_combo),
             ("单位", self.unit_column_combo),
@@ -206,7 +206,8 @@ class ExamPrintPage(QWidget):
         self.items_per_page_spin = QSpinBox()
         self.items_per_page_spin.setRange(1, 60)
         self.items_per_page_spin.setValue(10)
-        settings_row.addWidget(QLabel("每行列数"))
+        self.columns_label = QLabel("每行列数")
+        settings_row.addWidget(self.columns_label)
         settings_row.addWidget(self.columns_spin)
         settings_row.addStretch(1)
         mapping_layout.addLayout(settings_row)
@@ -236,7 +237,7 @@ class ExamPrintPage(QWidget):
         designer_layout = designer_card.body_layout
         designer_layout.setContentsMargins(16, 14, 16, 14)
         designer_layout.setSpacing(10)
-        designer_title = QLabel("模板设计（座次表模板）")
+        designer_title = QLabel("模板设计（面试签到表模板）")
         designer_title.setProperty("sectionTitle", True)
         designer_layout.addWidget(designer_title)
 
@@ -327,7 +328,7 @@ class ExamPrintPage(QWidget):
         right_layout.addWidget(layers_title)
         self.layer_text = QPlainTextEdit()
         self.layer_text.setReadOnly(True)
-        self.layer_text.setPlainText("标题文本\n考场信息文本\n考生人数文本\n座次表格")
+        self.layer_text.setPlainText("标题文本\n报到时间文本\n考生人数文本\n签到表格")
         right_layout.addWidget(self.layer_text, 1)
         workspace.addWidget(right)
 
@@ -370,8 +371,8 @@ class ExamPrintPage(QWidget):
 
     def _new_template(self) -> None:
         self.template_name_edit.clear()
-        self.main_editor.setHtml("<h1 style='text-align:center;'>考场座次表</h1><p>考点：${考点}　考场：${考场}</p><p>${座次表格}</p>")
-        self.item_editor.setHtml("<p>${座号}　${姓名}　${准考证号}</p>")
+        self.main_editor.setHtml("<h1 style='text-align:center;'>面试签到表</h1><p>报到时间：${面试报到时间}　人数：${考生人数}</p><p>${座次表格}</p>")
+        self.item_editor.setHtml("<p>${姓名}　${考号}　${身份证号}</p>")
         self.preview_edit.clear()
 
     def _refresh_data_preview(self) -> None:
@@ -423,9 +424,11 @@ class ExamPrintPage(QWidget):
         self.item_editor.setHtml(template.item_html)
         self.columns_spin.setValue(int(template.settings.get("columns", 4)))
         self.items_per_page_spin.setValue(int(template.settings.get("items_per_page", 10)))
+        is_signin = str(template.settings.get("layout", "")) == "signin"
         self.item_title.setText("考生单元模板")
-        self.item_editor.setEnabled(True)
-        self.columns_spin.setEnabled(template.doc_type == DOC_TYPE_SEAT)
+        self.item_editor.setEnabled(not is_signin)
+        self.columns_label.setEnabled(not is_signin)
+        self.columns_spin.setEnabled(template.doc_type == DOC_TYPE_SEAT and not is_signin)
         self.items_per_page_spin.setEnabled(False)
         if hasattr(self, "template_info_label"):
             type_label = self.doc_type_combo.currentText()
@@ -472,7 +475,7 @@ class ExamPrintPage(QWidget):
                 combo.addItem(header, header)
 
         self._select_guess(self.room_column_combo, ["考场", "考场号"])
-        self._select_guess(self.seat_column_combo, ["座号"])
+        self._select_guess(self.seat_column_combo, ["序号", "座号"])
         self._select_guess(self.exam_no_column_combo, ["考号", "准考证号"])
         self._select_guess(self.site_column_combo, ["考点"])
         self._select_guess(self.subject_column_combo, ["考试科目", "科目"])
@@ -534,6 +537,7 @@ class ExamPrintPage(QWidget):
             settings={
                 "columns": self.columns_spin.value(),
                 "items_per_page": self.items_per_page_spin.value(),
+                "layout": str(template.settings.get("layout", "")) if template else "",
             },
             builtin=False,
         )
@@ -566,6 +570,7 @@ class ExamPrintPage(QWidget):
                 settings={
                     "columns": self.columns_spin.value(),
                     "items_per_page": self.items_per_page_spin.value(),
+                    "layout": str((self.current_template().settings if self.current_template() else {}).get("layout", "")),
                 },
             )
             self.rendered_html = render_document(
@@ -580,7 +585,7 @@ class ExamPrintPage(QWidget):
             QMessageBox.critical(self, "预览失败", str(exc))
             return
         self.preview_edit.setHtml(self.rendered_html)
-        self.log_fn(f"已生成座次表预览：{room_value or '全部考生'}")
+        self.log_fn(f"已生成面试签到表预览：{room_value or '全部考生'}")
 
     def export_html(self) -> None:
         if not self.rendered_html:
