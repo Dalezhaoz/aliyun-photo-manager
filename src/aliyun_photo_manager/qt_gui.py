@@ -1289,8 +1289,7 @@ class QtMainWindow(QMainWindow):
         host_layout = QVBoxLayout(host)
         host_layout.setContentsMargins(0, 0, 0, 0)
         host_layout.setSpacing(0)
-        host_layout.addWidget(page)
-        host_layout.addStretch(1)
+        host_layout.addWidget(page, 1)
         scroll.setWidget(host)
         return scroll
 
