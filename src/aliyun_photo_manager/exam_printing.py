@@ -79,6 +79,7 @@ def available_placeholders(headers: Iterable[str]) -> list[str]:
         "单位岗位汇总",
         "考生人数",
         "照片",
+        "照片标签",
         "座次表表格",
         "桌贴列表",
     ]
@@ -191,9 +192,12 @@ body { font-family: 'Microsoft YaHei UI'; margin: 20px; color: #1f2937; }
 .header h1 { margin: 0 0 8px; font-size: 28px; }
 .meta { font-size: 14px; line-height: 1.8; }
 .seat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.seat-table td { border: 1px solid #cbd5e1; vertical-align: top; padding: 10px; height: 120px; }
+.seat-table td { border: 1px solid #cbd5e1; vertical-align: top; padding: 10px; height: 138px; }
 .seat-card { font-size: 13px; line-height: 1.7; }
+.seat-row { display: flex; gap: 10px; align-items: flex-start; }
+.seat-info { flex: 1; min-width: 0; }
 .seat-no { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.photo { width: 72px; height: 96px; object-fit: cover; border: 1px solid #cbd5e1; background: #f8fafc; }
 </style>
 </head>
 <body>
@@ -212,10 +216,15 @@ body { font-family: 'Microsoft YaHei UI'; margin: 20px; color: #1f2937; }
 """.strip()
     seat_item = """
 <div class="seat-card">
-  <div class="seat-no">座号：${座号}</div>
-  <div>姓名：${姓名}</div>
-  <div>准考证号：${考号}</div>
-  <div>身份证号：${身份证号}</div>
+  <div class="seat-row">
+    <div class="seat-info">
+      <div class="seat-no">座号：${座号}</div>
+      <div>姓名：${姓名}</div>
+      <div>准考证号：${考号}</div>
+      <div>身份证号：${身份证号}</div>
+    </div>
+    ${照片标签}
+  </div>
 </div>
 """.strip()
     door_main = """
@@ -372,16 +381,21 @@ def _unique_join(values: Iterable[str]) -> str:
 def _match_photo(record: dict[str, str], config: PrintDataConfig) -> str:
     if config.photo_dir is None or not config.photo_dir.exists() or not config.photo_match_column:
         return ""
-    match_value = _coerce_text(record.get(config.photo_match_column, ""))
+    match_value = _normalize_match_text(record.get(config.photo_match_column, ""))
     if not match_value:
         return ""
-    for file_path in sorted(config.photo_dir.iterdir()):
+    for file_path in sorted(config.photo_dir.rglob("*")):
         if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_IMAGE_SUFFIXES:
             continue
-        stem = file_path.stem.strip()
-        if stem == match_value or stem.startswith(match_value):
+        stem = _normalize_match_text(file_path.stem)
+        if stem == match_value or stem.startswith(match_value) or match_value in stem:
             return _to_file_url(file_path)
     return ""
+
+
+def _normalize_match_text(value: object) -> str:
+    text = _coerce_text(value).upper()
+    return re.sub(r"[^0-9A-Z]", "", text)
 
 
 def _sort_key(record: dict[str, str], config: PrintDataConfig) -> tuple[int, str, str]:
@@ -399,6 +413,9 @@ def _merge_context(record: dict[str, str], room_context: dict[str, str]) -> dict
     merged["报考岗位"] = _escape(record.get("报考岗位") or record.get("岗位") or "")
     if record.get("照片"):
         merged["照片"] = record["照片"]
+        merged["照片标签"] = f'<img class="photo" src="{record["照片"]}" />'
+    else:
+        merged["照片标签"] = ""
     return merged
 
 

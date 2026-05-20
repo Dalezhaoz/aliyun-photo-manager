@@ -123,7 +123,8 @@ class PhotoPage(BaseToolPage):
         cloud_form.setVerticalSpacing(14)
 
         self.cloud_type_combo = AppComboBox()
-        self.cloud_type_combo.addItems(["aliyun", "tencent"])
+        self.cloud_type_combo.addItem("阿里云 OSS", "aliyun")
+        self.cloud_type_combo.addItem("腾讯云 COS", "tencent")
         self.cloud_type_combo.currentTextChanged.connect(self._on_cloud_type_changed)
         self._add_row(cloud_form, 0, "云类型", self.cloud_type_combo)
 
@@ -409,7 +410,7 @@ class PhotoPage(BaseToolPage):
         )
 
     def build_cloud_config(self) -> OssConfig:
-        cloud_type = self.cloud_type_combo.currentText().strip()
+        cloud_type = self.cloud_type_combo.currentData() or "aliyun"
         endpoint = self.endpoint_edit.text().strip()
         bucket_location = self.bucket_combo.currentData()
         if cloud_type == "tencent" and isinstance(bucket_location, str) and bucket_location.strip():
@@ -462,7 +463,7 @@ class PhotoPage(BaseToolPage):
 
     def load_buckets(self) -> None:
         try:
-            cloud_type = self.cloud_type_combo.currentText().strip()
+            cloud_type = self.cloud_type_combo.currentData() or "aliyun"
             access_key_id = self.access_key_id_edit.text().strip()
             access_key_secret = self.access_key_secret_edit.text().strip()
             endpoint = self.endpoint_edit.text().strip()
@@ -809,7 +810,7 @@ class PhotoPage(BaseToolPage):
         self._append_result_log(self._format_browser_debug(action="bucket-changed", config=config, prefix=""))
 
     def _apply_current_bucket_location(self) -> None:
-        if self.cloud_type_combo.currentText().strip() != "tencent":
+        if (self.cloud_type_combo.currentData() or "aliyun") != "tencent":
             return
         location = self.bucket_combo.currentData()
         if isinstance(location, str) and location.strip():
@@ -817,7 +818,7 @@ class PhotoPage(BaseToolPage):
 
     def _save_cached_cloud_settings(self) -> None:
         settings = self._read_settings()
-        cloud_type = self.cloud_type_combo.currentText().strip() or "aliyun"
+        cloud_type = self.cloud_type_combo.currentData() or "aliyun"
         profiles = settings.setdefault("cloud_profiles", {})
         profile = profiles.setdefault(cloud_type, {})
         profile["access_key_id"] = self.access_key_id_edit.text().strip()
@@ -830,16 +831,33 @@ class PhotoPage(BaseToolPage):
         self._write_settings(settings)
 
     def _load_cached_cloud_settings(self) -> None:
+        from ..config import normalize_cloud_type
+
         settings = self._read_settings()
-        cloud_type = settings.get("cloud_type", self.cloud_type_combo.currentText().strip() or "aliyun")
-        index = self.cloud_type_combo.findText(cloud_type)
+        raw_cloud_type = settings.get("cloud_type", "aliyun")
+        try:
+            cloud_type = normalize_cloud_type(raw_cloud_type)
+        except ValueError:
+            cloud_type = "aliyun"
+        index = self.cloud_type_combo.findData(cloud_type)
         if index >= 0:
             self.cloud_type_combo.setCurrentIndex(index)
         self._apply_cached_cloud_profile(cloud_type)
 
     def _apply_cached_cloud_profile(self, cloud_type: str) -> None:
+        from ..config import normalize_cloud_type
+
+        try:
+            normalized_type = normalize_cloud_type(cloud_type)
+        except ValueError:
+            normalized_type = "aliyun"
+        index = self.cloud_type_combo.findData(normalized_type)
+        if index < 0:
+            index = self.cloud_type_combo.findData("aliyun")
+        if index >= 0:
+            self.cloud_type_combo.setCurrentIndex(index)
         settings = self._read_settings()
-        profile = settings.get("cloud_profiles", {}).get(cloud_type, {})
+        profile = settings.get("cloud_profiles", {}).get(normalized_type, {})
         self.access_key_id_edit.setText(profile.get("access_key_id", ""))
         self.access_key_secret_edit.setText(profile.get("access_key_secret", ""))
         self.endpoint_edit.setText(profile.get("endpoint", ""))
@@ -854,10 +872,10 @@ class PhotoPage(BaseToolPage):
             self.selected_prefix = selected_prefix
             self.selected_path_label.setText(selected_prefix)
 
-    def _on_cloud_type_changed(self, cloud_type: str) -> None:
+    def _on_cloud_type_changed(self, display_text: str) -> None:
         self._browser_request_id += 1
         self._loading_bucket_list = True
-        self._apply_cached_cloud_profile(cloud_type)
+        self._apply_cached_cloud_profile(str(self.cloud_type_combo.currentData() or "aliyun"))
         self._loading_bucket_list = False
         self._save_cached_cloud_settings()
 

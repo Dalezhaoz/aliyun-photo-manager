@@ -13,9 +13,9 @@ class OssConfig:
 
 def normalize_cloud_type(cloud_type: str) -> str:
     normalized = cloud_type.strip().lower()
-    if normalized in {"aliyun", "oss", ""}:
+    if normalized in {"aliyun", "oss", "阿里云", "阿里云oss", ""}:
         return "aliyun"
-    if normalized in {"tencent", "cos", "tencent_cos"}:
+    if normalized in {"tencent", "cos", "tencent_cos", "腾讯云", "腾讯云cos", "tencent cloud"}:
         return "tencent"
     raise ValueError("暂不支持该云类型，请选择阿里云 OSS 或腾讯云 COS。")
 

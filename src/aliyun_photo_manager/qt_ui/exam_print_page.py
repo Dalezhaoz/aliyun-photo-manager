@@ -27,8 +27,6 @@ from PySide6.QtWidgets import (
 )
 
 from ..exam_printing import (
-    DOC_TYPE_DESK,
-    DOC_TYPE_DOOR,
     DOC_TYPE_SEAT,
     PrintDataConfig,
     PrintTemplate,
@@ -100,7 +98,7 @@ class ExamPrintPage(QWidget):
         for index, title, subtitle in [
             ("1", "数据导入", "导入 Excel 并映射字段"),
             ("2", "照片匹配", "匹配考生照片"),
-            ("3", "模板设计", "设计座次表/门贴/桌贴"),
+            ("3", "模板设计", "设计座次表"),
             ("4", "打印输出", "预览并打印/导出"),
         ]:
             step = self._step_item(index, title, subtitle, active=index == "1")
@@ -157,8 +155,6 @@ class ExamPrintPage(QWidget):
 
         self.doc_type_combo = AppComboBox()
         self.doc_type_combo.addItem("座次表", DOC_TYPE_SEAT)
-        self.doc_type_combo.addItem("门贴", DOC_TYPE_DOOR)
-        self.doc_type_combo.addItem("桌贴", DOC_TYPE_DESK)
         self.doc_type_combo.currentIndexChanged.connect(self._refresh_template_combo)
         self.template_combo = AppComboBox()
         self.template_combo.currentIndexChanged.connect(self._apply_selected_template)
@@ -483,7 +479,7 @@ class ExamPrintPage(QWidget):
         self._select_guess(self.subject_column_combo, ["考试科目", "科目"])
         self._select_guess(self.unit_column_combo, ["报考单位", "单位"])
         self._select_guess(self.job_column_combo, ["报考岗位", "岗位"])
-        self._select_guess(self.photo_match_column_combo, ["考号", "准考证号", "身份证号"])
+        self._select_guess(self.photo_match_column_combo, ["身份证号", "证件号码", "身份证", "sfzh", "考号", "准考证号"])
         self._refresh_room_values()
 
     def _select_guess(self, combo: AppComboBox, candidates: list[str]) -> None:
