@@ -98,10 +98,10 @@ class ExamPrintPage(QWidget):
         left_layout.setContentsMargins(12, 12, 12, 12)
         left_layout.setSpacing(12)
         for index, title, subtitle in [
-            ("1", "数据导入", "导入 Excel 并映射字段"),
-            ("2", "照片匹配", "匹配考生照片"),
-            ("3", "模板设计", "设计签到表"),
-            ("4", "打印输出", "预览并打印/导出"),
+            ("1", "选择名单", "打开面试名单 Excel"),
+            ("2", "选择照片", "选择本地照片文件夹"),
+            ("3", "确认字段", "考号/单位/岗位/身份证号"),
+            ("4", "生成打印", "预览、导出或直接打印"),
         ]:
             step = self._step_item(index, title, subtitle, active=index == "1")
             left_layout.addWidget(step)
