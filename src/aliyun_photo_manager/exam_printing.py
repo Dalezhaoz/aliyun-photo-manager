@@ -81,6 +81,7 @@ def available_placeholders(headers: Iterable[str]) -> list[str]:
         "照片",
         "照片标签",
         "面试报到时间",
+        "考生列表",
         "座次表表格",
         "桌贴列表",
     ]
@@ -188,51 +189,36 @@ def default_templates() -> dict[str, list[PrintTemplate]]:
 <html>
 <head>
 <style>
-body { font-family: 'Microsoft YaHei UI'; margin: 20px; color: #1f2937; }
-.header { text-align: center; margin-bottom: 16px; }
-.header h1 { margin: 0 0 8px; font-size: 28px; }
-.meta { font-size: 14px; line-height: 1.8; }
-.signin-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
-.signin-table th, .signin-table td { border: 1px solid #111827; padding: 6px 5px; text-align: center; vertical-align: middle; }
-.signin-table th { font-weight: 700; background: #f8fafc; }
-.signin-photo { width: 54px; height: 72px; object-fit: cover; border: 1px solid #cbd5e1; }
-.signin-signature { height: 36px; }
-.seat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.seat-table td { border: 1px solid #cbd5e1; vertical-align: top; padding: 10px; height: 138px; }
-.seat-card { font-size: 13px; line-height: 1.7; }
-.seat-row { display: flex; gap: 10px; align-items: flex-start; }
-.seat-info { flex: 1; min-width: 0; }
-.seat-no { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-.photo { width: 72px; height: 96px; object-fit: cover; border: 1px solid #cbd5e1; background: #f8fafc; }
+body { font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }
+.candidate-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.candidate-grid > tr > td, .candidate-grid > tbody > tr > td { border: 1px solid #444; padding: 0; height: 94px; vertical-align: top; }
+.candidate-card { width: 100%; height: 94px; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.35; }
+.candidate-card td { border: none; padding: 0; vertical-align: top; }
+.candidate-card .photo-cell { width: 68px; }
+.candidate-card .info-cell { padding: 3px 5px; }
+.photo { width: 68px; height: 94px; object-fit: cover; display: block; }
+.footer-title { margin: 10px 10px 0; padding: 8px 12px; text-align: center; color: #c62828; background: #f5dada; border-radius: 8px; font-size: 18px; }
 </style>
 </head>
 <body>
-  <div class="header">
-    <h1>面试签到表</h1>
-    <div class="meta">
-      报到时间：${面试报到时间}　
-      人数：${考生人数}
-    </div>
-  </div>
-  ${座次表表格}
+  ${考生列表}
+  <div class="footer-title">2026年度周村区（文昌湖区）事业单位公开招聘综合类岗位人员面试</div>
 </body>
 </html>
 """.strip()
     seat_item = """
-<div class="seat-card">
-  <div class="seat-row">
-    <div class="seat-info">
-      <div class="seat-no">座号：${座号}</div>
-      <div>姓名：${姓名}</div>
-      <div>准考证号：${考号}</div>
-      <div>身份证号：${身份证号}</div>
-      <div>报考单位：${报考单位}</div>
-      <div>报考岗位：${报考岗位}</div>
-      <div>报到时间：${面试报到时间}</div>
-    </div>
-    ${照片标签}
-  </div>
-</div>
+<table class="candidate-card">
+  <tr>
+    <td class="photo-cell">${照片标签}</td>
+    <td class="info-cell">
+      <div>姓名:${姓名}</div>
+      <div>身份证号:</div>
+      <div>${身份证号}</div>
+      <div>报考单位:${报考单位}</div>
+      <div>报考职位:${报考岗位}</div>
+    </td>
+  </tr>
+</table>
 """.strip()
     door_main = """
 <html>
@@ -285,7 +271,7 @@ body { font-family: 'Microsoft YaHei UI'; margin: 18px; color: #111827; }
 """.strip()
     return {
         DOC_TYPE_SEAT: [
-            PrintTemplate("面试签到表", DOC_TYPE_SEAT, seat_main, seat_item, {"columns": 1, "layout": "signin"}, builtin=True),
+            PrintTemplate("面试表样网格", DOC_TYPE_SEAT, seat_main, seat_item, {"columns": 5, "layout": "candidate_grid"}, builtin=True),
         ],
         DOC_TYPE_DOOR: [
             PrintTemplate("标准门贴", DOC_TYPE_DOOR, door_main, "", {}, builtin=True),
@@ -354,8 +340,14 @@ def render_document(
 ) -> str:
     context, room_records = build_room_context(records, config, room_value)
     if template.doc_type == DOC_TYPE_SEAT:
-        if str(template.settings.get("layout", "")) == "signin":
-            context["座次表表格"] = _build_signin_table(room_records, room_context=context)
+        if str(template.settings.get("layout", "")) == "candidate_grid":
+            candidate_grid = _build_candidate_grid(room_records, template.item_html, context, columns)
+            context["考生列表"] = candidate_grid
+            context["座次表表格"] = candidate_grid
+        elif str(template.settings.get("layout", "")) == "signin":
+            signin_table = _build_signin_table(room_records, room_context=context)
+            context["考生列表"] = signin_table
+            context["座次表表格"] = signin_table
         else:
             context["座次表表格"] = _build_seat_table(room_records, template.item_html, context, columns)
     elif template.doc_type == DOC_TYPE_DESK:
@@ -445,6 +437,27 @@ def _build_seat_table(records: list[dict[str, str]], item_html: str, room_contex
             cells.append("<td></td>")
         rows.append("<tr>" + "".join(cells) + "</tr>")
     return '<table class="seat-table">' + "".join(rows) + "</table>"
+
+
+def _build_candidate_grid(records: list[dict[str, str]], item_html: str, room_context: dict[str, str], columns: int) -> str:
+    safe_columns = max(1, columns)
+    rows: list[str] = []
+    cells: list[str] = []
+    for record in records:
+        merged_context = _merge_context(record, room_context)
+        cells.append(
+            '<td style="border:1px solid #444;padding:0;height:94px;vertical-align:top;">'
+            f"{render_html_template(item_html, merged_context)}"
+            "</td>"
+        )
+        if len(cells) == safe_columns:
+            rows.append("<tr>" + "".join(cells) + "</tr>")
+            cells = []
+    if cells:
+        while len(cells) < safe_columns:
+            cells.append('<td style="border:1px solid #444;padding:0;height:94px;"></td>')
+        rows.append("<tr>" + "".join(cells) + "</tr>")
+    return '<table class="candidate-grid">' + "".join(rows) + "</table>"
 
 
 def _build_signin_table(records: list[dict[str, str]], room_context: dict[str, str]) -> str:

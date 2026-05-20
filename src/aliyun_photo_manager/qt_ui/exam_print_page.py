@@ -75,7 +75,7 @@ class ExamPrintPage(QWidget):
             ("打开Excel", self._choose_excel_and_load),
             ("选择照片文件夹", self._choose_photo_dir),
             ("预览", self.render_preview),
-            ("导出HTML", self.export_html),
+            ("导出PDF", self.export_pdf),
             ("打印", self.print_preview),
         ]:
             button = QPushButton(text)
@@ -237,7 +237,7 @@ class ExamPrintPage(QWidget):
         designer_layout = designer_card.body_layout
         designer_layout.setContentsMargins(16, 14, 16, 14)
         designer_layout.setSpacing(10)
-        designer_title = QLabel("模板设计（面试签到表模板）")
+        designer_title = QLabel("模板设计（整体表样 + 单个考生表样）")
         designer_title.setProperty("sectionTitle", True)
         designer_layout.addWidget(designer_title)
 
@@ -276,7 +276,7 @@ class ExamPrintPage(QWidget):
         main_card = QWidget()
         main_layout = QVBoxLayout(main_card)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(QLabel("主模板画布"))
+        main_layout.addWidget(QLabel("整体表样"))
         self.main_editor = QTextEdit()
         self.main_editor.setAcceptRichText(True)
         self.main_editor.setMinimumHeight(220)
@@ -286,7 +286,7 @@ class ExamPrintPage(QWidget):
         item_card = QWidget()
         item_layout = QVBoxLayout(item_card)
         item_layout.setContentsMargins(0, 0, 0, 0)
-        self.item_title = QLabel("考生单元模板")
+        self.item_title = QLabel("单个考生表样")
         item_layout.addWidget(self.item_title)
         self.item_editor = QTextEdit()
         self.item_editor.setAcceptRichText(True)
@@ -371,8 +371,19 @@ class ExamPrintPage(QWidget):
 
     def _new_template(self) -> None:
         self.template_name_edit.clear()
-        self.main_editor.setHtml("<h1 style='text-align:center;'>面试签到表</h1><p>报到时间：${面试报到时间}　人数：${考生人数}</p><p>${座次表格}</p>")
-        self.item_editor.setHtml("<p>${姓名}　${考号}　${身份证号}</p>")
+        self.main_editor.setHtml(
+            "<p>${考生列表}</p>"
+            "<p style='text-align:center;color:#c62828;background:#f5dada;padding:8px;'>"
+            "2026年度周村区（文昌湖区）事业单位公开招聘综合类岗位人员面试"
+            "</p>"
+        )
+        self.item_editor.setHtml(
+            "<table class='candidate-card'><tr>"
+            "<td class='photo-cell'>${照片标签}</td>"
+            "<td class='info-cell'>姓名:${姓名}<br>身份证号:<br>${身份证号}<br>"
+            "报考单位:${报考单位}<br>报考职位:${报考岗位}</td>"
+            "</tr></table>"
+        )
         self.preview_edit.clear()
 
     def _refresh_data_preview(self) -> None:
@@ -425,7 +436,7 @@ class ExamPrintPage(QWidget):
         self.columns_spin.setValue(int(template.settings.get("columns", 4)))
         self.items_per_page_spin.setValue(int(template.settings.get("items_per_page", 10)))
         is_signin = str(template.settings.get("layout", "")) == "signin"
-        self.item_title.setText("考生单元模板")
+        self.item_title.setText("单个考生表样")
         self.item_editor.setEnabled(not is_signin)
         self.columns_label.setEnabled(not is_signin)
         self.columns_spin.setEnabled(template.doc_type == DOC_TYPE_SEAT and not is_signin)
@@ -597,6 +608,24 @@ class ExamPrintPage(QWidget):
             return
         export_rendered_html(Path(selected), self.rendered_html)
         self.log_fn(f"已导出考场打印 HTML：{selected}")
+
+    def export_pdf(self) -> None:
+        if not self.rendered_html:
+            self.render_preview()
+            if not self.rendered_html:
+                return
+        selected, _ = QFileDialog.getSaveFileName(self, "导出 PDF", "面试表样打印.pdf", "PDF 文件 (*.pdf)")
+        if not selected:
+            return
+        output_path = Path(selected)
+        if output_path.suffix.lower() != ".pdf":
+            output_path = output_path.with_suffix(".pdf")
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer.setOutputFileName(str(output_path))
+        document = self.preview_edit.document().clone()
+        document.print(printer)
+        self.log_fn(f"已导出面试表样 PDF：{output_path}")
 
     def print_preview(self) -> None:
         if not self.rendered_html:
