@@ -65,7 +65,7 @@ class ExamPrintPage(QWidget):
 
         topbar = Card()
         topbar.setObjectName("ExamPrintTopbar")
-        topbar_layout = QHBoxLayout(topbar)
+        topbar_layout = QHBoxLayout()
         topbar_layout.setContentsMargins(12, 10, 12, 10)
         topbar_layout.setSpacing(8)
         for text, callback in [
@@ -83,6 +83,8 @@ class ExamPrintPage(QWidget):
             button.clicked.connect(callback)
             topbar_layout.addWidget(button)
         topbar_layout.addStretch(1)
+        topbar.body_layout.setContentsMargins(0, 0, 0, 0)
+        topbar.body_layout.addLayout(topbar_layout)
         root.addWidget(topbar)
 
         workspace = QSplitter()
@@ -92,7 +94,7 @@ class ExamPrintPage(QWidget):
         left.setObjectName("ExamPrintLeftRail")
         left.setMinimumWidth(210)
         left.setMaximumWidth(260)
-        left_layout = QVBoxLayout(left)
+        left_layout = left.body_layout
         left_layout.setContentsMargins(12, 12, 12, 12)
         left_layout.setSpacing(12)
         for index, title, subtitle in [
@@ -105,7 +107,7 @@ class ExamPrintPage(QWidget):
             left_layout.addWidget(step)
         left_layout.addStretch(1)
         info = Card()
-        info_layout = QVBoxLayout(info)
+        info_layout = info.body_layout
         info_layout.setContentsMargins(12, 12, 12, 12)
         info_layout.setSpacing(8)
         info_title = QLabel("模板信息")
@@ -127,7 +129,7 @@ class ExamPrintPage(QWidget):
         center_scroll.setWidget(center)
 
         data_card = Card()
-        data_layout = QVBoxLayout(data_card)
+        data_layout = data_card.body_layout
         data_layout.setContentsMargins(16, 14, 16, 14)
         data_layout.setSpacing(12)
         data_title = QLabel("数据导入与字段映射")
@@ -206,8 +208,6 @@ class ExamPrintPage(QWidget):
         self.items_per_page_spin.setValue(10)
         settings_row.addWidget(QLabel("每行列数"))
         settings_row.addWidget(self.columns_spin)
-        settings_row.addWidget(QLabel("桌贴每页人数"))
-        settings_row.addWidget(self.items_per_page_spin)
         settings_row.addStretch(1)
         mapping_layout.addLayout(settings_row)
         data_split.addWidget(mapping_card)
@@ -233,7 +233,7 @@ class ExamPrintPage(QWidget):
         center_layout.addWidget(data_card)
 
         designer_card = Card()
-        designer_layout = QVBoxLayout(designer_card)
+        designer_layout = designer_card.body_layout
         designer_layout.setContentsMargins(16, 14, 16, 14)
         designer_layout.setSpacing(10)
         designer_title = QLabel("模板设计（座次表模板）")
@@ -296,7 +296,7 @@ class ExamPrintPage(QWidget):
         center_layout.addWidget(designer_card, 1)
 
         result_card = Card()
-        result_layout = QVBoxLayout(result_card)
+        result_layout = result_card.body_layout
         result_layout.setContentsMargins(16, 14, 16, 14)
         result_layout.setSpacing(8)
         result_layout.addWidget(QLabel("预览与输出"))
@@ -311,7 +311,7 @@ class ExamPrintPage(QWidget):
         right.setObjectName("ExamPrintRightPanel")
         right.setMinimumWidth(230)
         right.setMaximumWidth(290)
-        right_layout = QVBoxLayout(right)
+        right_layout = right.body_layout
         right_layout.setContentsMargins(12, 12, 12, 12)
         right_layout.setSpacing(10)
         fields_title = QLabel("可用字段")
