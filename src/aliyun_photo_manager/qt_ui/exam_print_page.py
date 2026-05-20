@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
+import re
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtCore import QByteArray, Qt, QUrl
+from PySide6.QtGui import QFont, QImage, QTextCursor, QTextDocument
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QDialog,
@@ -43,6 +45,9 @@ from ..exam_printing import (
 from .base_page import Card
 from .common import AppComboBox
 from .widgets import FormRow
+
+
+DATA_IMAGE_PATTERN = re.compile(r'src="(data:image/[^;]+;base64,([^"]+))"')
 
 
 class HtmlModeEditor(QWidget):
@@ -664,7 +669,7 @@ class ExamPrintPage(QWidget):
         except Exception as exc:
             QMessageBox.critical(self, "预览失败", str(exc))
             return
-        self.preview_edit.setHtml(self.rendered_html)
+        self._set_preview_html(self.rendered_html)
         self.log_fn(f"已生成面试签到表预览：{room_value or '全部考生'}")
 
     def export_html(self) -> None:
@@ -693,7 +698,7 @@ class ExamPrintPage(QWidget):
             printer = QPrinter(QPrinter.HighResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)
             printer.setOutputFileName(str(output_path))
-            self.preview_edit.document().print(printer)
+            self._print_preview_document(printer)
             if not output_path.exists() or output_path.stat().st_size == 0:
                 raise OSError("PDF 文件没有成功生成。")
         except Exception as exc:
@@ -711,9 +716,42 @@ class ExamPrintPage(QWidget):
         dialog = QPrintDialog(printer, self)
         if dialog.exec() != QDialog.Accepted:
             return
-        document = self.preview_edit.document().clone()
-        document.print(printer)
+        self._print_preview_document(printer)
         self.log_fn("已发送考场打印任务。")
+
+    def _set_preview_html(self, html_text: str) -> None:
+        resources: list[tuple[QUrl, QImage]] = []
+
+        def replace_data_image(match: re.Match[str]) -> str:
+            image_index = len(resources)
+            url = QUrl(f"aliyun-photo-preview://image/{image_index}")
+            try:
+                image_data = base64.b64decode(match.group(2))
+            except Exception:
+                return match.group(0)
+            image = QImage.fromData(QByteArray(image_data))
+            if not image.isNull():
+                resources.append((url, image))
+                return f'src="{url.toString()}"'
+            return match.group(0)
+
+        preview_html = DATA_IMAGE_PATTERN.sub(replace_data_image, html_text)
+        self.preview_edit.clear()
+        document = self.preview_edit.document()
+        for url, image in resources:
+            document.addResource(QTextDocument.ImageResource, url, image)
+        self.preview_edit.setHtml(preview_html)
+
+    def _print_preview_document(self, printer: QPrinter) -> None:
+        print_method = getattr(self.preview_edit, "print_", None) or getattr(self.preview_edit, "print", None)
+        if print_method is not None:
+            print_method(printer)
+            return
+        document = self.preview_edit.document()
+        document_print = getattr(document, "print_", None) or getattr(document, "print", None)
+        if document_print is None:
+            raise AttributeError("当前 Qt 版本不支持 PDF 打印方法。")
+        document_print(printer)
 
     def insert_placeholder(self) -> None:
         text = self.placeholder_text.textCursor().selectedText().strip()
