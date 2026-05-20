@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -42,6 +43,76 @@ from ..exam_printing import (
 from .base_page import Card
 from .common import AppComboBox
 from .widgets import FormRow
+
+
+class HtmlModeEditor(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self._syncing = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self.tabs = QTabWidget()
+        self.visual_edit = QTextEdit()
+        self.visual_edit.setAcceptRichText(True)
+        self.code_edit = QPlainTextEdit()
+        self.code_edit.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.code_edit.setPlaceholderText("在这里编辑 HTML 代码。")
+
+        self.tabs.addTab(self.visual_edit, "显示模式")
+        self.tabs.addTab(self.code_edit, "代码模式")
+        self.tabs.currentChanged.connect(self._sync_current_tab)
+        layout.addWidget(self.tabs)
+
+    def setHtml(self, html_text: str) -> None:
+        self._syncing = True
+        try:
+            self.visual_edit.setHtml(html_text)
+            self.code_edit.setPlainText(html_text)
+        finally:
+            self._syncing = False
+
+    def toHtml(self) -> str:
+        if self.tabs.currentWidget() is self.code_edit:
+            return self.code_edit.toPlainText()
+        return self.visual_edit.toHtml()
+
+    def clear(self) -> None:
+        self._syncing = True
+        try:
+            self.visual_edit.clear()
+            self.code_edit.clear()
+        finally:
+            self._syncing = False
+
+    def insertPlainText(self, text: str) -> None:
+        if self.tabs.currentWidget() is self.code_edit:
+            self.code_edit.insertPlainText(text)
+        else:
+            self.visual_edit.insertPlainText(text)
+
+    def active_text_edit(self) -> QTextEdit | None:
+        return self.visual_edit if self.tabs.currentWidget() is self.visual_edit else None
+
+    def hasEditorFocus(self) -> bool:
+        return self.visual_edit.hasFocus() or self.code_edit.hasFocus()
+
+    def setEnabled(self, enabled: bool) -> None:
+        super().setEnabled(enabled)
+        self.tabs.setEnabled(enabled)
+
+    def _sync_current_tab(self) -> None:
+        if self._syncing:
+            return
+        self._syncing = True
+        try:
+            if self.tabs.currentWidget() is self.code_edit:
+                self.code_edit.setPlainText(self.visual_edit.toHtml())
+            else:
+                self.visual_edit.setHtml(self.code_edit.toPlainText())
+        finally:
+            self._syncing = False
 
 
 class ExamPrintPage(QWidget):
@@ -277,8 +348,7 @@ class ExamPrintPage(QWidget):
         main_layout = QVBoxLayout(main_card)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(QLabel("整体表样"))
-        self.main_editor = QTextEdit()
-        self.main_editor.setAcceptRichText(True)
+        self.main_editor = HtmlModeEditor()
         self.main_editor.setMinimumHeight(220)
         main_layout.addWidget(self.main_editor)
         editor_splitter.addWidget(main_card)
@@ -288,8 +358,7 @@ class ExamPrintPage(QWidget):
         item_layout.setContentsMargins(0, 0, 0, 0)
         self.item_title = QLabel("单个考生表样")
         item_layout.addWidget(self.item_title)
-        self.item_editor = QTextEdit()
-        self.item_editor.setAcceptRichText(True)
+        self.item_editor = HtmlModeEditor()
         self.item_editor.setMinimumHeight(140)
         item_layout.addWidget(self.item_editor)
         editor_splitter.addWidget(item_card)
@@ -655,16 +724,26 @@ class ExamPrintPage(QWidget):
         if not text:
             QMessageBox.information(self, "插入占位符", "请先在左侧占位符列表里选中一项。")
             return
-        target = self.main_editor if self.main_editor.hasFocus() else self.item_editor
+        target = self._active_template_editor()
         target.insertPlainText(text)
 
     def _toggle_weight(self, bold: bool, italic: bool = False) -> None:
-        editor = self.main_editor if self.main_editor.hasFocus() else self.item_editor
+        editor = self._active_visual_editor()
+        if editor is None:
+            return
         if bold:
             editor.setFontWeight(QFont.Normal if editor.fontWeight() > QFont.Normal else QFont.Bold)
         else:
             editor.setFontItalic(not editor.fontItalic() if italic else editor.fontItalic())
 
     def _toggle_underline(self) -> None:
-        editor = self.main_editor if self.main_editor.hasFocus() else self.item_editor
+        editor = self._active_visual_editor()
+        if editor is None:
+            return
         editor.setFontUnderline(not editor.fontUnderline())
+
+    def _active_template_editor(self) -> HtmlModeEditor:
+        return self.item_editor if self.item_editor.hasEditorFocus() else self.main_editor
+
+    def _active_visual_editor(self) -> QTextEdit | None:
+        return self._active_template_editor().active_text_edit()
