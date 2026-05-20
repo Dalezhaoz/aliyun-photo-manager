@@ -423,11 +423,10 @@ class ExamPrintPage(QWidget):
         self.item_editor.setHtml(template.item_html)
         self.columns_spin.setValue(int(template.settings.get("columns", 4)))
         self.items_per_page_spin.setValue(int(template.settings.get("items_per_page", 10)))
-        is_door = template.doc_type == DOC_TYPE_DOOR
-        self.item_title.setText("考生单元模板" if not is_door else "门贴无需单元模板")
-        self.item_editor.setEnabled(not is_door)
-        self.columns_spin.setEnabled(template.doc_type in {DOC_TYPE_SEAT, DOC_TYPE_DESK})
-        self.items_per_page_spin.setEnabled(template.doc_type == DOC_TYPE_DESK)
+        self.item_title.setText("考生单元模板")
+        self.item_editor.setEnabled(True)
+        self.columns_spin.setEnabled(template.doc_type == DOC_TYPE_SEAT)
+        self.items_per_page_spin.setEnabled(False)
         if hasattr(self, "template_info_label"):
             type_label = self.doc_type_combo.currentText()
             source = "内置模板" if template.builtin else "自定义模板"
