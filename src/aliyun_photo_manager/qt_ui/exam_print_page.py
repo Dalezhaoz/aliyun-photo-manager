@@ -176,7 +176,7 @@ class ExamPrintPage(QWidget):
             ("打印类型", self.doc_type_combo),
             ("模板", self.template_combo),
             ("模板名称", self.template_name_edit),
-            ("考场", self.room_column_combo),
+            ("考场/分组", self.room_column_combo),
             ("座号", self.seat_column_combo),
             ("准考证号", self.exam_no_column_combo),
             ("考点", self.site_column_combo),
@@ -184,7 +184,7 @@ class ExamPrintPage(QWidget):
             ("单位", self.unit_column_combo),
             ("岗位", self.job_column_combo),
             ("照片匹配", self.photo_match_column_combo),
-            ("预览考场", self.room_value_combo),
+            ("预览范围", self.room_value_combo),
         ]
         for row, (label, field) in enumerate(fields):
             form_layout_row = FormRow(label, field)
@@ -491,7 +491,10 @@ class ExamPrintPage(QWidget):
     def _refresh_room_values(self) -> None:
         room_column = str(self.room_column_combo.currentData() or "")
         self.room_value_combo.clear()
-        if not self.records or not room_column:
+        if not self.records:
+            return
+        if not room_column:
+            self.room_value_combo.addItem("全部考生", "")
             return
         for value in room_values(self.records, room_column):
             self.room_value_combo.addItem(value, value)
@@ -501,8 +504,6 @@ class ExamPrintPage(QWidget):
         if not excel_path.exists():
             raise ValueError("请先选择有效的 Excel 数据文件。")
         room_column = str(self.room_column_combo.currentData() or "")
-        if not room_column:
-            raise ValueError("请先选择考场列。")
         photo_dir_text = self.photo_dir_edit.text().strip()
         photo_dir = Path(photo_dir_text) if photo_dir_text else None
         return PrintDataConfig(
@@ -552,10 +553,10 @@ class ExamPrintPage(QWidget):
         try:
             config = self._build_config()
             room_value = str(self.room_value_combo.currentData() or "")
-            if not room_value:
+            if not room_value and str(self.room_column_combo.currentData() or ""):
                 self._refresh_room_values()
                 room_value = str(self.room_value_combo.currentData() or "")
-            if not room_value:
+            if not room_value and str(self.room_column_combo.currentData() or ""):
                 raise ValueError("当前没有可预览的考场。")
             template = PrintTemplate(
                 name=self.template_name_edit.text().strip() or "当前模板",
@@ -579,7 +580,7 @@ class ExamPrintPage(QWidget):
             QMessageBox.critical(self, "预览失败", str(exc))
             return
         self.preview_edit.setHtml(self.rendered_html)
-        self.log_fn(f"已生成考场打印预览：{room_value}")
+        self.log_fn(f"已生成座次表预览：{room_value or '全部考生'}")
 
     def export_html(self) -> None:
         if not self.rendered_html:

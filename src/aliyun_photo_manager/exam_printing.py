@@ -80,6 +80,7 @@ def available_placeholders(headers: Iterable[str]) -> list[str]:
         "考生人数",
         "照片",
         "照片标签",
+        "面试报到时间",
         "座次表表格",
         "桌贴列表",
     ]
@@ -207,6 +208,7 @@ body { font-family: 'Microsoft YaHei UI'; margin: 20px; color: #1f2937; }
       考点：${考点}　
       考场：${考场}　
       科目：${考试科目}　
+      报到时间：${面试报到时间}　
       人数：${考生人数}
     </div>
   </div>
@@ -222,6 +224,9 @@ body { font-family: 'Microsoft YaHei UI'; margin: 20px; color: #1f2937; }
       <div>姓名：${姓名}</div>
       <div>准考证号：${考号}</div>
       <div>身份证号：${身份证号}</div>
+      <div>报考单位：${报考单位}</div>
+      <div>报考岗位：${报考岗位}</div>
+      <div>报到时间：${面试报到时间}</div>
     </div>
     ${照片标签}
   </div>
@@ -298,9 +303,12 @@ def room_values(records: Iterable[dict[str, str]], room_column: str) -> list[str
 
 
 def build_room_context(records: list[dict[str, str]], config: PrintDataConfig, room_value: str) -> tuple[dict[str, str], list[dict[str, str]]]:
-    room_records = [record for record in records if _coerce_text(record.get(config.room_column, "")) == room_value]
+    if config.room_column:
+        room_records = [record for record in records if _coerce_text(record.get(config.room_column, "")) == room_value]
+    else:
+        room_records = list(records)
     if not room_records:
-        raise ValueError("所选考场没有匹配到任何考生。")
+        raise ValueError("没有匹配到任何考生。")
 
     sorted_records = sorted(room_records, key=lambda item: _sort_key(item, config))
     for record in sorted_records:
