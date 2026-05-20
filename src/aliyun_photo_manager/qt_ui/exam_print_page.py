@@ -620,12 +620,18 @@ class ExamPrintPage(QWidget):
         output_path = Path(selected)
         if output_path.suffix.lower() != ".pdf":
             output_path = output_path.with_suffix(".pdf")
-        printer = QPrinter(QPrinter.HighResolution)
-        printer.setOutputFormat(QPrinter.PdfFormat)
-        printer.setOutputFileName(str(output_path))
-        document = self.preview_edit.document().clone()
-        document.print(printer)
+        try:
+            printer = QPrinter(QPrinter.HighResolution)
+            printer.setOutputFormat(QPrinter.PdfFormat)
+            printer.setOutputFileName(str(output_path))
+            self.preview_edit.document().print(printer)
+            if not output_path.exists() or output_path.stat().st_size == 0:
+                raise OSError("PDF 文件没有成功生成。")
+        except Exception as exc:
+            QMessageBox.critical(self, "导出 PDF 失败", str(exc))
+            return
         self.log_fn(f"已导出面试表样 PDF：{output_path}")
+        QMessageBox.information(self, "导出 PDF", f"已导出：{output_path}")
 
     def print_preview(self) -> None:
         if not self.rendered_html:

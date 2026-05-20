@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import html
 import json
 import math
@@ -20,6 +21,13 @@ DOC_TYPE_DESK = "desk"
 PLACEHOLDER_PATTERN = re.compile(r"\$\{([^}]+)\}")
 TEMPLATE_STORAGE_NAME = ".exam_print_templates.json"
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+IMAGE_MIME_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".bmp": "image/bmp",
+    ".webp": "image/webp",
+}
 
 
 @dataclass
@@ -66,6 +74,17 @@ def _coerce_text(value: object) -> str:
 def _to_file_url(path: Path) -> str:
     resolved = path.resolve()
     return "file:///" + quote(str(resolved).replace("\\", "/"), safe="/:")
+
+
+def _to_image_data_uri(path: Path) -> str:
+    mime_type = IMAGE_MIME_TYPES.get(path.suffix.lower())
+    if not mime_type:
+        return _to_file_url(path)
+    try:
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    except OSError:
+        return _to_file_url(path)
+    return f"data:{mime_type};base64,{encoded}"
 
 
 def available_placeholders(headers: Iterable[str]) -> list[str]:
@@ -392,7 +411,7 @@ def _match_photo(record: dict[str, str], config: PrintDataConfig) -> str:
             continue
         stem = _normalize_match_text(file_path.stem)
         if stem == match_value or stem.startswith(match_value) or match_value in stem:
-            return _to_file_url(file_path)
+            return _to_image_data_uri(file_path)
     return ""
 
 
