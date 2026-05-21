@@ -210,35 +210,6 @@ class ExamPrintPage(QWidget):
         workspace = QSplitter()
         root.addWidget(workspace, 1)
 
-        left = Card()
-        left.setObjectName("ExamPrintLeftRail")
-        left.setMinimumWidth(210)
-        left.setMaximumWidth(260)
-        left_layout = left.body_layout
-        left_layout.setContentsMargins(12, 12, 12, 12)
-        left_layout.setSpacing(12)
-        for index, title, subtitle in [
-            ("1", "选择名单", "打开面试名单 Excel"),
-            ("2", "选择照片", "选择本地照片文件夹"),
-            ("3", "确认字段", "考号/单位/岗位/身份证号"),
-            ("4", "生成打印", "预览、导出或直接打印"),
-        ]:
-            step = self._step_item(index, title, subtitle, active=index == "1")
-            left_layout.addWidget(step)
-        left_layout.addStretch(1)
-        info = Card()
-        info_layout = info.body_layout
-        info_layout.setContentsMargins(12, 12, 12, 12)
-        info_layout.setSpacing(8)
-        info_title = QLabel("模板信息")
-        info_title.setProperty("sectionTitle", True)
-        self.template_info_label = QLabel("模板名称：未选择\n模板类型：面试签到表\n页面大小：A4\n纸张方向：纵向")
-        self.template_info_label.setWordWrap(True)
-        info_layout.addWidget(info_title)
-        info_layout.addWidget(self.template_info_label)
-        left_layout.addWidget(info)
-        workspace.addWidget(left)
-
         center_scroll = QScrollArea()
         center_scroll.setWidgetResizable(True)
         center_scroll.setFrameShape(QFrame.NoFrame)
@@ -437,34 +408,8 @@ class ExamPrintPage(QWidget):
         right_layout.addWidget(self.layer_text, 1)
         workspace.addWidget(right)
 
-        workspace.setStretchFactor(0, 1)
-        workspace.setStretchFactor(1, 6)
-        workspace.setStretchFactor(2, 1)
-
-    def _step_item(self, index: str, title: str, subtitle: str, *, active: bool = False) -> QFrame:
-        frame = QFrame()
-        frame.setProperty("workflowStep", True)
-        frame.setProperty("active", active)
-        layout = QHBoxLayout(frame)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
-        badge = QLabel(index)
-        badge.setFixedSize(28, 28)
-        badge.setAlignment(Qt.AlignCenter)
-        badge.setProperty("stepBadge", True)
-        text_layout = QVBoxLayout()
-        text_layout.setContentsMargins(0, 0, 0, 0)
-        text_layout.setSpacing(3)
-        title_label = QLabel(title)
-        title_label.setProperty("formLabel", True)
-        subtitle_label = QLabel(subtitle)
-        subtitle_label.setWordWrap(True)
-        subtitle_label.setProperty("heroText", True)
-        text_layout.addWidget(title_label)
-        text_layout.addWidget(subtitle_label)
-        layout.addWidget(badge)
-        layout.addLayout(text_layout, 1)
-        return frame
+        workspace.setStretchFactor(0, 6)
+        workspace.setStretchFactor(1, 1)
 
     def _choose_excel_and_load(self) -> None:
         self.choose_file(self.excel_edit)
