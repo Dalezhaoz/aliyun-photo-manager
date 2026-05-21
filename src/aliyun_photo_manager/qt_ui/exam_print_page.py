@@ -49,6 +49,8 @@ from .widgets import FormRow
 
 
 DATA_IMAGE_PATTERN = re.compile(r'src="data:image/[^;]+;base64,([^"]+)"')
+PHOTO_DATA_URI_PATTERN = re.compile(r"^data:image/[^;]+;base64,(.+)$")
+SUPPORTED_PHOTO_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
 class HtmlModeEditor(QWidget):
@@ -438,12 +440,12 @@ class ExamPrintPage(QWidget):
         self.placeholder_text.setPlaceholderText("先选择 Excel 并加载列。")
         self.placeholder_text.setMinimumHeight(230)
         right_layout.addWidget(self.placeholder_text, 2)
-        layers_title = QLabel("控件图层")
+        layers_title = QLabel("照片诊断")
         layers_title.setProperty("sectionTitle", True)
         right_layout.addWidget(layers_title)
         self.layer_text = QPlainTextEdit()
         self.layer_text.setReadOnly(True)
-        self.layer_text.setPlainText("标题文本\n报到时间文本\n考生人数文本\n签到表格")
+        self.layer_text.setPlainText("预览后显示照片匹配结果。")
         right_layout.addWidget(self.layer_text, 1)
         workspace.addWidget(right)
 
@@ -711,6 +713,7 @@ class ExamPrintPage(QWidget):
             QMessageBox.critical(self, "预览失败", str(exc))
             return
         self._set_preview_html(self.rendered_html)
+        self._update_photo_diagnostics(config, room_value)
         self.log_fn(f"已生成面试签到表预览：{room_value or '全部考生'}")
 
     def export_html(self) -> None:
@@ -774,6 +777,77 @@ class ExamPrintPage(QWidget):
         if document_print is None:
             raise AttributeError("当前 Qt 版本不支持 PDF 打印方法。")
         document_print(printer)
+
+    def _update_photo_diagnostics(self, config: PrintDataConfig, room_value: str) -> None:
+        photo_dir = config.photo_dir
+        if photo_dir is None:
+            self.layer_text.setPlainText("未选择照片目录。")
+            return
+        lines = [
+            f"照片目录：{photo_dir}",
+            f"目录存在：{'是' if photo_dir.exists() else '否'}",
+            f"匹配字段：{config.photo_match_column or '未选择'}",
+        ]
+        if not photo_dir.exists():
+            self.layer_text.setPlainText("\n".join(lines))
+            return
+
+        try:
+            photo_files = [
+                item
+                for item in photo_dir.rglob("*")
+                if item.is_file() and item.suffix.lower() in SUPPORTED_PHOTO_SUFFIXES
+            ]
+        except OSError as exc:
+            lines.append(f"扫描失败：{exc}")
+            self.layer_text.setPlainText("\n".join(lines))
+            return
+
+        if config.room_column:
+            preview_records = [
+                record
+                for record in self.records
+                if str(record.get(config.room_column, "")).strip() == room_value
+            ]
+        else:
+            preview_records = list(self.records)
+        matched_records = [record for record in preview_records if record.get("照片")]
+        decoded = [self._decode_photo_size(record.get("照片", "")) for record in matched_records]
+        decoded_ok = [item for item in decoded if item]
+
+        lines.extend(
+            [
+                f"照片文件数：{len(photo_files)}",
+                f"预览人数：{len(preview_records)}",
+                f"匹配到照片：{len(matched_records)}",
+                f"成功解码：{len(decoded_ok)}",
+            ]
+        )
+        if photo_files:
+            lines.append(f"照片文件示例：{photo_files[0].name}")
+        lines.append("")
+        lines.append("前 10 人：")
+        for index, record in enumerate(preview_records[:10], start=1):
+            name = str(record.get("姓名", "")).strip() or "-"
+            match_value = str(record.get(config.photo_match_column, "")).strip() if config.photo_match_column else ""
+            photo_value = record.get("照片", "")
+            size = self._decode_photo_size(photo_value)
+            status = f"已匹配，{size[0]}x{size[1]}" if size else ("已匹配但解码失败" if photo_value else "未匹配")
+            lines.append(f"{index}. {name} | {match_value or '-'} | {status}")
+        self.layer_text.setPlainText("\n".join(lines))
+
+    def _decode_photo_size(self, photo_value: str) -> tuple[int, int] | None:
+        match = PHOTO_DATA_URI_PATTERN.match(photo_value)
+        if not match:
+            return None
+        try:
+            image_data = base64.b64decode(match.group(1))
+        except Exception:
+            return None
+        image = QImage.fromData(QByteArray(image_data))
+        if image.isNull():
+            return None
+        return image.width(), image.height()
 
     def insert_placeholder(self) -> None:
         text = self.placeholder_text.textCursor().selectedText().strip()
