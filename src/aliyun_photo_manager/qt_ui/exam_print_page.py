@@ -266,6 +266,7 @@ class ExamPrintPage(QWidget):
         self.photo_match_column_combo = AppComboBox()
         self.room_value_combo = AppComboBox()
         self.sort_column_combo = AppComboBox()
+        self.file_group_column_combo = AppComboBox()
         self.page_group_column_combo = AppComboBox()
         self.start_corner_combo = AppComboBox()
         self.start_corner_combo.addItem("左上角", "top_left")
@@ -281,6 +282,7 @@ class ExamPrintPage(QWidget):
         self.snake_combo.addItem("S 型排序", "1")
         fields = [
             ("排序列", self.sort_column_combo),
+            ("分文件字段", self.file_group_column_combo),
             ("分页字段", self.page_group_column_combo),
             ("第一个考生", self.start_corner_combo),
             ("填充方向", self.fill_direction_combo),
@@ -477,6 +479,7 @@ class ExamPrintPage(QWidget):
                 **default_template.settings,
                 "columns": self.columns_spin.value() if hasattr(self, "columns_spin") else 5,
                 "sort_column": "",
+                "file_group_column": "",
                 "page_group_column": "",
                 "start_corner": "top_left",
                 "fill_direction": "row",
@@ -506,6 +509,7 @@ class ExamPrintPage(QWidget):
         self._set_combo_data(self.fill_direction_combo, str(template.settings.get("fill_direction", "row")))
         self._set_combo_data(self.snake_combo, str(template.settings.get("snake", "0")))
         self._set_combo_data(self.sort_column_combo, str(template.settings.get("sort_column", "")))
+        self._set_combo_data(self.file_group_column_combo, str(template.settings.get("file_group_column", "")))
         self._set_combo_data(self.page_group_column_combo, str(template.settings.get("page_group_column", "")))
         self._update_people_count_label()
         is_signin = str(template.settings.get("layout", "")) == "signin"
@@ -599,6 +603,7 @@ class ExamPrintPage(QWidget):
             self.job_column_combo,
             self.photo_match_column_combo,
             self.sort_column_combo,
+            self.file_group_column_combo,
             self.page_group_column_combo,
         ]
         for combo in combos:
@@ -622,6 +627,9 @@ class ExamPrintPage(QWidget):
         else:
             self._select_guess(self.sort_column_combo, ["考号", "序号", "座号", "身份证号"])
         template = self.current_template()
+        saved_file_group_column = str((template.settings if template else {}).get("file_group_column", ""))
+        if saved_file_group_column:
+            self._set_combo_data(self.file_group_column_combo, saved_file_group_column)
         saved_page_group_column = str((template.settings if template else {}).get("page_group_column", ""))
         if saved_page_group_column:
             self._set_combo_data(self.page_group_column_combo, saved_page_group_column)
@@ -679,6 +687,7 @@ class ExamPrintPage(QWidget):
                 "items_per_page": self.items_per_page_spin.value(),
                 "layout": str(template.settings.get("layout", "")) if template else "",
                 "sort_column": str(self.sort_column_combo.currentData() or ""),
+                "file_group_column": str(self.file_group_column_combo.currentData() or ""),
                 "page_group_column": str(self.page_group_column_combo.currentData() or ""),
                 "start_corner": str(self.start_corner_combo.currentData() or "top_left"),
                 "fill_direction": str(self.fill_direction_combo.currentData() or "row"),
@@ -764,7 +773,7 @@ class ExamPrintPage(QWidget):
                 str(self.doc_type_combo.currentData()) == DOC_TYPE_SEAT
                 and str((template.settings if template else {}).get("layout", "")) == "candidate_grid"
             ):
-                export_interview_signin_pdf(
+                output_paths = export_interview_signin_pdf(
                     output_path,
                     self.records,
                     config,
@@ -773,23 +782,31 @@ class ExamPrintPage(QWidget):
                     item_html=self.item_editor.toHtml(),
                     people_per_line=self.columns_spin.value(),
                     sort_column=str(self.sort_column_combo.currentData() or ""),
+                    file_group_column=str(self.file_group_column_combo.currentData() or ""),
                     page_group_column=str(self.page_group_column_combo.currentData() or ""),
                     start_corner=str(self.start_corner_combo.currentData() or "top_left"),
                     fill_direction=str(self.fill_direction_combo.currentData() or "row"),
                     snake=str(self.snake_combo.currentData() or "0") == "1",
                 )
+                if not output_paths:
+                    raise OSError("PDF 文件没有成功生成。")
             else:
+                output_paths = [output_path]
                 printer = QPrinter(QPrinter.HighResolution)
                 printer.setOutputFormat(QPrinter.PdfFormat)
                 printer.setOutputFileName(str(output_path))
                 self._print_preview_document(printer)
-            if not output_path.exists() or output_path.stat().st_size == 0:
+            if any(not path.exists() or path.stat().st_size == 0 for path in output_paths):
                 raise OSError("PDF 文件没有成功生成。")
         except Exception as exc:
             QMessageBox.critical(self, "导出 PDF 失败", str(exc))
             return
-        self.log_fn(f"已导出面试表样 PDF：{output_path}")
-        QMessageBox.information(self, "导出 PDF", f"已导出：{output_path}")
+        if len(output_paths) == 1:
+            message = f"已导出：{output_paths[0]}"
+        else:
+            message = f"已导出 {len(output_paths)} 个 PDF 到：{output_paths[0].parent}"
+        self.log_fn(f"已导出面试表样 PDF：{message}")
+        QMessageBox.information(self, "导出 PDF", message)
 
     def print_preview(self) -> None:
         if not self.rendered_html:

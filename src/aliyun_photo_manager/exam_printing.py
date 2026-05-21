@@ -411,11 +411,12 @@ def export_interview_signin_pdf(
     item_html: str = "",
     people_per_line: int = 5,
     sort_column: str = "",
+    file_group_column: str = "",
     page_group_column: str = "",
     start_corner: str = "top_left",
     fill_direction: str = "row",
     snake: bool = False,
-) -> None:
+) -> list[Path]:
     from PIL import Image, ImageFile, ImageOps
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
@@ -431,6 +432,30 @@ def export_interview_signin_pdf(
         pass
     font_name = "STSong-Light"
     room_records = _filtered_sorted_records(records, config, room_value, sort_column=sort_column)
+    if file_group_column:
+        output_paths: list[Path] = []
+        for file_group_value, file_group_records in _named_record_groups(room_records, file_group_column):
+            grouped_output_path = output_path.with_name(
+                f"{output_path.stem}_{_safe_filename(file_group_value or '未分组')}{output_path.suffix}"
+            )
+            output_paths.extend(
+                export_interview_signin_pdf(
+                    grouped_output_path,
+                    file_group_records,
+                    config,
+                    "",
+                    title=title,
+                    item_html=item_html,
+                    people_per_line=people_per_line,
+                    sort_column=sort_column,
+                    file_group_column="",
+                    page_group_column=page_group_column,
+                    start_corner=start_corner,
+                    fill_direction=fill_direction,
+                    snake=snake,
+                )
+            )
+        return output_paths
     photo_map = _photo_file_map(config.photo_dir)
 
     page_width, page_height = landscape(A4)
@@ -512,6 +537,7 @@ def export_interview_signin_pdf(
             pdf.drawCentredString(page_width / 2, footer_y + 8, title)
             pdf.showPage()
     pdf.save()
+    return [output_path]
 
 
 def _join_parts(left: str, right: str, separator: str = " ") -> str:
@@ -561,15 +587,27 @@ def _natural_sort_key(value: object) -> tuple[object, ...]:
 def _page_groups(records: list[dict[str, str]], page_group_column: str) -> list[list[dict[str, str]]]:
     if not page_group_column:
         return [records]
+    return [group_records for _, group_records in _named_record_groups(records, page_group_column)]
+
+
+def _named_record_groups(records: list[dict[str, str]], group_column: str) -> list[tuple[str, list[dict[str, str]]]]:
     groups: list[list[dict[str, str]]] = []
-    group_index: dict[str, list[dict[str, str]]] = {}
+    named_groups: list[tuple[str, list[dict[str, str]]]] = []
+    group_index: dict[str, tuple[str, list[dict[str, str]]]] = {}
     for record in records:
-        key = _coerce_text(record.get(page_group_column, ""))
+        key = _coerce_text(record.get(group_column, ""))
         if key not in group_index:
-            group_index[key] = []
-            groups.append(group_index[key])
-        group_index[key].append(record)
-    return groups
+            item = (key, [])
+            group_index[key] = item
+            named_groups.append(item)
+        group_index[key][1].append(record)
+    return named_groups
+
+
+def _safe_filename(value: str) -> str:
+    safe_value = re.sub(r'[\\/:*?"<>|]+', "_", _coerce_text(value))
+    safe_value = safe_value.strip().strip(".")
+    return safe_value or "未分组"
 
 
 def _layout_positions(
