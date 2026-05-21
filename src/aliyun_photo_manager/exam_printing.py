@@ -482,9 +482,9 @@ def export_interview_signin_pdf(
         rows_per_page = 6
     card_width = (page_width - margin_x * 2) / safe_columns
     card_height = (page_height - margin_top - 14 - footer_height - footer_gap) / rows_per_page
-    photo_width = 39
-    photo_height = min(60, card_height - 10)
     padding = 4
+    photo_width = min(52, card_width * 0.32)
+    photo_height = max(1, card_height - padding * 2)
     font_size = 6.9
     leading = 7.45
 
