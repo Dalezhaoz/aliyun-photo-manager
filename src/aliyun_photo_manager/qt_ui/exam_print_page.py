@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import re
 import uuid
 from pathlib import Path
@@ -42,7 +43,6 @@ from ..exam_printing import (
     load_templates,
     render_document,
     room_values,
-    save_template,
 )
 from .base_page import Card
 from .common import AppComboBox
@@ -190,8 +190,7 @@ class ExamPrintPage(QWidget):
         topbar_layout.setContentsMargins(12, 10, 12, 10)
         topbar_layout.setSpacing(8)
         for text, callback in [
-            ("新建模板", self._new_template),
-            ("打开模板", lambda: self._refresh_template_combo()),
+            ("生成默认模板", self._new_template),
             ("保存模板", self.save_current_template),
             ("打开Excel", self._choose_excel_and_load),
             ("选择照片文件夹", self._choose_photo_dir),
@@ -253,7 +252,7 @@ class ExamPrintPage(QWidget):
         data_layout = data_card.body_layout
         data_layout.setContentsMargins(16, 14, 16, 14)
         data_layout.setSpacing(12)
-        data_title = QLabel("面试签到数据导入与字段映射")
+        data_title = QLabel("面试签到数据与模板")
         data_title.setProperty("sectionTitle", True)
         data_layout.addWidget(data_title)
 
@@ -308,9 +307,6 @@ class ExamPrintPage(QWidget):
         self.snake_combo.addItem("普通排序", "0")
         self.snake_combo.addItem("S 型排序", "1")
         fields = [
-            ("打印类型", self.doc_type_combo),
-            ("模板", self.template_combo),
-            ("模板名称", self.template_name_edit),
             ("排序列", self.sort_column_combo),
             ("第一个考生", self.start_corner_combo),
             ("填充方向", self.fill_direction_combo),
@@ -332,7 +328,7 @@ class ExamPrintPage(QWidget):
         settings_row = QHBoxLayout()
         self.columns_spin = QSpinBox()
         self.columns_spin.setRange(1, 12)
-        self.columns_spin.setValue(4)
+        self.columns_spin.setValue(5)
         self.items_per_page_spin = QSpinBox()
         self.items_per_page_spin.setRange(1, 60)
         self.items_per_page_spin.setValue(10)
@@ -479,20 +475,16 @@ class ExamPrintPage(QWidget):
         self.choose_folder(self.photo_dir_edit)
 
     def _new_template(self) -> None:
-        self.template_name_edit.clear()
-        self.main_editor.setHtml(
-            "<p>${考生列表}</p>"
-            "<p style='text-align:center;color:#c62828;background:#f5dada;padding:8px;'>"
-            "2026年度周村区（文昌湖区）事业单位公开招聘综合类岗位人员面试"
-            "</p>"
-        )
-        self.item_editor.setHtml(
-            "<table class='candidate-card'><tr>"
-            "<td class='photo-cell'>${照片标签}</td>"
-            "<td class='info-cell'>姓名:${姓名}<br>身份证号:<br>${身份证号}<br>"
-            "报考单位:${报考单位}<br>报考职位:${报考岗位}</td>"
-            "</tr></table>"
-        )
+        template = self._default_local_template()
+        self._set_current_template(template)
+        self._apply_selected_template()
+        template_path = self._local_template_path()
+        if template_path is not None:
+            try:
+                self._write_local_template(template)
+                self.log_fn(f"已生成默认模板：{template_path}")
+            except Exception as exc:
+                QMessageBox.critical(self, "生成模板失败", str(exc))
         self.preview_edit.clear()
 
     def _refresh_data_preview(self) -> None:
@@ -518,6 +510,37 @@ class ExamPrintPage(QWidget):
             self.template_combo.addItem(f"{item.name}{suffix}", item)
         self.template_combo.blockSignals(False)
         self._apply_selected_template()
+
+    def _set_current_template(self, template: PrintTemplate) -> None:
+        self.template_combo.blockSignals(True)
+        self.template_combo.clear()
+        self.template_combo.addItem(template.name, template)
+        self.template_combo.blockSignals(False)
+        self.template_combo.setCurrentIndex(0)
+
+    def _default_local_template(self) -> PrintTemplate:
+        default_template = self.templates.get(DOC_TYPE_SEAT, [])[0]
+        return PrintTemplate(
+            name="面试签到表模板",
+            doc_type=DOC_TYPE_SEAT,
+            main_html=default_template.main_html,
+            item_html=default_template.item_html,
+            settings={
+                **default_template.settings,
+                "columns": self.columns_spin.value() if hasattr(self, "columns_spin") else 5,
+                "sort_column": "",
+                "start_corner": "top_left",
+                "fill_direction": "row",
+                "snake": "0",
+            },
+            builtin=False,
+        )
+
+    def _local_template_path(self) -> Path | None:
+        excel_text = self.excel_edit.text().strip() if hasattr(self, "excel_edit") else ""
+        if not excel_text:
+            return None
+        return Path(excel_text).parent / "面试签到表模板.json"
 
     def _apply_selected_template(self) -> None:
         template = self.current_template()
@@ -567,10 +590,46 @@ class ExamPrintPage(QWidget):
         except Exception as exc:
             QMessageBox.critical(self, "读取失败", str(exc))
             return
+        self._load_or_create_local_template()
         self._fill_header_combos()
         self.placeholder_text.setPlainText("\n".join(available_placeholders(self.headers)))
         self._refresh_data_preview()
         self.log_fn(f"已加载考场打印数据：{excel_path.name}，共 {len(self.records)} 条。")
+
+    def _load_or_create_local_template(self) -> None:
+        template_path = self._local_template_path()
+        template = self._default_local_template()
+        if template_path and template_path.exists():
+            try:
+                payload = json.loads(template_path.read_text(encoding="utf-8"))
+                template = PrintTemplate(
+                    name=str(payload.get("name") or "面试签到表模板"),
+                    doc_type=str(payload.get("doc_type") or DOC_TYPE_SEAT),
+                    main_html=str(payload.get("main_html") or template.main_html),
+                    item_html=str(payload.get("item_html") or template.item_html),
+                    settings=dict(payload.get("settings") or template.settings),
+                    builtin=False,
+                )
+            except Exception as exc:
+                self.log_fn(f"读取本地模板失败，已使用默认模板：{exc}")
+        self._set_current_template(template)
+        self._apply_selected_template()
+        if template_path and not template_path.exists():
+            self._write_local_template(template)
+
+    def _write_local_template(self, template: PrintTemplate) -> Path:
+        template_path = self._local_template_path()
+        if template_path is None:
+            raise ValueError("请先选择 Excel 数据文件。")
+        payload = {
+            "name": template.name,
+            "doc_type": template.doc_type,
+            "main_html": template.main_html,
+            "item_html": template.item_html,
+            "settings": template.settings,
+        }
+        template_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return template_path
 
     def _fill_header_combos(self) -> None:
         combos = [
@@ -647,10 +706,7 @@ class ExamPrintPage(QWidget):
     def save_current_template(self) -> None:
         template = self.current_template()
         doc_type = str(self.doc_type_combo.currentData())
-        name = self.template_name_edit.text().strip() or (template.name if template and not template.builtin else "")
-        if not name:
-            QMessageBox.critical(self, "缺少名称", "请输入模板名称后再保存。")
-            return
+        name = "面试签到表模板"
         saved = PrintTemplate(
             name=name,
             doc_type=doc_type,
@@ -667,13 +723,14 @@ class ExamPrintPage(QWidget):
             },
             builtin=False,
         )
-        save_template(saved)
-        self.templates = load_templates()
-        self._refresh_template_combo()
-        index = self.template_combo.findText(name)
-        if index >= 0:
-            self.template_combo.setCurrentIndex(index)
-        self.log_fn(f"已保存考场打印模板：{name}")
+        try:
+            template_path = self._write_local_template(saved)
+        except Exception as exc:
+            QMessageBox.critical(self, "保存模板失败", str(exc))
+            return
+        self._set_current_template(saved)
+        self.log_fn(f"已保存面试签到表模板：{template_path}")
+        QMessageBox.information(self, "保存模板", f"已保存到：{template_path}")
 
     def render_preview(self) -> None:
         if not self.records:
