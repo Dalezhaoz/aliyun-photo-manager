@@ -6,6 +6,7 @@ import json
 import math
 import re
 import sys
+from io import BytesIO
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -77,9 +78,23 @@ def _to_file_url(path: Path) -> str:
 
 
 def _to_image_data_uri(path: Path) -> str:
-    mime_type = IMAGE_MIME_TYPES.get(path.suffix.lower())
-    if not mime_type:
-        return _to_file_url(path)
+    try:
+        from PIL import Image, ImageFile
+
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+        with Image.open(path) as image:
+            if image.mode not in {"RGB", "RGBA"}:
+                image = image.convert("RGB")
+            image.thumbnail((360, 480))
+            output = BytesIO()
+            image.save(output, format="PNG")
+        encoded = base64.b64encode(output.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except Exception:
+        mime_type = IMAGE_MIME_TYPES.get(path.suffix.lower())
+        if not mime_type:
+            return _to_file_url(path)
     try:
         encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     except OSError:
