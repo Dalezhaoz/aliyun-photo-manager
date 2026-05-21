@@ -295,10 +295,26 @@ class ExamPrintPage(QWidget):
         self.job_column_combo = AppComboBox()
         self.photo_match_column_combo = AppComboBox()
         self.room_value_combo = AppComboBox()
+        self.sort_column_combo = AppComboBox()
+        self.start_corner_combo = AppComboBox()
+        self.start_corner_combo.addItem("左上角", "top_left")
+        self.start_corner_combo.addItem("右上角", "top_right")
+        self.start_corner_combo.addItem("左下角", "bottom_left")
+        self.start_corner_combo.addItem("右下角", "bottom_right")
+        self.fill_direction_combo = AppComboBox()
+        self.fill_direction_combo.addItem("从左到右、从上到下", "row")
+        self.fill_direction_combo.addItem("从上到下、从左到右", "column")
+        self.snake_combo = AppComboBox()
+        self.snake_combo.addItem("普通排序", "0")
+        self.snake_combo.addItem("S 型排序", "1")
         fields = [
             ("打印类型", self.doc_type_combo),
             ("模板", self.template_combo),
             ("模板名称", self.template_name_edit),
+            ("排序列", self.sort_column_combo),
+            ("第一个考生", self.start_corner_combo),
+            ("填充方向", self.fill_direction_combo),
+            ("排序方式", self.snake_combo),
         ]
         for row, (label, field) in enumerate(fields):
             form_layout_row = FormRow(label, field)
@@ -514,6 +530,10 @@ class ExamPrintPage(QWidget):
         self.item_editor.setHtml(template.item_html)
         self.columns_spin.setValue(int(template.settings.get("columns", 4)))
         self.items_per_page_spin.setValue(int(template.settings.get("items_per_page", 10)))
+        self._set_combo_data(self.start_corner_combo, str(template.settings.get("start_corner", "top_left")))
+        self._set_combo_data(self.fill_direction_combo, str(template.settings.get("fill_direction", "row")))
+        self._set_combo_data(self.snake_combo, str(template.settings.get("snake", "0")))
+        self._set_combo_data(self.sort_column_combo, str(template.settings.get("sort_column", "")))
         is_signin = str(template.settings.get("layout", "")) == "signin"
         self.item_title.setText("单个考生表样")
         self.item_editor.setEnabled(not is_signin)
@@ -530,6 +550,11 @@ class ExamPrintPage(QWidget):
     def current_template(self) -> PrintTemplate | None:
         data = self.template_combo.currentData()
         return data if isinstance(data, PrintTemplate) else None
+
+    def _set_combo_data(self, combo: AppComboBox, value: str) -> None:
+        index = combo.findData(value)
+        if index >= 0:
+            combo.setCurrentIndex(index)
 
     def load_headers(self) -> None:
         excel_path = Path(self.excel_edit.text().strip())
@@ -557,6 +582,7 @@ class ExamPrintPage(QWidget):
             self.unit_column_combo,
             self.job_column_combo,
             self.photo_match_column_combo,
+            self.sort_column_combo,
         ]
         for combo in combos:
             combo.clear()
@@ -572,6 +598,12 @@ class ExamPrintPage(QWidget):
         self._select_guess(self.unit_column_combo, ["报考单位", "单位"])
         self._select_guess(self.job_column_combo, ["报考岗位", "岗位"])
         self._select_guess(self.photo_match_column_combo, ["身份证号", "证件号码", "身份证", "sfzh", "考号", "准考证号"])
+        template = self.current_template()
+        saved_sort_column = str((template.settings if template else {}).get("sort_column", ""))
+        if saved_sort_column:
+            self._set_combo_data(self.sort_column_combo, saved_sort_column)
+        else:
+            self._select_guess(self.sort_column_combo, ["考号", "序号", "座号", "身份证号"])
         self._refresh_room_values()
 
     def _select_guess(self, combo: AppComboBox, candidates: list[str]) -> None:
@@ -628,6 +660,10 @@ class ExamPrintPage(QWidget):
                 "columns": self.columns_spin.value(),
                 "items_per_page": self.items_per_page_spin.value(),
                 "layout": str(template.settings.get("layout", "")) if template else "",
+                "sort_column": str(self.sort_column_combo.currentData() or ""),
+                "start_corner": str(self.start_corner_combo.currentData() or "top_left"),
+                "fill_direction": str(self.fill_direction_combo.currentData() or "row"),
+                "snake": str(self.snake_combo.currentData() or "0"),
             },
             builtin=False,
         )
@@ -716,6 +752,10 @@ class ExamPrintPage(QWidget):
                     title=self._pdf_title(),
                     item_html=self.item_editor.toHtml(),
                     columns=self.columns_spin.value(),
+                    sort_column=str(self.sort_column_combo.currentData() or ""),
+                    start_corner=str(self.start_corner_combo.currentData() or "top_left"),
+                    fill_direction=str(self.fill_direction_combo.currentData() or "row"),
+                    snake=str(self.snake_combo.currentData() or "0") == "1",
                 )
             else:
                 printer = QPrinter(QPrinter.HighResolution)

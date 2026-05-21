@@ -410,6 +410,10 @@ def export_interview_signin_pdf(
     title: str,
     item_html: str = "",
     columns: int = 5,
+    sort_column: str = "",
+    start_corner: str = "top_left",
+    fill_direction: str = "row",
+    snake: bool = False,
 ) -> None:
     from PIL import Image, ImageFile, ImageOps
     from reportlab.lib import colors
@@ -425,7 +429,7 @@ def export_interview_signin_pdf(
     except Exception:
         pass
     font_name = "STSong-Light"
-    room_records = _filtered_sorted_records(records, config, room_value)
+    room_records = _filtered_sorted_records(records, config, room_value, sort_column=sort_column)
     photo_map = _photo_file_map(config.photo_dir)
 
     page_width, page_height = landscape(A4)
@@ -447,9 +451,16 @@ def export_interview_signin_pdf(
     pdf.setTitle(title)
     for page_start in range(0, len(room_records), safe_columns * rows_per_page):
         page_records = room_records[page_start : page_start + safe_columns * rows_per_page]
+        positions = _layout_positions(
+            len(page_records),
+            safe_columns,
+            rows_per_page,
+            start_corner=start_corner,
+            fill_direction=fill_direction,
+            snake=snake,
+        )
         for index, record in enumerate(page_records):
-            row = index // safe_columns
-            column = index % safe_columns
+            row, column = positions[index]
             x = margin_x + column * card_width
             y = page_height - margin_top - (row + 1) * card_height
             pdf.setStrokeColor(colors.HexColor("#333333"))
@@ -510,14 +521,69 @@ def _unique_join(values: Iterable[str]) -> str:
     return "、".join(seen)
 
 
-def _filtered_sorted_records(records: list[dict[str, str]], config: PrintDataConfig, room_value: str) -> list[dict[str, str]]:
+def _filtered_sorted_records(
+    records: list[dict[str, str]],
+    config: PrintDataConfig,
+    room_value: str,
+    *,
+    sort_column: str = "",
+) -> list[dict[str, str]]:
     if config.room_column:
         room_records = [record for record in records if _coerce_text(record.get(config.room_column, "")) == room_value]
     else:
         room_records = list(records)
     if not room_records:
         raise ValueError("没有匹配到任何考生。")
+    if sort_column:
+        return sorted(room_records, key=lambda item: _natural_sort_key(item.get(sort_column, "")))
     return sorted(room_records, key=lambda item: _sort_key(item, config))
+
+
+def _natural_sort_key(value: object) -> tuple[object, ...]:
+    text = _coerce_text(value)
+    parts = re.split(r"(\d+)", text)
+    key: list[object] = []
+    for part in parts:
+        if part.isdigit():
+            key.append((0, int(part)))
+        else:
+            key.append((1, part))
+    return tuple(key)
+
+
+def _layout_positions(
+    count: int,
+    columns: int,
+    rows: int,
+    *,
+    start_corner: str,
+    fill_direction: str,
+    snake: bool,
+) -> list[tuple[int, int]]:
+    top_first = not start_corner.startswith("bottom")
+    left_first = not start_corner.endswith("right")
+    row_order = list(range(rows)) if top_first else list(reversed(range(rows)))
+    column_order = list(range(columns)) if left_first else list(reversed(range(columns)))
+    positions: list[tuple[int, int]] = []
+    if fill_direction == "column":
+        for column_index, column in enumerate(column_order):
+            current_rows = row_order
+            if snake and column_index % 2 == 1:
+                current_rows = list(reversed(row_order))
+            for row in current_rows:
+                positions.append((row, column))
+                if len(positions) >= count:
+                    return positions
+    else:
+        for row_index, row in enumerate(row_order):
+            current_columns = column_order
+            if snake and row_index % 2 == 1:
+                current_columns = list(reversed(column_order))
+            for column in current_columns:
+                positions.append((row, column))
+                if len(positions) >= count:
+                    return positions
+    return positions
 
 
 def _photo_file_map(photo_dir: Path | None) -> dict[str, Path]:
