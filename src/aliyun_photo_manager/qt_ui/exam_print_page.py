@@ -35,6 +35,7 @@ from ..exam_printing import (
     PrintDataConfig,
     PrintTemplate,
     available_placeholders,
+    export_interview_signin_pdf,
     export_rendered_html,
     load_excel_headers,
     load_excel_records,
@@ -49,6 +50,7 @@ from .widgets import FormRow
 
 
 DATA_IMAGE_PATTERN = re.compile(r'src="data:image/[^;]+;base64,([^"]+)"')
+IMAGE_TAG_PATTERN = re.compile(r"<img\\b[^>]*>", re.IGNORECASE)
 PHOTO_DATA_URI_PATTERN = re.compile(r"^data:image/[^;]+;base64,(.+)$")
 SUPPORTED_PHOTO_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
@@ -739,10 +741,26 @@ class ExamPrintPage(QWidget):
         if output_path.suffix.lower() != ".pdf":
             output_path = output_path.with_suffix(".pdf")
         try:
-            printer = QPrinter(QPrinter.HighResolution)
-            printer.setOutputFormat(QPrinter.PdfFormat)
-            printer.setOutputFileName(str(output_path))
-            self._print_preview_document(printer)
+            config = self._build_config()
+            room_value = str(self.room_value_combo.currentData() or "")
+            template = self.current_template()
+            if (
+                str(self.doc_type_combo.currentData()) == DOC_TYPE_SEAT
+                and str((template.settings if template else {}).get("layout", "")) == "candidate_grid"
+            ):
+                export_interview_signin_pdf(
+                    output_path,
+                    self.records,
+                    config,
+                    room_value,
+                    title=self._pdf_title(),
+                    columns=self.columns_spin.value(),
+                )
+            else:
+                printer = QPrinter(QPrinter.HighResolution)
+                printer.setOutputFormat(QPrinter.PdfFormat)
+                printer.setOutputFileName(str(output_path))
+                self._print_preview_document(printer)
             if not output_path.exists() or output_path.stat().st_size == 0:
                 raise OSError("PDF 文件没有成功生成。")
         except Exception as exc:
@@ -765,7 +783,14 @@ class ExamPrintPage(QWidget):
 
     def _set_preview_html(self, html_text: str) -> None:
         self.preview_edit.clear()
-        self.preview_edit.set_image_html(html_text)
+        preview_html = IMAGE_TAG_PATTERN.sub(
+            '<span style="display:inline-block;width:40px;height:58px;border:1px solid #999;text-align:center;color:#777;">照片</span>',
+            html_text,
+        )
+        self.preview_edit.setHtml(preview_html)
+
+    def _pdf_title(self) -> str:
+        return "2026年度周村区（文昌湖区）事业单位公开招聘综合类岗位人员面试签到表"
 
     def _print_preview_document(self, printer: QPrinter) -> None:
         print_method = getattr(self.preview_edit, "print_", None) or getattr(self.preview_edit, "print", None)

@@ -401,6 +401,104 @@ def export_rendered_html(output_path: Path, rendered_html: str) -> None:
     output_path.write_text(rendered_html, encoding="utf-8")
 
 
+def export_interview_signin_pdf(
+    output_path: Path,
+    records: list[dict[str, str]],
+    config: PrintDataConfig,
+    room_value: str,
+    *,
+    title: str,
+    columns: int = 5,
+) -> None:
+    from PIL import Image, ImageFile, ImageOps
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfgen import canvas
+
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+    except Exception:
+        pass
+    font_name = "STSong-Light"
+    room_records = _filtered_sorted_records(records, config, room_value)
+    photo_map = _photo_file_map(config.photo_dir)
+
+    page_width, page_height = landscape(A4)
+    margin_x = 14
+    margin_top = 14
+    footer_height = 28
+    footer_gap = 8
+    safe_columns = max(1, columns)
+    rows_per_page = 6
+    card_width = (page_width - margin_x * 2) / safe_columns
+    card_height = (page_height - margin_top - 14 - footer_height - footer_gap) / rows_per_page
+    photo_width = 39
+    photo_height = min(60, card_height - 10)
+    padding = 4
+    font_size = 6.9
+    leading = 7.45
+
+    pdf = canvas.Canvas(str(output_path), pagesize=landscape(A4))
+    pdf.setTitle(title)
+    for page_start in range(0, len(room_records), safe_columns * rows_per_page):
+        page_records = room_records[page_start : page_start + safe_columns * rows_per_page]
+        for index, record in enumerate(page_records):
+            row = index // safe_columns
+            column = index % safe_columns
+            x = margin_x + column * card_width
+            y = page_height - margin_top - (row + 1) * card_height
+            pdf.setStrokeColor(colors.HexColor("#333333"))
+            pdf.setLineWidth(0.65)
+            pdf.rect(x, y, card_width, card_height, stroke=1, fill=0)
+
+            image_x = x + padding
+            image_y = y + card_height - photo_height - padding
+            photo_path = _find_photo_file(record, config, photo_map)
+            if photo_path is not None:
+                _draw_photo(pdf, photo_path, image_x, image_y, photo_width, photo_height)
+            else:
+                pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
+                pdf.rect(image_x, image_y, photo_width, photo_height, stroke=1, fill=0)
+
+            text_x = image_x + photo_width + 4
+            text_y = y + card_height - 8
+            text_width = card_width - (text_x - x) - padding
+            signature_y = y + 5.8
+            pdf.setFillColor(colors.black)
+            pdf.setFont(font_name, font_size)
+            lines = [
+                f"姓名:{_coerce_text(record.get('姓名', ''))}",
+                "身份证号:",
+                _coerce_text(record.get('身份证号', "")),
+            ]
+            lines.extend(_wrap_pdf_text(f"报考单位:{_record_unit(record, config)}", text_width, font_name, font_size))
+            lines.extend(_wrap_pdf_text(f"报考职位:{_record_job(record, config)}", text_width, font_name, font_size))
+            for line in lines:
+                if text_y - leading < signature_y + 8:
+                    break
+                pdf.drawString(text_x, text_y, line)
+                text_y -= leading
+
+            pdf.setFont(font_name, 7.5)
+            pdf.drawString(text_x, signature_y, "考生签字:")
+            pdf.setStrokeColor(colors.HexColor("#333333"))
+            pdf.setLineWidth(0.45)
+            pdf.line(text_x + 32, signature_y - 1, x + card_width - padding, signature_y - 1)
+
+        footer_y = 14
+        pdf.setFillColor(colors.HexColor("#f5dada"))
+        pdf.roundRect(margin_x + 4, footer_y, page_width - (margin_x + 4) * 2, footer_height, 5, stroke=0, fill=1)
+        pdf.setFillColor(colors.HexColor("#c62828"))
+        pdf.setFont(font_name, 12.5)
+        pdf.drawCentredString(page_width / 2, footer_y + 8, title)
+        pdf.showPage()
+    pdf.save()
+
+
 def _join_parts(left: str, right: str, separator: str = " ") -> str:
     parts = [part for part in (left.strip(), right.strip()) if part]
     return separator.join(parts)
@@ -413,6 +511,78 @@ def _unique_join(values: Iterable[str]) -> str:
         if text and text not in seen:
             seen.append(text)
     return "、".join(seen)
+
+
+def _filtered_sorted_records(records: list[dict[str, str]], config: PrintDataConfig, room_value: str) -> list[dict[str, str]]:
+    if config.room_column:
+        room_records = [record for record in records if _coerce_text(record.get(config.room_column, "")) == room_value]
+    else:
+        room_records = list(records)
+    if not room_records:
+        raise ValueError("没有匹配到任何考生。")
+    return sorted(room_records, key=lambda item: _sort_key(item, config))
+
+
+def _photo_file_map(photo_dir: Path | None) -> dict[str, Path]:
+    if photo_dir is None or not photo_dir.exists():
+        return {}
+    photo_map: dict[str, Path] = {}
+    for file_path in sorted(photo_dir.rglob("*")):
+        if file_path.name.startswith("._"):
+            continue
+        if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_IMAGE_SUFFIXES:
+            photo_map[_normalize_match_text(file_path.stem)] = file_path
+    return photo_map
+
+
+def _find_photo_file(record: dict[str, str], config: PrintDataConfig, photo_map: dict[str, Path]) -> Path | None:
+    if not config.photo_match_column:
+        return None
+    match_value = _normalize_match_text(record.get(config.photo_match_column, ""))
+    if not match_value:
+        return None
+    if match_value in photo_map:
+        return photo_map[match_value]
+    for stem, file_path in photo_map.items():
+        if stem.startswith(match_value) or match_value in stem:
+            return file_path
+    return None
+
+
+def _draw_photo(pdf, photo_path: Path, x: float, y: float, width: float, height: float) -> None:
+    from PIL import Image, ImageOps
+    from reportlab.lib.utils import ImageReader
+
+    with Image.open(photo_path) as image:
+        image = ImageOps.exif_transpose(image)
+        image = ImageOps.fit(image.convert("RGB"), (int(width * 3), int(height * 3)), method=Image.Resampling.LANCZOS)
+        pdf.drawImage(ImageReader(image), x, y, width=width, height=height, preserveAspectRatio=False, mask=None)
+
+
+def _wrap_pdf_text(text: str, max_width: float, font_name: str, font_size: float) -> list[str]:
+    from reportlab.pdfbase import pdfmetrics
+
+    lines: list[str] = []
+    current = ""
+    for char in _coerce_text(text):
+        candidate = current + char
+        if pdfmetrics.stringWidth(candidate, font_name, font_size) <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = char
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def _record_unit(record: dict[str, str], config: PrintDataConfig) -> str:
+    return _coerce_text(record.get("报考单位") or record.get(config.unit_column, "") or record.get("单位", ""))
+
+
+def _record_job(record: dict[str, str], config: PrintDataConfig) -> str:
+    return _coerce_text(record.get("报考岗位") or record.get(config.job_column, "") or record.get("岗位", ""))
 
 
 def _match_photo(record: dict[str, str], config: PrintDataConfig) -> str:
