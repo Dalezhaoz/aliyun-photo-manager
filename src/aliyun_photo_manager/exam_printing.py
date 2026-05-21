@@ -408,6 +408,7 @@ def export_interview_signin_pdf(
     room_value: str,
     *,
     title: str,
+    item_html: str = "",
     columns: int = 5,
 ) -> None:
     from PIL import Image, ImageFile, ImageOps
@@ -467,27 +468,23 @@ def export_interview_signin_pdf(
             text_x = image_x + photo_width + 4
             text_y = y + card_height - 8
             text_width = card_width - (text_x - x) - padding
-            signature_y = y + 5.8
+            bottom_limit = y + 4.5
             pdf.setFillColor(colors.black)
             pdf.setFont(font_name, font_size)
-            lines = [
-                f"姓名:{_coerce_text(record.get('姓名', ''))}",
-                "身份证号:",
-                _coerce_text(record.get('身份证号', "")),
-            ]
-            lines.extend(_wrap_pdf_text(f"报考单位:{_record_unit(record, config)}", text_width, font_name, font_size))
-            lines.extend(_wrap_pdf_text(f"报考职位:{_record_job(record, config)}", text_width, font_name, font_size))
+            lines = _candidate_pdf_lines(record, config, item_html, text_width, font_name, font_size)
             for line in lines:
-                if text_y - leading < signature_y + 8:
+                if text_y - leading < bottom_limit:
                     break
-                pdf.drawString(text_x, text_y, line)
+                if "考生签字" in line:
+                    pdf.drawString(text_x, text_y, line)
+                    pdf.setStrokeColor(colors.HexColor("#333333"))
+                    pdf.setLineWidth(0.45)
+                    line_start = text_x + pdfmetrics.stringWidth(line, font_name, font_size) + 4
+                    if line_start < x + card_width - padding:
+                        pdf.line(line_start, text_y - 1, x + card_width - padding, text_y - 1)
+                else:
+                    pdf.drawString(text_x, text_y, line)
                 text_y -= leading
-
-            pdf.setFont(font_name, 7.5)
-            pdf.drawString(text_x, signature_y, "考生签字:")
-            pdf.setStrokeColor(colors.HexColor("#333333"))
-            pdf.setLineWidth(0.45)
-            pdf.line(text_x + 32, signature_y - 1, x + card_width - padding, signature_y - 1)
 
         footer_y = 14
         pdf.setFillColor(colors.HexColor("#f5dada"))
@@ -575,6 +572,42 @@ def _wrap_pdf_text(text: str, max_width: float, font_name: str, font_size: float
     if current:
         lines.append(current)
     return lines or [""]
+
+
+def _candidate_pdf_lines(
+    record: dict[str, str],
+    config: PrintDataConfig,
+    item_html: str,
+    max_width: float,
+    font_name: str,
+    font_size: float,
+) -> list[str]:
+    if item_html.strip():
+        context = _merge_context(record, {})
+        context["报考单位"] = _escape(_record_unit(record, config))
+        context["报考岗位"] = _escape(_record_job(record, config))
+        rendered = render_html_template(item_html, context)
+        rendered = re.sub(r"<img\b[^>]*>", "", rendered, flags=re.IGNORECASE)
+        rendered = re.sub(r"(?i)<br\s*/?>", "\n", rendered)
+        rendered = re.sub(r"(?i)</(div|p|tr|li|td)>", "\n", rendered)
+        rendered = re.sub(r"<[^>]+>", "", rendered)
+        raw_lines = [html.unescape(line).strip() for line in rendered.splitlines()]
+        raw_lines = [line for line in raw_lines if line]
+    else:
+        raw_lines = [
+            f"姓名:{_coerce_text(record.get('姓名', ''))}",
+            "身份证号:",
+            _coerce_text(record.get("身份证号", "")),
+            f"报考单位:{_record_unit(record, config)}",
+            f"报考职位:{_record_job(record, config)}",
+        ]
+    lines: list[str] = []
+    for raw_line in raw_lines:
+        if "考生签字" in raw_line:
+            lines.append(raw_line)
+        else:
+            lines.extend(_wrap_pdf_text(raw_line, max_width, font_name, font_size))
+    return lines
 
 
 def _record_unit(record: dict[str, str], config: PrintDataConfig) -> str:

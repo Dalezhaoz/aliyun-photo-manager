@@ -266,13 +266,15 @@ class ExamPrintPage(QWidget):
         file_row.addWidget(self.excel_edit, 1)
         file_row.addWidget(excel_button)
         data_layout.addLayout(file_row)
+        self.record_count_label = QLabel("未加载数据")
+        self.record_count_label.setProperty("heroText", True)
+        data_layout.addWidget(self.record_count_label)
 
-        data_split = QSplitter()
         mapping_card = QWidget()
         mapping_layout = QVBoxLayout(mapping_card)
         mapping_layout.setContentsMargins(0, 0, 0, 0)
         mapping_layout.setSpacing(8)
-        mapping_title = QLabel("字段映射（将 Excel 列映射到系统字段）")
+        mapping_title = QLabel("打印设置")
         mapping_title.setProperty("formLabel", True)
         mapping_layout.addWidget(mapping_title)
 
@@ -297,15 +299,6 @@ class ExamPrintPage(QWidget):
             ("打印类型", self.doc_type_combo),
             ("模板", self.template_combo),
             ("模板名称", self.template_name_edit),
-            ("考场/分组", self.room_column_combo),
-            ("序号/座号", self.seat_column_combo),
-            ("考号", self.exam_no_column_combo),
-            ("考点", self.site_column_combo),
-            ("科目", self.subject_column_combo),
-            ("单位", self.unit_column_combo),
-            ("岗位", self.job_column_combo),
-            ("照片匹配", self.photo_match_column_combo),
-            ("预览范围", self.room_value_combo),
         ]
         for row, (label, field) in enumerate(fields):
             form_layout_row = FormRow(label, field)
@@ -332,26 +325,7 @@ class ExamPrintPage(QWidget):
         settings_row.addWidget(self.columns_spin)
         settings_row.addStretch(1)
         mapping_layout.addLayout(settings_row)
-        data_split.addWidget(mapping_card)
-
-        preview_card = QWidget()
-        preview_layout = QVBoxLayout(preview_card)
-        preview_layout.setContentsMargins(0, 0, 0, 0)
-        preview_layout.setSpacing(8)
-        preview_title = QLabel("数据预览（前 10 条）")
-        preview_title.setProperty("formLabel", True)
-        preview_layout.addWidget(preview_title)
-        self.data_preview_table = QTableWidget(0, 0)
-        self.data_preview_table.setMinimumHeight(220)
-        self.data_preview_table.setAlternatingRowColors(True)
-        preview_layout.addWidget(self.data_preview_table)
-        self.record_count_label = QLabel("未加载数据")
-        self.record_count_label.setProperty("heroText", True)
-        preview_layout.addWidget(self.record_count_label)
-        data_split.addWidget(preview_card)
-        data_split.setStretchFactor(0, 3)
-        data_split.setStretchFactor(1, 5)
-        data_layout.addWidget(data_split)
+        data_layout.addWidget(mapping_card)
         center_layout.addWidget(data_card)
 
         designer_card = Card()
@@ -506,20 +480,6 @@ class ExamPrintPage(QWidget):
         self.preview_edit.clear()
 
     def _refresh_data_preview(self) -> None:
-        visible_headers = self.headers[:8]
-        visible_records = self.records[:10]
-        self.data_preview_table.clear()
-        self.data_preview_table.setRowCount(len(visible_records))
-        self.data_preview_table.setColumnCount(len(visible_headers))
-        self.data_preview_table.setHorizontalHeaderLabels(visible_headers)
-        for row_index, record in enumerate(visible_records):
-            for column_index, header in enumerate(visible_headers):
-                self.data_preview_table.setItem(
-                    row_index,
-                    column_index,
-                    QTableWidgetItem(str(record.get(header, ""))),
-                )
-        self.data_preview_table.resizeColumnsToContents()
         self.record_count_label.setText(f"共 {len(self.records)} 人" if self.records else "未加载数据")
 
     def choose_file(self, line_edit: QLineEdit) -> None:
@@ -754,6 +714,7 @@ class ExamPrintPage(QWidget):
                     config,
                     room_value,
                     title=self._pdf_title(),
+                    item_html=self.item_editor.toHtml(),
                     columns=self.columns_spin.value(),
                 )
             else:
