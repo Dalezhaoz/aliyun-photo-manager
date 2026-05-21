@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QByteArray, Qt, QUrl
 from PySide6.QtGui import QFont, QImage, QTextCursor, QTextDocument
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
@@ -121,7 +121,7 @@ class HtmlModeEditor(QWidget):
             self._syncing = False
 
 
-class PreviewTextEdit(QTextEdit):
+class PreviewDocument(QTextDocument):
     def __init__(self) -> None:
         super().__init__()
         self._images: dict[str, QImage] = {}
@@ -134,7 +134,7 @@ class PreviewTextEdit(QTextEdit):
                 image_data = base64.b64decode(match.group(1))
             except Exception:
                 return match.group(0)
-            image = QImage.fromData(image_data)
+            image = QImage.fromData(QByteArray(image_data))
             if image.isNull():
                 return match.group(0)
             image_id = f"aliyun-photo-preview://image/{uuid.uuid4().hex}"
@@ -149,6 +149,16 @@ class PreviewTextEdit(QTextEdit):
             if key in self._images:
                 return self._images[key]
         return super().loadResource(resource_type, name)
+
+
+class PreviewTextEdit(QTextEdit):
+    def __init__(self) -> None:
+        super().__init__()
+        self._preview_document = PreviewDocument()
+        self.setDocument(self._preview_document)
+
+    def set_image_html(self, html_text: str) -> None:
+        self._preview_document.set_image_html(html_text)
 
 
 class ExamPrintPage(QWidget):
