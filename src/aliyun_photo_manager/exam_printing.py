@@ -397,6 +397,16 @@ def render_html_template(template_html: str, context: dict[str, str]) -> str:
     return PLACEHOLDER_PATTERN.sub(replacer, template_html)
 
 
+def _html_body_fragment(template_html: str) -> str:
+    html_text = re.sub(r"(?is)<style\b[^>]*>.*?</style>", "", template_html)
+    html_text = re.sub(r"(?is)<script\b[^>]*>.*?</script>", "", html_text)
+    body_match = re.search(r"(?is)<body\b[^>]*>(.*?)</body>", html_text)
+    if body_match:
+        html_text = body_match.group(1)
+    html_text = re.sub(r"(?is)<head\b[^>]*>.*?</head>", "", html_text)
+    return html_text.strip()
+
+
 def export_rendered_html(output_path: Path, rendered_html: str) -> None:
     output_path.write_text(rendered_html, encoding="utf-8")
 
@@ -711,7 +721,7 @@ def _candidate_pdf_lines(
         context = _merge_context(record, {})
         context["报考单位"] = _escape(_record_unit(record, config))
         context["报考岗位"] = _escape(_record_job(record, config))
-        rendered = render_html_template(item_html, context)
+        rendered = render_html_template(_html_body_fragment(item_html), context)
         rendered = re.sub(r"<img\b[^>]*>", "", rendered, flags=re.IGNORECASE)
         rendered = re.sub(r"(?i)<br\s*/?>", "\n", rendered)
         rendered = re.sub(r"(?i)</(div|p|tr|li|td)>", "\n", rendered)
@@ -786,11 +796,12 @@ def _merge_context(record: dict[str, str], room_context: dict[str, str]) -> dict
 
 def _build_seat_table(records: list[dict[str, str]], item_html: str, room_context: dict[str, str], columns: int) -> str:
     safe_columns = max(1, columns)
+    item_fragment = _html_body_fragment(item_html)
     rows: list[str] = []
     cells: list[str] = []
     for record in records:
         merged_context = _merge_context(record, room_context)
-        cells.append(f"<td>{render_html_template(item_html, merged_context)}</td>")
+        cells.append(f"<td>{render_html_template(item_fragment, merged_context)}</td>")
         if len(cells) == safe_columns:
             rows.append("<tr>" + "".join(cells) + "</tr>")
             cells = []
@@ -803,13 +814,14 @@ def _build_seat_table(records: list[dict[str, str]], item_html: str, room_contex
 
 def _build_candidate_grid(records: list[dict[str, str]], item_html: str, room_context: dict[str, str], columns: int) -> str:
     safe_columns = max(1, columns)
+    item_fragment = _html_body_fragment(item_html)
     rows: list[str] = []
     cells: list[str] = []
     for record in records:
         merged_context = _merge_context(record, room_context)
         cells.append(
             '<td style="border:1px solid #444;padding:0;height:94px;vertical-align:top;">'
-            f"{render_html_template(item_html, merged_context)}"
+            f"{render_html_template(item_fragment, merged_context)}"
             "</td>"
         )
         if len(cells) == safe_columns:
@@ -866,6 +878,7 @@ def _build_desk_pages(
 ) -> str:
     safe_columns = max(1, columns)
     safe_items = max(1, items_per_page)
+    item_fragment = _html_body_fragment(item_html)
     pages: list[str] = []
     for page_start in range(0, len(records), safe_items):
         chunk = records[page_start : page_start + safe_items]
@@ -873,7 +886,7 @@ def _build_desk_pages(
         cells: list[str] = []
         for record in chunk:
             merged_context = _merge_context(record, room_context)
-            cells.append(f"<td>{render_html_template(item_html, merged_context)}</td>")
+            cells.append(f"<td>{render_html_template(item_fragment, merged_context)}</td>")
             if len(cells) == safe_columns:
                 rows.append("<tr>" + "".join(cells) + "</tr>")
                 cells = []

@@ -477,7 +477,7 @@ class ExamPrintPage(QWidget):
             item_html=default_template.item_html,
             settings={
                 **default_template.settings,
-                "columns": self.columns_spin.value() if hasattr(self, "columns_spin") else 5,
+                "columns": 5,
                 "sort_column": "",
                 "file_group_column": "",
                 "page_group_column": "",
@@ -503,7 +503,7 @@ class ExamPrintPage(QWidget):
         self.template_name_edit.setText(template.name if not template.builtin else "")
         self.main_editor.setHtml(template.main_html)
         self.item_editor.setHtml(template.item_html)
-        self.columns_spin.setValue(int(template.settings.get("columns", 4)))
+        self.columns_spin.setValue(int(template.settings.get("columns", 5)))
         self.items_per_page_spin.setValue(int(template.settings.get("items_per_page", 10)))
         self._set_combo_data(self.start_corner_combo, str(template.settings.get("start_corner", "top_left")))
         self._set_combo_data(self.fill_direction_combo, str(template.settings.get("fill_direction", "row")))
