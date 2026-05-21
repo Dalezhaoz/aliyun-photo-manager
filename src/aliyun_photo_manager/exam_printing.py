@@ -411,6 +411,7 @@ def export_interview_signin_pdf(
     item_html: str = "",
     people_per_line: int = 5,
     sort_column: str = "",
+    page_group_column: str = "",
     start_corner: str = "top_left",
     fill_direction: str = "row",
     snake: bool = False,
@@ -454,61 +455,62 @@ def export_interview_signin_pdf(
 
     pdf = canvas.Canvas(str(output_path), pagesize=landscape(A4))
     pdf.setTitle(title)
-    for page_start in range(0, len(room_records), safe_columns * rows_per_page):
-        page_records = room_records[page_start : page_start + safe_columns * rows_per_page]
-        positions = _layout_positions(
-            len(page_records),
-            safe_columns,
-            rows_per_page,
-            start_corner=start_corner,
-            fill_direction=fill_direction,
-            snake=snake,
-        )
-        for index, record in enumerate(page_records):
-            row, column = positions[index]
-            x = margin_x + column * card_width
-            y = page_height - margin_top - (row + 1) * card_height
-            pdf.setStrokeColor(colors.HexColor("#333333"))
-            pdf.setLineWidth(0.65)
-            pdf.rect(x, y, card_width, card_height, stroke=1, fill=0)
+    for group_records in _page_groups(room_records, page_group_column):
+        for page_start in range(0, len(group_records), safe_columns * rows_per_page):
+            page_records = group_records[page_start : page_start + safe_columns * rows_per_page]
+            positions = _layout_positions(
+                len(page_records),
+                safe_columns,
+                rows_per_page,
+                start_corner=start_corner,
+                fill_direction=fill_direction,
+                snake=snake,
+            )
+            for index, record in enumerate(page_records):
+                row, column = positions[index]
+                x = margin_x + column * card_width
+                y = page_height - margin_top - (row + 1) * card_height
+                pdf.setStrokeColor(colors.HexColor("#333333"))
+                pdf.setLineWidth(0.65)
+                pdf.rect(x, y, card_width, card_height, stroke=1, fill=0)
 
-            image_x = x + padding
-            image_y = y + card_height - photo_height - padding
-            photo_path = _find_photo_file(record, config, photo_map)
-            if photo_path is not None:
-                _draw_photo(pdf, photo_path, image_x, image_y, photo_width, photo_height)
-            else:
-                pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
-                pdf.rect(image_x, image_y, photo_width, photo_height, stroke=1, fill=0)
-
-            text_x = image_x + photo_width + 4
-            text_y = y + card_height - 8
-            text_width = card_width - (text_x - x) - padding
-            bottom_limit = y + 4.5
-            pdf.setFillColor(colors.black)
-            pdf.setFont(font_name, font_size)
-            lines = _candidate_pdf_lines(record, config, item_html, text_width, font_name, font_size)
-            for line in lines:
-                if text_y - leading < bottom_limit:
-                    break
-                if "考生签字" in line:
-                    pdf.drawString(text_x, text_y, line)
-                    pdf.setStrokeColor(colors.HexColor("#333333"))
-                    pdf.setLineWidth(0.45)
-                    line_start = text_x + pdfmetrics.stringWidth(line, font_name, font_size) + 4
-                    if line_start < x + card_width - padding:
-                        pdf.line(line_start, text_y - 1, x + card_width - padding, text_y - 1)
+                image_x = x + padding
+                image_y = y + card_height - photo_height - padding
+                photo_path = _find_photo_file(record, config, photo_map)
+                if photo_path is not None:
+                    _draw_photo(pdf, photo_path, image_x, image_y, photo_width, photo_height)
                 else:
-                    pdf.drawString(text_x, text_y, line)
-                text_y -= leading
+                    pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
+                    pdf.rect(image_x, image_y, photo_width, photo_height, stroke=1, fill=0)
 
-        footer_y = 14
-        pdf.setFillColor(colors.HexColor("#f5dada"))
-        pdf.roundRect(margin_x + 4, footer_y, page_width - (margin_x + 4) * 2, footer_height, 5, stroke=0, fill=1)
-        pdf.setFillColor(colors.HexColor("#c62828"))
-        pdf.setFont(font_name, 12.5)
-        pdf.drawCentredString(page_width / 2, footer_y + 8, title)
-        pdf.showPage()
+                text_x = image_x + photo_width + 4
+                text_y = y + card_height - 8
+                text_width = card_width - (text_x - x) - padding
+                bottom_limit = y + 4.5
+                pdf.setFillColor(colors.black)
+                pdf.setFont(font_name, font_size)
+                lines = _candidate_pdf_lines(record, config, item_html, text_width, font_name, font_size)
+                for line in lines:
+                    if text_y - leading < bottom_limit:
+                        break
+                    if "考生签字" in line:
+                        pdf.drawString(text_x, text_y, line)
+                        pdf.setStrokeColor(colors.HexColor("#333333"))
+                        pdf.setLineWidth(0.45)
+                        line_start = text_x + pdfmetrics.stringWidth(line, font_name, font_size) + 4
+                        if line_start < x + card_width - padding:
+                            pdf.line(line_start, text_y - 1, x + card_width - padding, text_y - 1)
+                    else:
+                        pdf.drawString(text_x, text_y, line)
+                    text_y -= leading
+
+            footer_y = 14
+            pdf.setFillColor(colors.HexColor("#f5dada"))
+            pdf.roundRect(margin_x + 4, footer_y, page_width - (margin_x + 4) * 2, footer_height, 5, stroke=0, fill=1)
+            pdf.setFillColor(colors.HexColor("#c62828"))
+            pdf.setFont(font_name, 12.5)
+            pdf.drawCentredString(page_width / 2, footer_y + 8, title)
+            pdf.showPage()
     pdf.save()
 
 
@@ -554,6 +556,20 @@ def _natural_sort_key(value: object) -> tuple[object, ...]:
         else:
             key.append((1, part))
     return tuple(key)
+
+
+def _page_groups(records: list[dict[str, str]], page_group_column: str) -> list[list[dict[str, str]]]:
+    if not page_group_column:
+        return [records]
+    groups: list[list[dict[str, str]]] = []
+    group_index: dict[str, list[dict[str, str]]] = {}
+    for record in records:
+        key = _coerce_text(record.get(page_group_column, ""))
+        if key not in group_index:
+            group_index[key] = []
+            groups.append(group_index[key])
+        group_index[key].append(record)
+    return groups
 
 
 def _layout_positions(
