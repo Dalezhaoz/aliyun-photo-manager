@@ -311,6 +311,21 @@ class ExamPrintPage(QWidget):
         self.columns_label = QLabel("每行人数")
         settings_row.addWidget(self.columns_label)
         settings_row.addWidget(self.columns_spin)
+        self.photo_width_spin = QSpinBox()
+        self.photo_width_spin.setRange(20, 90)
+        self.photo_width_spin.setValue(52)
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(4, 16)
+        self.font_size_spin.setValue(7)
+        self.line_spacing_spin = QSpinBox()
+        self.line_spacing_spin.setRange(5, 24)
+        self.line_spacing_spin.setValue(8)
+        settings_row.addWidget(QLabel("照片宽度"))
+        settings_row.addWidget(self.photo_width_spin)
+        settings_row.addWidget(QLabel("字体"))
+        settings_row.addWidget(self.font_size_spin)
+        settings_row.addWidget(QLabel("行距"))
+        settings_row.addWidget(self.line_spacing_spin)
         settings_row.addStretch(1)
         mapping_layout.addLayout(settings_row)
         data_layout.addWidget(mapping_card)
@@ -484,6 +499,9 @@ class ExamPrintPage(QWidget):
                 "start_corner": "top_left",
                 "fill_direction": "row",
                 "snake": "0",
+                "photo_width": 52,
+                "font_size": 7,
+                "line_spacing": 8,
             },
             builtin=False,
         )
@@ -505,6 +523,9 @@ class ExamPrintPage(QWidget):
         self.item_editor.setHtml(template.item_html)
         self.columns_spin.setValue(int(template.settings.get("columns", 5)))
         self.items_per_page_spin.setValue(int(template.settings.get("items_per_page", 10)))
+        self.photo_width_spin.setValue(int(template.settings.get("photo_width", 52)))
+        self.font_size_spin.setValue(int(template.settings.get("font_size", 7)))
+        self.line_spacing_spin.setValue(int(template.settings.get("line_spacing", 8)))
         self._set_combo_data(self.start_corner_combo, str(template.settings.get("start_corner", "top_left")))
         self._set_combo_data(self.fill_direction_combo, str(template.settings.get("fill_direction", "row")))
         self._set_combo_data(self.snake_combo, str(template.settings.get("snake", "0")))
@@ -692,6 +713,9 @@ class ExamPrintPage(QWidget):
                 "start_corner": str(self.start_corner_combo.currentData() or "top_left"),
                 "fill_direction": str(self.fill_direction_combo.currentData() or "row"),
                 "snake": str(self.snake_combo.currentData() or "0"),
+                "photo_width": self.photo_width_spin.value(),
+                "font_size": self.font_size_spin.value(),
+                "line_spacing": self.line_spacing_spin.value(),
             },
             builtin=False,
         )
@@ -787,6 +811,9 @@ class ExamPrintPage(QWidget):
                     start_corner=str(self.start_corner_combo.currentData() or "top_left"),
                     fill_direction=str(self.fill_direction_combo.currentData() or "row"),
                     snake=str(self.snake_combo.currentData() or "0") == "1",
+                    photo_width=self.photo_width_spin.value(),
+                    font_size=self.font_size_spin.value(),
+                    line_spacing=self.line_spacing_spin.value(),
                 )
                 if not output_paths:
                     raise OSError("PDF 文件没有成功生成。")

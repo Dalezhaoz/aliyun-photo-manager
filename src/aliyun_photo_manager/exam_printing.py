@@ -426,6 +426,9 @@ def export_interview_signin_pdf(
     start_corner: str = "top_left",
     fill_direction: str = "row",
     snake: bool = False,
+    photo_width: float = 52,
+    font_size: float = 6.9,
+    line_spacing: float = 7.45,
 ) -> list[Path]:
     from PIL import Image, ImageFile, ImageOps
     from reportlab.lib import colors
@@ -463,6 +466,9 @@ def export_interview_signin_pdf(
                     start_corner=start_corner,
                     fill_direction=fill_direction,
                     snake=snake,
+                    photo_width=photo_width,
+                    font_size=font_size,
+                    line_spacing=line_spacing,
                 )
             )
         return output_paths
@@ -483,10 +489,10 @@ def export_interview_signin_pdf(
     card_width = (page_width - margin_x * 2) / safe_columns
     card_height = (page_height - margin_top - 14 - footer_height - footer_gap) / rows_per_page
     padding = 4
-    photo_width = min(52, card_width * 0.32)
+    safe_photo_width = min(max(20, photo_width), card_width * 0.55)
     photo_height = max(1, card_height - padding * 2)
-    font_size = 6.9
-    leading = 7.45
+    safe_font_size = max(4, font_size)
+    leading = max(safe_font_size + 0.4, line_spacing)
 
     pdf = canvas.Canvas(str(output_path), pagesize=landscape(A4))
     pdf.setTitle(title)
@@ -513,18 +519,18 @@ def export_interview_signin_pdf(
                 image_y = y + card_height - photo_height - padding
                 photo_path = _find_photo_file(record, config, photo_map)
                 if photo_path is not None:
-                    _draw_photo(pdf, photo_path, image_x, image_y, photo_width, photo_height)
+                    _draw_photo(pdf, photo_path, image_x, image_y, safe_photo_width, photo_height)
                 else:
                     pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
-                    pdf.rect(image_x, image_y, photo_width, photo_height, stroke=1, fill=0)
+                    pdf.rect(image_x, image_y, safe_photo_width, photo_height, stroke=1, fill=0)
 
-                text_x = image_x + photo_width + 4
+                text_x = image_x + safe_photo_width + 4
                 text_y = y + card_height - 8
                 text_width = card_width - (text_x - x) - padding
                 bottom_limit = y + 4.5
                 pdf.setFillColor(colors.black)
-                pdf.setFont(font_name, font_size)
-                lines = _candidate_pdf_lines(record, config, item_html, text_width, font_name, font_size)
+                pdf.setFont(font_name, safe_font_size)
+                lines = _candidate_pdf_lines(record, config, item_html, text_width, font_name, safe_font_size)
                 for line in lines:
                     if text_y - leading < bottom_limit:
                         break
@@ -532,7 +538,7 @@ def export_interview_signin_pdf(
                         pdf.drawString(text_x, text_y, line)
                         pdf.setStrokeColor(colors.HexColor("#333333"))
                         pdf.setLineWidth(0.45)
-                        line_start = text_x + pdfmetrics.stringWidth(line, font_name, font_size) + 4
+                        line_start = text_x + pdfmetrics.stringWidth(line, font_name, safe_font_size) + 4
                         if line_start < x + card_width - padding:
                             pdf.line(line_start, text_y - 1, x + card_width - padding, text_y - 1)
                     else:
