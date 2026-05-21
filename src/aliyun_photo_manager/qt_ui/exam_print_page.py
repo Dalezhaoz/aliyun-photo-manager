@@ -274,6 +274,7 @@ class ExamPrintPage(QWidget):
         self.fill_direction_combo = AppComboBox()
         self.fill_direction_combo.addItem("从左到右、从上到下", "row")
         self.fill_direction_combo.addItem("从上到下、从左到右", "column")
+        self.fill_direction_combo.currentIndexChanged.connect(self._update_people_count_label)
         self.snake_combo = AppComboBox()
         self.snake_combo.addItem("普通排序", "0")
         self.snake_combo.addItem("S 型排序", "1")
@@ -303,7 +304,7 @@ class ExamPrintPage(QWidget):
         self.items_per_page_spin = QSpinBox()
         self.items_per_page_spin.setRange(1, 60)
         self.items_per_page_spin.setValue(10)
-        self.columns_label = QLabel("每行列数")
+        self.columns_label = QLabel("每行人数")
         settings_row.addWidget(self.columns_label)
         settings_row.addWidget(self.columns_spin)
         settings_row.addStretch(1)
@@ -502,6 +503,7 @@ class ExamPrintPage(QWidget):
         self._set_combo_data(self.fill_direction_combo, str(template.settings.get("fill_direction", "row")))
         self._set_combo_data(self.snake_combo, str(template.settings.get("snake", "0")))
         self._set_combo_data(self.sort_column_combo, str(template.settings.get("sort_column", "")))
+        self._update_people_count_label()
         is_signin = str(template.settings.get("layout", "")) == "signin"
         self.item_title.setText("单个考生表样")
         self.item_editor.setEnabled(not is_signin)
@@ -523,6 +525,12 @@ class ExamPrintPage(QWidget):
         index = combo.findData(value)
         if index >= 0:
             combo.setCurrentIndex(index)
+
+    def _update_people_count_label(self) -> None:
+        if str(self.fill_direction_combo.currentData() or "row") == "column":
+            self.columns_label.setText("每列人数")
+        else:
+            self.columns_label.setText("每行人数")
 
     def load_headers(self) -> None:
         excel_path = Path(self.excel_edit.text().strip())
@@ -753,7 +761,7 @@ class ExamPrintPage(QWidget):
                     room_value,
                     title=self._pdf_title(),
                     item_html=self.item_editor.toHtml(),
-                    columns=self.columns_spin.value(),
+                    people_per_line=self.columns_spin.value(),
                     sort_column=str(self.sort_column_combo.currentData() or ""),
                     start_corner=str(self.start_corner_combo.currentData() or "top_left"),
                     fill_direction=str(self.fill_direction_combo.currentData() or "row"),

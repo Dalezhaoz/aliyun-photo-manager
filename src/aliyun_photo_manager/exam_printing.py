@@ -409,7 +409,7 @@ def export_interview_signin_pdf(
     *,
     title: str,
     item_html: str = "",
-    columns: int = 5,
+    people_per_line: int = 5,
     sort_column: str = "",
     start_corner: str = "top_left",
     fill_direction: str = "row",
@@ -437,8 +437,13 @@ def export_interview_signin_pdf(
     margin_top = 14
     footer_height = 28
     footer_gap = 8
-    safe_columns = max(1, columns)
-    rows_per_page = 6
+    safe_people_per_line = max(1, people_per_line)
+    if fill_direction == "column":
+        safe_columns = 5
+        rows_per_page = safe_people_per_line
+    else:
+        safe_columns = safe_people_per_line
+        rows_per_page = 6
     card_width = (page_width - margin_x * 2) / safe_columns
     card_height = (page_height - margin_top - 14 - footer_height - footer_gap) / rows_per_page
     photo_width = 39
