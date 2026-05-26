@@ -34,6 +34,7 @@ from . import __version__
 from .qt_ui import (
     CertificatePage,
     ExamPrintPage,
+    ExamPrintV2Page,
     ExamPage,
     IdCardPage,
     JobCodeAuditPage,
@@ -83,6 +84,7 @@ NAV_ENTRIES: list[NavEntry] = [
     NavEntry("id_card", "身份证工具", "query", "校验并生成 18 位大陆居民身份证。", True),
     NavEntry("about", "关于", "settings", "查看版本与工具说明。", True),
     NavEntry("exam_print", "考场文件打印", "experimental", "实验功能：打印笔试座次表、面试签到表、桌贴和门贴。", True),
+    NavEntry("exam_print_v2", "考场打印(新版)", "experimental", "新版考场文件打印：签到表、座次表、门贴、桌贴。", True),
     NavEntry("job_code_audit", "岗位表核对", "experimental", "实验功能：核对地市、主管部门、报考单位、报考岗位编码及顺延关系。", True),
     NavEntry("ordered_name_audit", "单列顺序核对", "experimental", "实验功能：按原表顺序检查指定列的上下相似与分段重复。", True),
     NavEntry("exam", "考场编排", "experimental", "实验功能：按模板和规则生成考号、考场与座号。", True),
@@ -318,7 +320,7 @@ class HomePage(QWidget):
 
         preferred_keys = ["photo", "certificate", "template", "match", "pack", "phone", "update_sql", "id_card"]
         if self.show_experimental:
-            preferred_keys.extend(["exam_print", "job_code_audit", "ordered_name_audit", "exam", "sql_exec", "project_stage"])
+            preferred_keys.extend(["exam_print", "exam_print_v2", "job_code_audit", "ordered_name_audit", "exam", "sql_exec", "project_stage"])
         visible_map = {entry.key: entry for entry in self.visible_entries}
         for key in preferred_keys:
             entry = visible_map.get(key)
@@ -477,7 +479,7 @@ class HomeLandingPage(QWidget):
             "id_card",
         ]
         if self.show_experimental:
-            keys.extend(["exam_print", "job_code_audit", "ordered_name_audit", "exam", "sql_exec", "project_stage"])
+            keys.extend(["exam_print", "exam_print_v2", "job_code_audit", "ordered_name_audit", "exam", "sql_exec", "project_stage"])
         return [self.entries_by_key[key] for key in keys if key in self.entries_by_key]
 
     def _favorite_entries(self) -> list[NavEntry]:
@@ -506,6 +508,7 @@ class HomeLandingPage(QWidget):
         if self.show_experimental:
             mapping.extend([
                 ("exam_print", "考场文件打印", "打印笔试座次表、面试签到表、桌贴和门贴。", "实验功能"),
+                ("exam_print_v2", "考场打印(新版)", "新版考场文件打印。", "实验功能"),
                 ("job_code_audit", "岗位表核对", "校验岗位编码格式、绑定关系和顺延规则。", "实验功能"),
                 ("ordered_name_audit", "单列顺序核对", "按原表顺序检查指定列的上下相似与分段重复。", "实验功能"),
                 ("exam", "考场编排", "按模板和规则编排考号、考场和座号。", "实验功能"),
@@ -714,6 +717,7 @@ class HomeLandingPage(QWidget):
             "update_sql": "SQL",
             "id_card": "证",
             "exam_print": "印",
+            "exam_print_v2": "印",
             "job_code_audit": "核",
             "ordered_name_audit": "序",
             "exam": "考",
@@ -733,6 +737,7 @@ class HomeLandingPage(QWidget):
             "update_sql": "#F97316",
             "id_card": "#4F46E5",
             "exam_print": "#0F766E",
+            "exam_print_v2": "#0F766E",
             "job_code_audit": "#B45309",
             "ordered_name_audit": "#7C3AED",
             "exam": "#DC2626",
@@ -817,6 +822,7 @@ class AboutPage(QWidget):
             features.extend(
                 [
                     "考场文件打印：打印笔试座次表、面试签到表、桌贴和门贴。",
+                    "考场打印(新版)：新版考场文件打印，支持自定义列高和字段配置。",
                     "考场编排：按模板和规则编排考号、考场和座号。",
                     "SQL 配置执行：按模板参数生成可执行 SQL。",
                     "项目阶段汇总：汇总多台 SQL Server 上的项目阶段状态。",
@@ -1054,6 +1060,8 @@ class QtMainWindow(QMainWindow):
                 page = IdCardPage(self.emit_log)
             elif entry.key == "exam_print":
                 page = ExamPrintPage(self.emit_log)
+            elif entry.key == "exam_print_v2":
+                page = ExamPrintV2Page(self.emit_log)
             elif entry.key == "job_code_audit":
                 page = JobCodeAuditPage(self.emit_log)
             elif entry.key == "ordered_name_audit":
@@ -1182,6 +1190,7 @@ class QtMainWindow(QMainWindow):
             "id_card": "查",
             "about": "设",
             "exam_print": "印",
+            "exam_print_v2": "印",
             "job_code_audit": "核",
             "ordered_name_audit": "序",
             "exam": "考",

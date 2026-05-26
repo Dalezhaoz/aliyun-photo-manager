@@ -1,5 +1,6 @@
 from .certificate_page import CertificatePage
 from .exam_print_page import ExamPrintPage
+from .exam_print_v2_page import ExamPrintV2Page
 from .exam_page import ExamPage
 from .id_card_page import IdCardPage
 from .job_code_audit_page import JobCodeAuditPage
@@ -17,6 +18,7 @@ from .update_sql_page import UpdateSqlPage
 __all__ = [
     "CertificatePage",
     "ExamPrintPage",
+    "ExamPrintV2Page",
     "ExamPage",
     "IdCardPage",
     "JobCodeAuditPage",
