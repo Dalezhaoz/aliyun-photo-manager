@@ -145,7 +145,7 @@ class ExamPrintV2Page(QWidget):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(10)
+        root.setSpacing(6)
 
         root.addWidget(self._build_data_card())
 
@@ -156,55 +156,59 @@ class ExamPrintV2Page(QWidget):
         self.tabs.addTab(self._build_desk_tab(), "桌贴")
         root.addWidget(self.tabs, 1)
 
-        self.log_edit = QPlainTextEdit()
-        self.log_edit.setReadOnly(True)
-        self.log_edit.setMaximumHeight(80)
-        self.log_edit.setPlaceholderText("操作日志…")
-        root.addWidget(self.log_edit)
-
     def _build_data_card(self) -> Card:
-        card = Card("数据源")
+        card = Card()
+        card.body_layout.setContentsMargins(12, 8, 12, 8)
+        card.body_layout.setSpacing(6)
         layout = card.body_layout
 
-        self.excel_input = PathInput("选择 Excel 数据文件", "选择文件")
+        # Excel + 照片 + 记录数 一行
+        file_row = QHBoxLayout()
+        file_row.setSpacing(8)
+        self.excel_input = PathInput("Excel 数据文件", "选择")
         self.excel_input.button.clicked.connect(self._choose_excel)
-        layout.addWidget(self.excel_input)
+        self.excel_input.button.setFixedWidth(60)
+        file_row.addWidget(self.excel_input, 2)
 
-        self.photo_input = PathInput("选择照片文件夹（可选）", "选择文件夹")
+        self.photo_input = PathInput("照片文件夹（可选）", "选择")
         self.photo_input.button.clicked.connect(self._choose_photo)
-        layout.addWidget(self.photo_input)
+        self.photo_input.button.setFixedWidth(60)
+        file_row.addWidget(self.photo_input, 2)
 
-        self.record_label = QLabel("未加载数据")
-        layout.addWidget(self.record_label)
+        self.record_label = QLabel("未加载")
+        self.record_label.setStyleSheet("color: #666;")
+        file_row.addWidget(self.record_label)
+        layout.addLayout(file_row)
 
-        mapping_title = QLabel("列映射（自动检测，可手动调整）")
-        mapping_title.setProperty("formLabel", True)
-        layout.addWidget(mapping_title)
-
+        # 列映射紧凑网格：5列 × 2行
         self.mapping_combos: dict[str, AppComboBox] = {}
         grid = QGridLayout()
-        grid.setSpacing(6)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(4)
         mapping_fields = [
-            ("room_column", "考场列"),
-            ("seat_column", "座号列"),
-            ("exam_no_column", "考号列"),
-            ("site_column", "考点列"),
-            ("subject_column", "科目列"),
-            ("unit_column", "单位列"),
-            ("job_column", "岗位列"),
-            ("photo_match_column", "照片匹配列"),
-            ("sort_column", "排序列"),
+            ("room_column", "考场"),
+            ("seat_column", "座号"),
+            ("exam_no_column", "考号"),
+            ("site_column", "考点"),
+            ("subject_column", "科目"),
+            ("unit_column", "单位"),
+            ("job_column", "岗位"),
+            ("photo_match_column", "照片匹配"),
+            ("sort_column", "排序"),
         ]
         for idx, (key, label) in enumerate(mapping_fields):
-            row = idx // 3
-            col = (idx % 3) * 2
-            grid.addWidget(QLabel(label), row, col)
+            row = idx // 5
+            col = (idx % 5) * 2
+            lbl = QLabel(label)
+            lbl.setStyleSheet("color: #888; font-size: 11px;")
+            grid.addWidget(lbl, row, col)
             combo = AppComboBox()
+            combo.setMaximumHeight(24)
             self.mapping_combos[key] = combo
             grid.addWidget(combo, row, col + 1)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(3, 1)
-        grid.setColumnStretch(5, 1)
+        for c in range(5):
+            grid.setColumnStretch(c * 2 + 1, 1)
         layout.addLayout(grid)
         return card
 
