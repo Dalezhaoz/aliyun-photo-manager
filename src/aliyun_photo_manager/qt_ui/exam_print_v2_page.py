@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
-    QPushButton,
     QRadioButton,
     QScrollArea,
     QSpinBox,
@@ -63,71 +62,28 @@ _DOOR_FIELDS = [
 
 
 class FieldConfigWidget(QWidget):
-    """字段配置组件：勾选模式 + 文本模板模式。"""
+    """字段配置组件：手动输入列名，每行一个。"""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
 
-        self._group = QButtonGroup(self)
-        mode_row = QHBoxLayout()
-        self.radio_checkbox = QRadioButton("勾选字段")
-        self.radio_template = QRadioButton("文本模板")
-        self.radio_checkbox.setChecked(True)
-        self._group.addButton(self.radio_checkbox)
-        self._group.addButton(self.radio_template)
-        mode_row.addWidget(self.radio_checkbox)
-        mode_row.addWidget(self.radio_template)
-        mode_row.addStretch(1)
-        layout.addLayout(mode_row)
+        hint = QLabel("每行输入一个列名，支持 ${占位符} 语法")
+        hint.setStyleSheet("color: #666; font-size: 11px;")
+        layout.addWidget(hint)
 
-        self.checkbox_area = QScrollArea()
-        self.checkbox_area.setWidgetResizable(True)
-        self.checkbox_area.setFrameShape(QScrollArea.NoFrame)
-        self.checkbox_widget = QWidget()
-        self.checkbox_layout = QVBoxLayout(self.checkbox_widget)
-        self.checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        self.checkbox_layout.setSpacing(4)
-        self.checkbox_layout.addStretch(1)
-        self.checkbox_area.setWidget(self.checkbox_widget)
-        self.checkbox_area.setMinimumHeight(100)
-        self.checkbox_area.setMaximumHeight(180)
-        layout.addWidget(self.checkbox_area)
-
-        self.template_edit = QPlainTextEdit()
-        self.template_edit.setPlaceholderText("例：姓名：${姓名}\n考号：${考号}\n身份证号：${身份证号}")
-        self.template_edit.setMinimumHeight(80)
-        self.template_edit.setMaximumHeight(140)
-        self.template_edit.setVisible(False)
-        layout.addWidget(self.template_edit)
-
-        self.radio_checkbox.toggled.connect(self._on_mode_changed)
-        self.checkboxes: list[QCheckBox] = []
-
-    def _on_mode_changed(self, checked: bool) -> None:
-        self.checkbox_area.setVisible(checked)
-        self.template_edit.setVisible(not checked)
-
-    def rebuild(self, headers: list[str]) -> None:
-        while self.checkbox_layout.count() > 1:
-            item = self.checkbox_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self.checkboxes.clear()
-        for header in headers:
-            cb = QCheckBox(header)
-            if header in _DEFAULT_FIELDS:
-                cb.setChecked(True)
-            self.checkbox_layout.insertWidget(self.checkbox_layout.count() - 1, cb)
-            self.checkboxes.append(cb)
+        self.text_edit = QPlainTextEdit()
+        self.text_edit.setPlaceholderText("姓名\n考号\n身份证号\n报考单位\n报考岗位")
+        self.text_edit.setMinimumHeight(80)
+        self.text_edit.setMaximumHeight(160)
+        self.text_edit.setPlainText("\n".join(_DEFAULT_FIELDS))
+        layout.addWidget(self.text_edit)
 
     def get_config(self) -> FieldConfig:
-        if self.radio_template.isChecked():
-            return FieldConfig(mode="template", template_text=self.template_edit.toPlainText())
-        fields = [cb.text() for cb in self.checkboxes if cb.isChecked()]
-        return FieldConfig(mode="checkbox", checkbox_fields=fields)
+        lines = [line.strip() for line in self.text_edit.toPlainText().split("\n") if line.strip()]
+        return FieldConfig(fields=lines)
 
 
 class ExamPrintV2Page(QWidget):
@@ -495,9 +451,6 @@ class ExamPrintV2Page(QWidget):
             return
         self.record_label.setText(f"共 {len(self.records)} 条记录")
         self._populate_mapping_combos()
-        self.signin_fields.rebuild(self.headers)
-        self.seat_fields.rebuild(self.headers)
-        self.desk_fields.rebuild(self.headers)
         self._update_summaries()
         self.log_fn(f"已加载 Excel：{path.name}，共 {len(self.records)} 条。")
 

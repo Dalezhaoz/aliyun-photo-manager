@@ -53,10 +53,8 @@ class GridSettings:
 
 @dataclass
 class FieldConfig:
-    """考生卡片字段配置。checkbox 模式勾选列名，template 模式用文本模板。"""
-    mode: str = "checkbox"
-    checkbox_fields: list[str] = field(default_factory=list)
-    template_text: str = ""
+    """考生卡片字段配置。fields 为用户手动输入的列名列表。"""
+    fields: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -226,19 +224,24 @@ def resolve_fields(
     context: dict[str, str] | None = None,
 ) -> list[str]:
     """根据字段配置生成文本行列表。"""
-    if field_config.mode == "template" and field_config.template_text.strip():
-        ctx = dict(record)
-        if context:
-            ctx.update(context)
-        rendered = PLACEHOLDER_PATTERN.sub(
-            lambda m: str(ctx.get(m.group(1).strip(), "")),
-            field_config.template_text,
-        )
-        return [line.strip() for line in rendered.split("\n") if line.strip()]
     lines: list[str] = []
-    for field_name in field_config.checkbox_fields:
-        value = _coerce(record.get(field_name, ""))
-        lines.append(f"{field_name}：{value}" if value else f"{field_name}：")
+    ctx = dict(record)
+    if context:
+        ctx.update(context)
+    for field_name in field_config.fields:
+        field_name = field_name.strip()
+        if not field_name:
+            continue
+        # 支持 ${占位符} 语法
+        if PLACEHOLDER_PATTERN.search(field_name):
+            rendered = PLACEHOLDER_PATTERN.sub(
+                lambda m: str(ctx.get(m.group(1).strip(), "")),
+                field_name,
+            )
+            lines.append(rendered.strip())
+        else:
+            value = _coerce(ctx.get(field_name, ""))
+            lines.append(f"{field_name}：{value}" if value else f"{field_name}：")
     return lines
 
 
@@ -380,19 +383,19 @@ def export_signin_pdf(
 
     page_w, page_h = landscape(A4)
     margin = 14
-    title_font_size = 16
-    subtitle_font_size = 11
+    title_font_size = 24
+    subtitle_font_size = 14
     content_width = page_w - margin * 2
 
     cols, max_rows = grid_dimensions(settings.grid)
     card_w = content_width / cols
-    card_h_base = (page_h - margin * 2 - 60) / max_rows
-    card_h = max(40, card_h_base)
+    card_h_base = (page_h - margin * 2 - 80) / max_rows
+    card_h = max(50, card_h_base)
 
     safe_photo_w = 0 if settings.photo_width <= 0 else min(settings.photo_width, card_w * 0.5)
     photo_h = max(1, card_h - 12)
-    font_size = 7
-    leading = font_size + 1.5
+    font_size = 10
+    leading = font_size + 2
 
     pdf = canvas.Canvas(str(output_path), pagesize=landscape(A4))
     pdf.setTitle(settings.title or "面试签到表")
@@ -459,19 +462,19 @@ def export_seat_pdf(
     page_w, page_h = landscape(A4)
     margin = 14
     content_width = page_w - margin * 2
-    title_font_size = 16
-    subtitle_font_size = 11
-    overview_font_size = 9
+    title_font_size = 24
+    subtitle_font_size = 14
+    overview_font_size = 12
 
     cols, max_rows = grid_dimensions(settings.grid)
     card_w = content_width / cols
-    card_h_base = (page_h - margin * 2 - 90) / max_rows
-    card_h = max(40, card_h_base)
+    card_h_base = (page_h - margin * 2 - 100) / max_rows
+    card_h = max(50, card_h_base)
 
     safe_photo_w = 0 if settings.photo_width <= 0 else min(settings.photo_width, card_w * 0.5)
     photo_h = max(1, card_h - 12)
-    font_size = 7
-    leading = font_size + 1.5
+    font_size = 10
+    leading = font_size + 2
 
     pdf = canvas.Canvas(str(output_path), pagesize=landscape(A4))
     pdf.setTitle(settings.title or "笔试座次表")
@@ -638,8 +641,8 @@ def export_desk_pdf(
 
     safe_photo_w = 0 if settings.photo_width <= 0 else min(settings.photo_width, card_w * 0.4)
     photo_h = max(1, card_h - 20)
-    font_size = 10
-    name_font_size = min(font_size + 4, 16)
+    font_size = 12
+    name_font_size = 20
     leading = font_size + 2
 
     output_paths: list[Path] = []
