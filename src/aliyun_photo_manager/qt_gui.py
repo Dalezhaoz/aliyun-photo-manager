@@ -82,7 +82,7 @@ NAV_ENTRIES: list[NavEntry] = [
     NavEntry("update_sql", "更新 SQL 生成", "db", "通过字段映射模板生成标准 UPDATE SQL。", True),
     NavEntry("id_card", "身份证工具", "query", "校验并生成 18 位大陆居民身份证。", True),
     NavEntry("about", "关于", "settings", "查看版本与工具说明。", True),
-    NavEntry("exam_print", "面试签到表打印", "experimental", "实验功能：按 Excel 和照片生成面试签到表。", True),
+    NavEntry("exam_print", "考场文件打印", "experimental", "实验功能：打印笔试座次表、面试签到表、桌贴和门贴。", True),
     NavEntry("job_code_audit", "岗位表核对", "experimental", "实验功能：核对地市、主管部门、报考单位、报考岗位编码及顺延关系。", True),
     NavEntry("ordered_name_audit", "单列顺序核对", "experimental", "实验功能：按原表顺序检查指定列的上下相似与分段重复。", True),
     NavEntry("exam", "考场编排", "experimental", "实验功能：按模板和规则生成考号、考场与座号。", True),
@@ -505,7 +505,7 @@ class HomeLandingPage(QWidget):
         ]
         if self.show_experimental:
             mapping.extend([
-                ("exam_print", "面试签到表打印", "按 Excel 和照片生成面试签到表。", "实验功能"),
+                ("exam_print", "考场文件打印", "打印笔试座次表、面试签到表、桌贴和门贴。", "实验功能"),
                 ("job_code_audit", "岗位表核对", "校验岗位编码格式、绑定关系和顺延规则。", "实验功能"),
                 ("ordered_name_audit", "单列顺序核对", "按原表顺序检查指定列的上下相似与分段重复。", "实验功能"),
                 ("exam", "考场编排", "按模板和规则编排考号、考场和座号。", "实验功能"),
@@ -816,7 +816,7 @@ class AboutPage(QWidget):
         if self.show_experimental:
             features.extend(
                 [
-                    "面试签到表打印：按 Excel 和照片生成面试签到表。",
+                    "考场文件打印：打印笔试座次表、面试签到表、桌贴和门贴。",
                     "考场编排：按模板和规则编排考号、考场和座号。",
                     "SQL 配置执行：按模板参数生成可执行 SQL。",
                     "项目阶段汇总：汇总多台 SQL Server 上的项目阶段状态。",

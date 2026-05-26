@@ -462,6 +462,8 @@ def render_document(
             context["座次表表格"] = _build_seat_table(room_records, template.item_html, context, columns)
     elif template.doc_type == DOC_TYPE_DESK:
         context["桌贴列表"] = _build_desk_pages(room_records, template.item_html, context, columns, items_per_page)
+    elif template.doc_type == DOC_TYPE_DOOR:
+        pass  # 门贴仅使用房间汇总上下文，无需额外列表构建
     return render_html_template(template.main_html, context)
 
 
@@ -721,6 +723,188 @@ def export_interview_signin_pdf(
                     line_y -= bottom_leading
 
             pdf.showPage()
+    pdf.save()
+    return [output_path]
+
+
+def export_door_pdf(
+    output_path: Path,
+    records: list[dict[str, str]],
+    config: PrintDataConfig,
+    template: PrintTemplate,
+    *,
+    sort_column: str = "",
+) -> list[Path]:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfgen import canvas
+
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+    except Exception:
+        pass
+    font_name = "STSong-Light"
+    page_width, page_height = A4
+    margin = 32
+    room_column = config.room_column
+    if room_column:
+        rooms = room_values(records, room_column)
+    else:
+        rooms = [""]
+
+    pdf = canvas.Canvas(str(output_path), pagesize=A4)
+    pdf.setTitle("考场门贴")
+    for room in rooms:
+        room_records = _filtered_sorted_records(records, config, room, sort_column=sort_column)
+        context, _ = build_room_context(room_records, config, room, sort_column=sort_column)
+        rendered = render_html_template(template.main_html, context)
+
+        # 解析模板中的 div 结构和样式
+        div_blocks = re.findall(
+            r'<div\s+class="([^"]*)"[^>]*>(.*?)</div>',
+            _html_body_fragment(rendered),
+            flags=re.DOTALL,
+        )
+
+        border_x = margin
+        border_y = margin
+        border_width = page_width - margin * 2
+        border_height = page_height - margin * 2
+        pdf.setStrokeColor(colors.HexColor("#cbd5e1"))
+        pdf.setLineWidth(2)
+        pdf.rect(border_x, border_y, border_width, border_height, stroke=1, fill=0)
+
+        y = page_height - margin - 36
+        content_width = page_width - margin * 2 - 56
+        for div_class, div_content in div_blocks:
+            text = re.sub(r"<[^>]+>", "", div_content).strip()
+            text = html.unescape(text)
+            if not text:
+                continue
+            if div_class == "title":
+                font_size = 34
+                line_height = 44
+                pdf.setFont(font_name, font_size)
+                pdf.drawCentredString(page_width / 2, y, text)
+                y -= line_height
+            else:
+                font_size = 18
+                line_height = 36
+                pdf.setFont(font_name, font_size)
+                wrapped = _wrap_pdf_text(text, content_width, font_name, font_size)
+                for line in wrapped:
+                    pdf.drawString(margin + 28, y, line)
+                    y -= line_height
+        pdf.showPage()
+    pdf.save()
+    return [output_path]
+
+
+def export_desk_pdf(
+    output_path: Path,
+    records: list[dict[str, str]],
+    config: PrintDataConfig,
+    room_value: str,
+    *,
+    item_html: str = "",
+    columns: int = 2,
+    items_per_page: int = 10,
+    sort_column: str = "",
+    photo_width: float = 0,
+    font_size: float = 12,
+    line_spacing: float = 16,
+) -> list[Path]:
+    from PIL import ImageFile
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfgen import canvas
+
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+    except Exception:
+        pass
+    font_name = "STSong-Light"
+    page_width, page_height = A4
+    margin_x = 18
+    margin_y = 18
+    safe_columns = max(1, columns)
+    safe_items = max(1, items_per_page)
+    rows_per_page = math.ceil(safe_items / safe_columns)
+    card_width = (page_width - margin_x * 2) / safe_columns
+    card_height = (page_height - margin_y * 2) / rows_per_page
+    padding = 10
+    safe_photo_width = 0 if photo_width <= 0 else min(max(20, photo_width), card_width * 0.4)
+    photo_height = max(1, card_height - padding * 2)
+    safe_font_size = max(6, font_size)
+    leading = max(safe_font_size + 1, line_spacing)
+    name_font_size = min(safe_font_size + 4, 18)
+
+    room_records = _filtered_sorted_records(records, config, room_value, sort_column=sort_column)
+    photo_map = _photo_file_map(config.photo_dir)
+
+    pdf = canvas.Canvas(str(output_path), pagesize=A4)
+    pdf.setTitle("桌贴")
+    for page_start in range(0, len(room_records), safe_items):
+        page_records = room_records[page_start : page_start + safe_items]
+        for index, record in enumerate(page_records):
+            row = index // safe_columns
+            col = index % safe_columns
+            x = margin_x + col * card_width
+            y = page_height - margin_y - (row + 1) * card_height
+
+            # 虚线边框
+            pdf.setStrokeColor(colors.HexColor("#94a3b8"))
+            pdf.setLineWidth(0.5)
+            pdf.setDash(3, 2)
+            pdf.rect(x, y, card_width, card_height, stroke=1, fill=0)
+            pdf.setDash()
+
+            content_x = x + padding
+            text_x = content_x
+            if safe_photo_width > 0:
+                image_x = x + padding
+                image_y = y + card_height - photo_height - padding
+                photo_path = _find_photo_file(record, config, photo_map)
+                if photo_path is not None:
+                    _draw_photo(pdf, photo_path, image_x, image_y, safe_photo_width, photo_height)
+                else:
+                    pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
+                    pdf.rect(image_x, image_y, safe_photo_width, photo_height, stroke=1, fill=0)
+                text_x = image_x + safe_photo_width + 6
+
+            text_y = y + card_height - padding - 2
+            text_width = card_width - (text_x - x) - padding
+            bottom_limit = y + padding
+
+            # 姓名（大字号加粗）
+            name = _coerce_text(record.get("姓名", ""))
+            if name:
+                pdf.setFillColor(colors.black)
+                pdf.setFont(font_name, name_font_size)
+                pdf.drawString(text_x, text_y, name)
+                text_y -= leading * 1.2
+
+            # 其余字段
+            pdf.setFont(font_name, safe_font_size)
+            lines = _candidate_pdf_lines(record, config, item_html, text_width, font_name, safe_font_size)
+            # 跳过姓名行（已在上面单独绘制）
+            skip_name = True
+            for line in lines:
+                if skip_name and "姓名" in line:
+                    skip_name = False
+                    continue
+                skip_name = False
+                if text_y - leading < bottom_limit:
+                    break
+                pdf.drawString(text_x, text_y, line)
+                text_y -= leading
+        pdf.showPage()
     pdf.save()
     return [output_path]
 

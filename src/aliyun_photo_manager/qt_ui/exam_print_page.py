@@ -34,10 +34,14 @@ from PySide6.QtWidgets import (
 )
 
 from ..exam_printing import (
+    DOC_TYPE_DESK,
+    DOC_TYPE_DOOR,
     DOC_TYPE_SEAT,
     PrintDataConfig,
     PrintTemplate,
     available_placeholders,
+    export_desk_pdf,
+    export_door_pdf,
     export_interview_signin_pdf,
     export_rendered_html,
     load_excel_headers,
@@ -225,7 +229,7 @@ class ExamPrintPage(QWidget):
         data_layout = data_card.body_layout
         data_layout.setContentsMargins(16, 14, 16, 14)
         data_layout.setSpacing(12)
-        data_title = QLabel("面试签到数据与模板")
+        data_title = QLabel("考场文件打印")
         data_title.setProperty("sectionTitle", True)
         data_layout.addWidget(data_title)
 
@@ -251,7 +255,10 @@ class ExamPrintPage(QWidget):
         mapping_layout.addWidget(mapping_title)
 
         self.doc_type_combo = AppComboBox()
+        self.doc_type_combo.addItem("笔试座次表", DOC_TYPE_SEAT)
         self.doc_type_combo.addItem("面试签到表", DOC_TYPE_SEAT)
+        self.doc_type_combo.addItem("桌贴", DOC_TYPE_DESK)
+        self.doc_type_combo.addItem("门贴", DOC_TYPE_DOOR)
         self.doc_type_combo.currentIndexChanged.connect(self._refresh_template_combo)
         self.template_combo = AppComboBox()
         self.template_combo.currentIndexChanged.connect(self._apply_selected_template)
@@ -282,8 +289,11 @@ class ExamPrintPage(QWidget):
         self.snake_combo = AppComboBox()
         self.snake_combo.addItem("普通排序", "0")
         self.snake_combo.addItem("S 型排序", "1")
+        self.room_value_combo = AppComboBox()
         fields = [
+            ("打印类型", self.doc_type_combo),
             ("模板", self.template_combo),
+            ("考场", self.room_value_combo),
             ("排序列", self.sort_column_combo),
             ("分文件字段", self.file_group_column_combo),
             ("分页字段", self.page_group_column_combo),
@@ -487,7 +497,7 @@ class ExamPrintPage(QWidget):
         default_template = self.templates.get(DOC_TYPE_SEAT, [])[1]
         top_html, bottom_html = self._template_sections(default_template)
         return PrintTemplate(
-            name="面试签到表模板",
+            name="考场文件打印模板",
             doc_type=DOC_TYPE_SEAT,
             main_html=self._compose_main_html(top_html, bottom_html),
             item_html=default_template.item_html,
@@ -514,7 +524,7 @@ class ExamPrintPage(QWidget):
         excel_text = self.excel_edit.text().strip() if hasattr(self, "excel_edit") else ""
         if not excel_text:
             return None
-        return Path(excel_text).parent / "面试签到表模板.json"
+        return Path(excel_text).parent / "考场文件打印模板.json"
 
     def _apply_selected_template(self) -> None:
         template = self.current_template()
@@ -666,7 +676,7 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
             try:
                 payload = json.loads(template_path.read_text(encoding="utf-8"))
                 template = PrintTemplate(
-                    name=str(payload.get("name") or "面试签到表模板"),
+                    name=str(payload.get("name") or "考场文件打印模板"),
                     doc_type=str(payload.get("doc_type") or DOC_TYPE_SEAT),
                     main_html=str(payload.get("main_html") or template.main_html),
                     item_html=str(payload.get("item_html") or template.item_html),
@@ -712,6 +722,7 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
             self.sort_column_combo,
             self.file_group_column_combo,
             self.page_group_column_combo,
+            self.room_value_combo,
         ]
         for combo in combos:
             combo.clear()
@@ -783,7 +794,7 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
     def save_current_template(self) -> None:
         template = self.current_template()
         doc_type = str(self.doc_type_combo.currentData())
-        name = "面试签到表模板"
+        name = "考场文件打印模板"
         saved = PrintTemplate(
             name=name,
             doc_type=doc_type,
@@ -814,7 +825,7 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
             QMessageBox.critical(self, "保存模板失败", str(exc))
             return
         self._set_current_template(saved)
-        self.log_fn(f"已保存面试签到表模板：{template_path}")
+        self.log_fn(f"已保存考场文件打印模板：{template_path}")
         QMessageBox.information(self, "保存模板", f"已保存到：{template_path}")
 
     def render_preview(self) -> None:
@@ -854,7 +865,7 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
             QMessageBox.critical(self, "预览失败", str(exc))
             return
         self._set_preview_html(self.rendered_html)
-        self.log_fn(f"已生成面试签到表预览：{room_value or '全部考生'}")
+        self.log_fn(f"已生成考场文件预览：{room_value or '全部考生'}")
 
     def export_html(self) -> None:
         if not self.rendered_html:
@@ -872,7 +883,7 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
             self.render_preview()
             if not self.rendered_html:
                 return
-        selected, _ = QFileDialog.getSaveFileName(self, "导出 PDF", "面试表样打印.pdf", "PDF 文件 (*.pdf)")
+        selected, _ = QFileDialog.getSaveFileName(self, "导出 PDF", "考场文件打印.pdf", "PDF 文件 (*.pdf)")
         if not selected:
             return
         output_path = Path(selected)
@@ -882,17 +893,16 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
             config = self._build_config()
             room_value = str(self.room_value_combo.currentData() or "")
             template = self.current_template()
-            if (
-                str(self.doc_type_combo.currentData()) == DOC_TYPE_SEAT
-                and str((template.settings if template else {}).get("layout", "")) == "candidate_grid"
-            ):
+            doc_type = str(self.doc_type_combo.currentData())
+            layout = str((template.settings if template else {}).get("layout", ""))
+            if doc_type == DOC_TYPE_SEAT and layout == "candidate_grid":
                 top_html = self._current_top_html()
                 output_paths = export_interview_signin_pdf(
                     output_path,
                     self.records,
                     config,
                     room_value,
-                    title=self._plain_text_from_html(top_html) or "面试表样打印",
+                    title=self._plain_text_from_html(top_html) or "考场文件打印",
                     top_html=top_html,
                     bottom_html=self._current_bottom_html(),
                     item_html=self.item_editor.toHtml(),
@@ -907,6 +917,34 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
                     font_size=self.font_size_spin.value(),
                     line_spacing=self.line_spacing_spin.value(),
                     section_background=self.selected_template_color,
+                )
+                if not output_paths:
+                    raise OSError("PDF 文件没有成功生成。")
+            elif doc_type == DOC_TYPE_DESK:
+                template_obj = self.current_template()
+                output_paths = export_desk_pdf(
+                    output_path,
+                    self.records,
+                    config,
+                    room_value,
+                    item_html=self.item_editor.toHtml(),
+                    columns=self.columns_spin.value(),
+                    items_per_page=self.items_per_page_spin.value(),
+                    sort_column=str(self.sort_column_combo.currentData() or ""),
+                    photo_width=self.photo_width_spin.value(),
+                    font_size=self.font_size_spin.value(),
+                    line_spacing=self.line_spacing_spin.value(),
+                )
+                if not output_paths:
+                    raise OSError("PDF 文件没有成功生成。")
+            elif doc_type == DOC_TYPE_DOOR:
+                template_obj = self.current_template()
+                output_paths = export_door_pdf(
+                    output_path,
+                    self.records,
+                    config,
+                    template_obj,
+                    sort_column=str(self.sort_column_combo.currentData() or ""),
                 )
                 if not output_paths:
                     raise OSError("PDF 文件没有成功生成。")
@@ -925,7 +963,7 @@ body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
             message = f"已导出：{output_paths[0]}"
         else:
             message = f"已导出 {len(output_paths)} 个 PDF 到：{output_paths[0].parent}"
-        self.log_fn(f"已导出面试表样 PDF：{message}")
+        self.log_fn(f"已导出考场文件 PDF：{message}")
         QMessageBox.information(self, "导出 PDF", message)
 
     def print_preview(self) -> None:
