@@ -12,8 +12,10 @@ from PySide6.QtGui import QFont, QImage, QTextCursor, QTextDocument
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
     QDialog,
+    QColorDialog,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -53,6 +55,10 @@ DATA_IMAGE_PATTERN = re.compile(r'src="data:image/[^;]+;base64,([^"]+)"')
 IMAGE_TAG_PATTERN = re.compile(r"<img\\b[^>]*>", re.IGNORECASE)
 PHOTO_DATA_URI_PATTERN = re.compile(r"^data:image/[^;]+;base64,(.+)$")
 SUPPORTED_PHOTO_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+TOP_SECTION_START = "<!-- TOP_SECTION_START -->"
+TOP_SECTION_END = "<!-- TOP_SECTION_END -->"
+BOTTOM_SECTION_START = "<!-- BOTTOM_SECTION_START -->"
+BOTTOM_SECTION_END = "<!-- BOTTOM_SECTION_END -->"
 
 
 class HtmlModeEditor(QWidget):
@@ -190,10 +196,6 @@ class ExamPrintPage(QWidget):
         topbar_layout.setContentsMargins(12, 10, 12, 10)
         topbar_layout.setSpacing(8)
         for text, callback in [
-            ("生成默认模板", self._new_template),
-            ("保存模板", self.save_current_template),
-            ("打开Excel", self._choose_excel_and_load),
-            ("选择照片文件夹", self._choose_photo_dir),
             ("预览", self.render_preview),
             ("导出PDF", self.export_pdf),
             ("打印", self.print_preview),
@@ -281,6 +283,7 @@ class ExamPrintPage(QWidget):
         self.snake_combo.addItem("普通排序", "0")
         self.snake_combo.addItem("S 型排序", "1")
         fields = [
+            ("模板", self.template_combo),
             ("排序列", self.sort_column_combo),
             ("分文件字段", self.file_group_column_combo),
             ("分页字段", self.page_group_column_combo),
@@ -288,9 +291,20 @@ class ExamPrintPage(QWidget):
             ("填充方向", self.fill_direction_combo),
             ("排序方式", self.snake_combo),
         ]
-        for row, (label, field) in enumerate(fields):
-            form_layout_row = FormRow(label, field)
-            mapping_layout.addWidget(form_layout_row)
+        fields_grid = QGridLayout()
+        fields_grid.setContentsMargins(0, 0, 0, 0)
+        fields_grid.setHorizontalSpacing(10)
+        fields_grid.setVerticalSpacing(6)
+        for index, (label, field) in enumerate(fields):
+            row = index // 2
+            column = (index % 2) * 2
+            label_widget = QLabel(label)
+            label_widget.setProperty("formLabel", True)
+            fields_grid.addWidget(label_widget, row, column)
+            fields_grid.addWidget(field, row, column + 1)
+        fields_grid.setColumnStretch(1, 1)
+        fields_grid.setColumnStretch(3, 1)
+        mapping_layout.addLayout(fields_grid)
         photo_row = QHBoxLayout()
         self.photo_dir_edit = QLineEdit()
         self.photo_dir_edit.setPlaceholderText("可选，选择照片文件夹用于照片匹配")
@@ -312,7 +326,7 @@ class ExamPrintPage(QWidget):
         settings_row.addWidget(self.columns_label)
         settings_row.addWidget(self.columns_spin)
         self.photo_width_spin = QSpinBox()
-        self.photo_width_spin.setRange(20, 90)
+        self.photo_width_spin.setRange(0, 90)
         self.photo_width_spin.setValue(52)
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(4, 16)
@@ -335,50 +349,19 @@ class ExamPrintPage(QWidget):
         designer_layout = designer_card.body_layout
         designer_layout.setContentsMargins(16, 14, 16, 14)
         designer_layout.setSpacing(10)
-        designer_title = QLabel("模板设计（整体表样 + 单个考生表样）")
+        designer_title = QLabel("模板设计（上栏 + 下栏 + 单个考生）")
         designer_title.setProperty("sectionTitle", True)
         designer_layout.addWidget(designer_title)
 
-        editor_toolbar = QHBoxLayout()
-        for text, callback in [
-            ("选择", lambda: None),
-            ("文本", lambda: None),
-            ("图片", lambda: None),
-            ("表格", lambda: None),
-            ("矩形", lambda: None),
-            ("线条", lambda: None),
-            ("删除", lambda: None),
-            ("撤销", lambda: None),
-            ("重做", lambda: None),
-        ]:
-            button = QPushButton(text)
-            button.setProperty("toolbarButton", True)
-            button.clicked.connect(callback)
-            editor_toolbar.addWidget(button)
-        bold_button = QPushButton("B")
-        bold_button.clicked.connect(lambda: self._toggle_weight(True))
-        italic_button = QPushButton("I")
-        italic_button.clicked.connect(lambda: self._toggle_weight(False, italic=True))
-        underline_button = QPushButton("U")
-        underline_button.clicked.connect(self._toggle_underline)
-        insert_button = QPushButton("插入占位符")
-        insert_button.clicked.connect(self.insert_placeholder)
-        for button in (bold_button, italic_button, underline_button, insert_button):
-            button.setProperty("toolbarButton", True)
-            editor_toolbar.addWidget(button)
-        editor_toolbar.addStretch(1)
-        editor_toolbar.addWidget(QLabel("100%"))
-        designer_layout.addLayout(editor_toolbar)
-
         editor_splitter = QSplitter(Qt.Vertical)
-        main_card = QWidget()
-        main_layout = QVBoxLayout(main_card)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(QLabel("整体表样"))
-        self.main_editor = HtmlModeEditor()
-        self.main_editor.setMinimumHeight(220)
-        main_layout.addWidget(self.main_editor)
-        editor_splitter.addWidget(main_card)
+        top_card = QWidget()
+        top_layout = QVBoxLayout(top_card)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.addWidget(QLabel("上栏"))
+        self.top_editor = HtmlModeEditor()
+        self.top_editor.setMinimumHeight(90)
+        top_layout.addWidget(self.top_editor)
+        editor_splitter.addWidget(top_card)
 
         item_card = QWidget()
         item_layout = QVBoxLayout(item_card)
@@ -389,6 +372,15 @@ class ExamPrintPage(QWidget):
         self.item_editor.setMinimumHeight(140)
         item_layout.addWidget(self.item_editor)
         editor_splitter.addWidget(item_card)
+
+        bottom_card = QWidget()
+        bottom_layout = QVBoxLayout(bottom_card)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.addWidget(QLabel("下栏"))
+        self.bottom_editor = HtmlModeEditor()
+        self.bottom_editor.setMinimumHeight(90)
+        bottom_layout.addWidget(self.bottom_editor)
+        editor_splitter.addWidget(bottom_card)
         designer_layout.addWidget(editor_splitter, 1)
         center_layout.addWidget(designer_card, 1)
 
@@ -419,13 +411,21 @@ class ExamPrintPage(QWidget):
         self.placeholder_text.setPlaceholderText("先选择 Excel 并加载列。")
         self.placeholder_text.setMinimumHeight(230)
         right_layout.addWidget(self.placeholder_text, 2)
-        layers_title = QLabel("照片诊断")
-        layers_title.setProperty("sectionTitle", True)
-        right_layout.addWidget(layers_title)
-        self.layer_text = QPlainTextEdit()
-        self.layer_text.setReadOnly(True)
-        self.layer_text.setPlainText("预览后显示照片匹配结果。")
-        right_layout.addWidget(self.layer_text, 1)
+        color_title = QLabel("颜色选择器")
+        color_title.setProperty("sectionTitle", True)
+        right_layout.addWidget(color_title)
+        color_button = QPushButton("选择颜色")
+        color_button.clicked.connect(self._choose_template_color)
+        right_layout.addWidget(color_button)
+        self.color_swatch = QLabel()
+        self.color_swatch.setMinimumHeight(28)
+        right_layout.addWidget(self.color_swatch)
+        self.color_code_text = QPlainTextEdit()
+        self.color_code_text.setReadOnly(True)
+        self.color_code_text.setMinimumHeight(120)
+        right_layout.addWidget(self.color_code_text, 1)
+        self.selected_template_color = "#f5dada"
+        self._set_template_color(self.selected_template_color)
         workspace.addWidget(right)
 
         workspace.setStretchFactor(0, 6)
@@ -484,14 +484,17 @@ class ExamPrintPage(QWidget):
         self.template_combo.setCurrentIndex(0)
 
     def _default_local_template(self) -> PrintTemplate:
-        default_template = self.templates.get(DOC_TYPE_SEAT, [])[0]
+        default_template = self.templates.get(DOC_TYPE_SEAT, [])[1]
+        top_html, bottom_html = self._template_sections(default_template)
         return PrintTemplate(
             name="面试签到表模板",
             doc_type=DOC_TYPE_SEAT,
-            main_html=default_template.main_html,
+            main_html=self._compose_main_html(top_html, bottom_html),
             item_html=default_template.item_html,
             settings={
                 **default_template.settings,
+                "top_html": top_html,
+                "bottom_html": bottom_html,
                 "columns": 5,
                 "sort_column": "",
                 "file_group_column": "",
@@ -502,6 +505,7 @@ class ExamPrintPage(QWidget):
                 "photo_width": 52,
                 "font_size": 7,
                 "line_spacing": 8,
+                "section_background": str(default_template.settings.get("section_background", "#f5dada")),
             },
             builtin=False,
         )
@@ -515,17 +519,21 @@ class ExamPrintPage(QWidget):
     def _apply_selected_template(self) -> None:
         template = self.current_template()
         if template is None:
-            self.main_editor.clear()
+            self.top_editor.clear()
+            self.bottom_editor.clear()
             self.item_editor.clear()
             return
         self.template_name_edit.setText(template.name if not template.builtin else "")
-        self.main_editor.setHtml(template.main_html)
+        top_html, bottom_html = self._template_sections(template)
+        self.top_editor.setHtml(top_html)
+        self.bottom_editor.setHtml(bottom_html)
         self.item_editor.setHtml(template.item_html)
         self.columns_spin.setValue(int(template.settings.get("columns", 5)))
         self.items_per_page_spin.setValue(int(template.settings.get("items_per_page", 10)))
         self.photo_width_spin.setValue(int(template.settings.get("photo_width", 52)))
         self.font_size_spin.setValue(int(template.settings.get("font_size", 7)))
         self.line_spacing_spin.setValue(int(template.settings.get("line_spacing", 8)))
+        self._set_template_color(str(template.settings.get("section_background", self.selected_template_color)))
         self._set_combo_data(self.start_corner_combo, str(template.settings.get("start_corner", "top_left")))
         self._set_combo_data(self.fill_direction_combo, str(template.settings.get("fill_direction", "row")))
         self._set_combo_data(self.snake_combo, str(template.settings.get("snake", "0")))
@@ -549,6 +557,79 @@ class ExamPrintPage(QWidget):
     def current_template(self) -> PrintTemplate | None:
         data = self.template_combo.currentData()
         return data if isinstance(data, PrintTemplate) else None
+
+    def _compose_main_html(self, top_html: str, bottom_html: str) -> str:
+        section_background = getattr(self, "selected_template_color", "#f5dada")
+        return f"""
+<html>
+<head>
+<style>
+body {{ font-family: 'Microsoft YaHei UI'; margin: 10px; color: #111827; }}
+.candidate-grid {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+.candidate-grid > tr > td, .candidate-grid > tbody > tr > td {{ border: 1px solid #444; padding: 0; height: 94px; vertical-align: top; }}
+.candidate-card {{ width: 100%; height: 94px; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.35; }}
+.candidate-card td {{ border: none; padding: 0; vertical-align: top; }}
+.candidate-card .photo-cell {{ width: 68px; }}
+.candidate-card .info-cell {{ padding: 3px 5px; }}
+.photo {{ width: 68px; height: 94px; object-fit: cover; display: block; }}
+.print-top {{ margin-bottom: 6px; background-color: {section_background}; }}
+.print-bottom {{ margin-top: 8px; background-color: {section_background}; }}
+</style>
+</head>
+<body>
+  <div class="print-top">{TOP_SECTION_START}{top_html}{TOP_SECTION_END}</div>
+  ${{考生列表}}
+  <div class="print-bottom">{BOTTOM_SECTION_START}{bottom_html}{BOTTOM_SECTION_END}</div>
+</body>
+</html>
+""".strip()
+
+    def _current_main_html(self) -> str:
+        return self._compose_main_html(
+            self._editor_body_fragment(self.top_editor.toHtml()),
+            self._editor_body_fragment(self.bottom_editor.toHtml()),
+        )
+
+    def _current_top_html(self) -> str:
+        return self._editor_body_fragment(self.top_editor.toHtml())
+
+    def _current_bottom_html(self) -> str:
+        return self._editor_body_fragment(self.bottom_editor.toHtml())
+
+    @staticmethod
+    def _editor_body_fragment(html_text: str) -> str:
+        html_text = re.sub(r"(?is)<style\b[^>]*>.*?</style>", "", html_text)
+        html_text = re.sub(r"(?is)<script\b[^>]*>.*?</script>", "", html_text)
+        body_match = re.search(r"(?is)<body\b[^>]*>(.*?)</body>", html_text)
+        if body_match:
+            html_text = body_match.group(1)
+        html_text = re.sub(r"(?is)<head\b[^>]*>.*?</head>", "", html_text)
+        return html_text.strip()
+
+    def _template_sections(self, template: PrintTemplate) -> tuple[str, str]:
+        top_html = str(template.settings.get("top_html", ""))
+        bottom_html = str(template.settings.get("bottom_html", ""))
+        if top_html or bottom_html:
+            return top_html, bottom_html
+        top_match = re.search(
+            re.escape(TOP_SECTION_START) + r"(.*?)" + re.escape(TOP_SECTION_END),
+            template.main_html,
+            flags=re.DOTALL,
+        )
+        bottom_match = re.search(
+            re.escape(BOTTOM_SECTION_START) + r"(.*?)" + re.escape(BOTTOM_SECTION_END),
+            template.main_html,
+            flags=re.DOTALL,
+        )
+        if top_match or bottom_match:
+            return (
+                top_match.group(1).strip() if top_match else "",
+                bottom_match.group(1).strip() if bottom_match else "",
+            )
+        parts = template.main_html.split("${考生列表}", 1)
+        if len(parts) == 2:
+            return parts[0].strip(), parts[1].strip()
+        return template.main_html, ""
 
     def _set_combo_data(self, combo: AppComboBox, value: str) -> None:
         index = combo.findData(value)
@@ -594,8 +675,13 @@ class ExamPrintPage(QWidget):
                 )
             except Exception as exc:
                 self.log_fn(f"读取本地模板失败，已使用默认模板：{exc}")
-        self._set_current_template(template)
-        self._apply_selected_template()
+        self._refresh_template_combo()
+        if template_path and template_path.exists():
+            self.template_combo.blockSignals(True)
+            self.template_combo.addItem(template.name, template)
+            self.template_combo.setCurrentIndex(self.template_combo.count() - 1)
+            self.template_combo.blockSignals(False)
+            self._apply_selected_template()
         if template_path and not template_path.exists():
             self._write_local_template(template)
 
@@ -701,9 +787,11 @@ class ExamPrintPage(QWidget):
         saved = PrintTemplate(
             name=name,
             doc_type=doc_type,
-            main_html=self.main_editor.toHtml(),
+            main_html=self._current_main_html(),
             item_html=self.item_editor.toHtml(),
             settings={
+                "top_html": self._current_top_html(),
+                "bottom_html": self._current_bottom_html(),
                 "columns": self.columns_spin.value(),
                 "items_per_page": self.items_per_page_spin.value(),
                 "layout": str(template.settings.get("layout", "")) if template else "",
@@ -716,6 +804,7 @@ class ExamPrintPage(QWidget):
                 "photo_width": self.photo_width_spin.value(),
                 "font_size": self.font_size_spin.value(),
                 "line_spacing": self.line_spacing_spin.value(),
+                "section_background": self.selected_template_color,
             },
             builtin=False,
         )
@@ -744,7 +833,7 @@ class ExamPrintPage(QWidget):
             template = PrintTemplate(
                 name=self.template_name_edit.text().strip() or "当前模板",
                 doc_type=str(self.doc_type_combo.currentData()),
-                main_html=self.main_editor.toHtml(),
+                main_html=self._current_main_html(),
                 item_html=self.item_editor.toHtml(),
                 settings={
                     "columns": self.columns_spin.value(),
@@ -759,12 +848,12 @@ class ExamPrintPage(QWidget):
                 room_value,
                 columns=self.columns_spin.value(),
                 items_per_page=self.items_per_page_spin.value(),
+                sort_column=str(self.sort_column_combo.currentData() or ""),
             )
         except Exception as exc:
             QMessageBox.critical(self, "预览失败", str(exc))
             return
         self._set_preview_html(self.rendered_html)
-        self._update_photo_diagnostics(config, room_value)
         self.log_fn(f"已生成面试签到表预览：{room_value or '全部考生'}")
 
     def export_html(self) -> None:
@@ -797,12 +886,15 @@ class ExamPrintPage(QWidget):
                 str(self.doc_type_combo.currentData()) == DOC_TYPE_SEAT
                 and str((template.settings if template else {}).get("layout", "")) == "candidate_grid"
             ):
+                top_html = self._current_top_html()
                 output_paths = export_interview_signin_pdf(
                     output_path,
                     self.records,
                     config,
                     room_value,
-                    title=self._pdf_title(),
+                    title=self._plain_text_from_html(top_html) or "面试表样打印",
+                    top_html=top_html,
+                    bottom_html=self._current_bottom_html(),
                     item_html=self.item_editor.toHtml(),
                     people_per_line=self.columns_spin.value(),
                     sort_column=str(self.sort_column_combo.currentData() or ""),
@@ -814,6 +906,7 @@ class ExamPrintPage(QWidget):
                     photo_width=self.photo_width_spin.value(),
                     font_size=self.font_size_spin.value(),
                     line_spacing=self.line_spacing_spin.value(),
+                    section_background=self.selected_template_color,
                 )
                 if not output_paths:
                     raise OSError("PDF 文件没有成功生成。")
@@ -855,8 +948,15 @@ class ExamPrintPage(QWidget):
         )
         self.preview_edit.setHtml(preview_html)
 
-    def _pdf_title(self) -> str:
-        return "2026年度周村区（文昌湖区）事业单位公开招聘综合类岗位人员面试签到表"
+    @staticmethod
+    def _plain_text_from_html(html_text: str) -> str:
+        text = re.sub(r"(?is)<style\b[^>]*>.*?</style>", "", html_text)
+        text = re.sub(r"(?is)<script\b[^>]*>.*?</script>", "", text)
+        text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+        text = re.sub(r"(?i)</(div|p|tr|li|td|h[1-6])>", "\n", text)
+        text = re.sub(r"<[^>]+>", "", text)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return lines[0] if lines else ""
 
     def _print_preview_document(self, printer: QPrinter) -> None:
         print_method = getattr(self.preview_edit, "print_", None) or getattr(self.preview_edit, "print", None)
@@ -869,76 +969,29 @@ class ExamPrintPage(QWidget):
             raise AttributeError("当前 Qt 版本不支持 PDF 打印方法。")
         document_print(printer)
 
-    def _update_photo_diagnostics(self, config: PrintDataConfig, room_value: str) -> None:
-        photo_dir = config.photo_dir
-        if photo_dir is None:
-            self.layer_text.setPlainText("未选择照片目录。")
-            return
-        lines = [
-            f"照片目录：{photo_dir}",
-            f"目录存在：{'是' if photo_dir.exists() else '否'}",
-            f"匹配字段：{config.photo_match_column or '未选择'}",
-        ]
-        if not photo_dir.exists():
-            self.layer_text.setPlainText("\n".join(lines))
-            return
+    def _choose_template_color(self) -> None:
+        color = QColorDialog.getColor(parent=self, title="选择模板颜色")
+        if color.isValid():
+            self._set_template_color(color.name())
 
-        try:
-            photo_files = [
-                item
-                for item in photo_dir.rglob("*")
-                if item.is_file() and item.suffix.lower() in SUPPORTED_PHOTO_SUFFIXES
-            ]
-        except OSError as exc:
-            lines.append(f"扫描失败：{exc}")
-            self.layer_text.setPlainText("\n".join(lines))
-            return
-
-        if config.room_column:
-            preview_records = [
-                record
-                for record in self.records
-                if str(record.get(config.room_column, "")).strip() == room_value
-            ]
-        else:
-            preview_records = list(self.records)
-        matched_records = [record for record in preview_records if record.get("照片")]
-        decoded = [self._decode_photo_size(record.get("照片", "")) for record in matched_records]
-        decoded_ok = [item for item in decoded if item]
-
-        lines.extend(
-            [
-                f"照片文件数：{len(photo_files)}",
-                f"预览人数：{len(preview_records)}",
-                f"匹配到照片：{len(matched_records)}",
-                f"成功解码：{len(decoded_ok)}",
-            ]
+    def _set_template_color(self, hex_color: str) -> None:
+        self.selected_template_color = hex_color
+        self.color_swatch.setStyleSheet(
+            f"background-color: {hex_color}; border: 1px solid #94a3b8; border-radius: 4px;"
         )
-        if photo_files:
-            lines.append(f"照片文件示例：{photo_files[0].name}")
-        lines.append("")
-        lines.append("前 10 人：")
-        for index, record in enumerate(preview_records[:10], start=1):
-            name = str(record.get("姓名", "")).strip() or "-"
-            match_value = str(record.get(config.photo_match_column, "")).strip() if config.photo_match_column else ""
-            photo_value = record.get("照片", "")
-            size = self._decode_photo_size(photo_value)
-            status = f"已匹配，{size[0]}x{size[1]}" if size else ("已匹配但解码失败" if photo_value else "未匹配")
-            lines.append(f"{index}. {name} | {match_value or '-'} | {status}")
-        self.layer_text.setPlainText("\n".join(lines))
-
-    def _decode_photo_size(self, photo_value: str) -> tuple[int, int] | None:
-        match = PHOTO_DATA_URI_PATTERN.match(photo_value)
-        if not match:
-            return None
-        try:
-            image_data = base64.b64decode(match.group(1))
-        except Exception:
-            return None
-        image = QImage.fromData(QByteArray(image_data))
-        if image.isNull():
-            return None
-        return image.width(), image.height()
+        self.color_code_text.setPlainText(
+            "\n".join(
+                [
+                    f"颜色值：{hex_color}",
+                    "",
+                    f"文字颜色：color:{hex_color};",
+                    f"背景颜色：background-color:{hex_color};",
+                    "",
+                    f'<div style="color:{hex_color};">文字</div>',
+                    f'<div style="background-color:{hex_color};">文字</div>',
+                ]
+            )
+        )
 
     def insert_placeholder(self) -> None:
         text = self.placeholder_text.textCursor().selectedText().strip()
@@ -968,7 +1021,11 @@ class ExamPrintPage(QWidget):
         editor.setFontUnderline(not editor.fontUnderline())
 
     def _active_template_editor(self) -> HtmlModeEditor:
-        return self.item_editor if self.item_editor.hasEditorFocus() else self.main_editor
+        if self.item_editor.hasEditorFocus():
+            return self.item_editor
+        if self.bottom_editor.hasEditorFocus():
+            return self.bottom_editor
+        return self.top_editor
 
     def _active_visual_editor(self) -> QTextEdit | None:
         return self._active_template_editor().active_text_edit()

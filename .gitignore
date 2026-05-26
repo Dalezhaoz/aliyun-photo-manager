@@ -7,8 +7,9 @@ __pycache__/
 venv/
 
 # Build outputs
-build/
-dist/
+build*/
+dist*/
+releases/
 *.spec
 tools/PhoneDecryptHelper/bin/
 tools/PhoneDecryptHelper/obj/

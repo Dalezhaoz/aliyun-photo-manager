@@ -7,7 +7,7 @@ import math
 import re
 import sys
 from io import BytesIO
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import quote
@@ -219,6 +219,38 @@ def save_template(template: PrintTemplate) -> None:
 
 
 def default_templates() -> dict[str, list[PrintTemplate]]:
+    written_top = """
+<div style="text-align:center;font-size:12px;font-weight:bold;color:#444;">
+考点：${考点} | 考场：${考场}
+</div>
+<div style="text-align:center;font-size:9px;color:#555;">
+准考证号起止：${起始考号} - ${结束考号} | 共有考生：${考生人数} | 所含专业：${考试科目} | 监考人员签字：________________
+</div>
+""".strip()
+    written_item = """
+<div>姓名：${姓名}</div>
+<div>考号：${考号}</div>
+<div>考场：${考场}  座号：${座号}</div>
+<div>进场签字：</div>
+<div>出场签字：</div>
+""".strip()
+    interview_top = """
+<div style="text-align:center;font-size:22px;font-weight:bold;color:#1f2937;">
+2025年菏泽市牡丹区公开招聘教师面试考生签到表
+</div>
+<div style="text-align:center;font-size:18px;font-weight:bold;color:#b4535a;">
+（${考点}）
+</div>
+""".strip()
+    interview_item = """
+<div>姓名：${姓名}</div>
+<div>身份证号：</div>
+<div>${身份证号}</div>
+<div>面试序号：${考号}</div>
+<div>候考室：${考场}</div>
+<div>报考专业：${报考岗位}</div>
+<div>进场签名：</div>
+""".strip()
     seat_main = """
 <html>
 <head>
@@ -305,7 +337,38 @@ body { font-family: 'Microsoft YaHei UI'; margin: 18px; color: #111827; }
 """.strip()
     return {
         DOC_TYPE_SEAT: [
-            PrintTemplate("面试表样网格", DOC_TYPE_SEAT, seat_main, seat_item, {"columns": 5, "layout": "candidate_grid"}, builtin=True),
+            PrintTemplate(
+                "笔试座次表",
+                DOC_TYPE_SEAT,
+                seat_main,
+                written_item,
+                {
+                    "columns": 5,
+                    "layout": "candidate_grid",
+                    "top_html": written_top,
+                    "bottom_html": "",
+                    "photo_width": 58,
+                    "font_size": 6,
+                    "line_spacing": 7,
+                },
+                builtin=True,
+            ),
+            PrintTemplate(
+                "面试签到表",
+                DOC_TYPE_SEAT,
+                seat_main,
+                interview_item,
+                {
+                    "columns": 5,
+                    "layout": "candidate_grid",
+                    "top_html": interview_top,
+                    "bottom_html": "",
+                    "photo_width": 52,
+                    "font_size": 7,
+                    "line_spacing": 8,
+                },
+                builtin=True,
+            ),
         ],
         DOC_TYPE_DOOR: [
             PrintTemplate("标准门贴", DOC_TYPE_DOOR, door_main, "", {}, builtin=True),
@@ -322,17 +385,27 @@ def room_values(records: Iterable[dict[str, str]], room_column: str) -> list[str
     return values
 
 
-def build_room_context(records: list[dict[str, str]], config: PrintDataConfig, room_value: str) -> tuple[dict[str, str], list[dict[str, str]]]:
-    if config.room_column:
+def build_room_context(
+    records: list[dict[str, str]],
+    config: PrintDataConfig,
+    room_value: str,
+    *,
+    sort_column: str = "",
+    image_mode: str = "data",
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    if config.room_column and room_value:
         room_records = [record for record in records if _coerce_text(record.get(config.room_column, "")) == room_value]
     else:
         room_records = list(records)
     if not room_records:
         raise ValueError("没有匹配到任何考生。")
 
-    sorted_records = sorted(room_records, key=lambda item: _sort_key(item, config))
+    if sort_column:
+        sorted_records = sorted(room_records, key=lambda item: _natural_sort_key(item.get(sort_column, "")))
+    else:
+        sorted_records = sorted(room_records, key=lambda item: _sort_key(item, config))
     for record in sorted_records:
-        record["照片"] = _match_photo(record, config)
+        record["照片"] = _match_photo(record, config, image_mode=image_mode)
         record["座号"] = record.get(config.seat_column, "") if config.seat_column else record.get("座号", "")
         record["考号"] = record.get(config.exam_no_column, "") if config.exam_no_column else record.get("考号", "")
         record["报考单位"] = record.get(config.unit_column, "") if config.unit_column else record.get("报考单位", "")
@@ -371,8 +444,11 @@ def render_document(
     room_value: str,
     columns: int,
     items_per_page: int,
+    *,
+    sort_column: str = "",
+    image_mode: str = "data",
 ) -> str:
-    context, room_records = build_room_context(records, config, room_value)
+    context, room_records = build_room_context(records, config, room_value, sort_column=sort_column, image_mode=image_mode)
     if template.doc_type == DOC_TYPE_SEAT:
         if str(template.settings.get("layout", "")) == "candidate_grid":
             candidate_grid = _build_candidate_grid(room_records, template.item_html, context, columns)
@@ -387,6 +463,37 @@ def render_document(
     elif template.doc_type == DOC_TYPE_DESK:
         context["桌贴列表"] = _build_desk_pages(room_records, template.item_html, context, columns, items_per_page)
     return render_html_template(template.main_html, context)
+
+
+def render_document_pages(
+    template: PrintTemplate,
+    records: list[dict[str, str]],
+    config: PrintDataConfig,
+    room_value: str,
+    columns: int,
+    items_per_page: int,
+    *,
+    sort_column: str = "",
+    page_group_column: str = "",
+    image_mode: str = "data",
+) -> str:
+    base_config = replace(config, room_column="") if not room_value else config
+    page_records = prepare_print_records(records, base_config, room_value, sort_column=sort_column)
+    group_config = replace(base_config, room_column="")
+    rendered_pages = [
+        render_document(
+            template,
+            group_records,
+            group_config,
+            "",
+            columns,
+            items_per_page,
+            sort_column=sort_column,
+            image_mode=image_mode,
+        )
+        for group_records in _page_groups(page_records, page_group_column)
+    ]
+    return _combine_rendered_pages(rendered_pages)
 
 
 def render_html_template(template_html: str, context: dict[str, str]) -> str:
@@ -407,6 +514,25 @@ def _html_body_fragment(template_html: str) -> str:
     return html_text.strip()
 
 
+def _html_head_fragment(template_html: str) -> str:
+    head_match = re.search(r"(?is)<head\b[^>]*>(.*?)</head>", template_html)
+    return head_match.group(1).strip() if head_match else ""
+
+
+def _combine_rendered_pages(rendered_pages: list[str]) -> str:
+    if not rendered_pages:
+        return ""
+    if len(rendered_pages) == 1:
+        return rendered_pages[0]
+    head_html = _html_head_fragment(rendered_pages[0])
+    body_parts = [_html_body_fragment(page) for page in rendered_pages]
+    pages_html = []
+    for index, body_html in enumerate(body_parts):
+        page_break = " page-break-after: always;" if index < len(body_parts) - 1 else ""
+        pages_html.append(f'<div class="print-page" style="{page_break}">{body_html}</div>')
+    return f"<html><head>{head_html}</head><body>{''.join(pages_html)}</body></html>"
+
+
 def export_rendered_html(output_path: Path, rendered_html: str) -> None:
     output_path.write_text(rendered_html, encoding="utf-8")
 
@@ -418,6 +544,8 @@ def export_interview_signin_pdf(
     room_value: str,
     *,
     title: str,
+    top_html: str = "",
+    bottom_html: str = "",
     item_html: str = "",
     people_per_line: int = 5,
     sort_column: str = "",
@@ -429,6 +557,7 @@ def export_interview_signin_pdf(
     photo_width: float = 52,
     font_size: float = 6.9,
     line_spacing: float = 7.45,
+    section_background: str = "",
 ) -> list[Path]:
     from PIL import Image, ImageFile, ImageOps
     from reportlab.lib import colors
@@ -458,6 +587,8 @@ def export_interview_signin_pdf(
                     config,
                     "",
                     title=title,
+                    top_html=top_html,
+                    bottom_html=bottom_html,
                     item_html=item_html,
                     people_per_line=people_per_line,
                     sort_column=sort_column,
@@ -469,6 +600,7 @@ def export_interview_signin_pdf(
                     photo_width=photo_width,
                     font_size=font_size,
                     line_spacing=line_spacing,
+                    section_background=section_background,
                 )
             )
         return output_paths
@@ -477,8 +609,23 @@ def export_interview_signin_pdf(
     page_width, page_height = landscape(A4)
     margin_x = 14
     margin_top = 14
-    footer_height = 28
-    footer_gap = 8
+    section_default_font_size = 12.5
+    top_style = _pdf_fragment_style(top_html or title, default_font_size=section_default_font_size)
+    bottom_style = _pdf_fragment_style(bottom_html, default_font_size=section_default_font_size)
+    if section_background.strip():
+        normalized_background = _normalize_pdf_color(section_background.strip(), "#ffffff")
+        top_style["background"] = normalized_background
+        bottom_style["background"] = normalized_background
+    top_font_size = float(top_style.get("font_size", section_default_font_size))
+    bottom_font_size = float(bottom_style.get("font_size", section_default_font_size))
+    top_leading = top_font_size + 4
+    bottom_leading = bottom_font_size + 4
+    top_lines = _pdf_fragment_lines(top_html or title, {}, font_name, top_font_size, page_width - margin_x * 2)
+    bottom_lines = _pdf_fragment_lines(bottom_html, {}, font_name, bottom_font_size, page_width - margin_x * 2)
+    top_height = 0 if not top_lines else max(20, len(top_lines) * top_leading + 6)
+    top_gap = 7 if top_lines else 0
+    bottom_height = 0 if not bottom_lines else max(16, len(bottom_lines) * bottom_leading + 6)
+    bottom_gap = 7 if bottom_lines else 0
     safe_people_per_line = max(1, people_per_line)
     if fill_direction == "column":
         safe_columns = 5
@@ -487,9 +634,11 @@ def export_interview_signin_pdf(
         safe_columns = safe_people_per_line
         rows_per_page = 6
     card_width = (page_width - margin_x * 2) / safe_columns
-    card_height = (page_height - margin_top - 14 - footer_height - footer_gap) / rows_per_page
-    padding = 4
-    safe_photo_width = min(max(20, photo_width), card_width * 0.55)
+    grid_top = page_height - margin_top - top_height - top_gap
+    grid_bottom = 14 + bottom_height + bottom_gap
+    card_height = (grid_top - grid_bottom) / rows_per_page
+    padding = 6
+    safe_photo_width = 0 if photo_width <= 0 else min(max(20, photo_width), card_width * 0.55)
     photo_height = max(1, card_height - padding * 2)
     safe_font_size = max(4, font_size)
     leading = max(safe_font_size + 0.4, line_spacing)
@@ -507,25 +656,40 @@ def export_interview_signin_pdf(
                 fill_direction=fill_direction,
                 snake=snake,
             )
+            page_context = _pdf_group_context(page_records, config)
+            page_top_lines = _pdf_fragment_lines(top_html or title, page_context, font_name, top_font_size, page_width - margin_x * 2)
+            page_bottom_lines = _pdf_fragment_lines(bottom_html, page_context, font_name, bottom_font_size, page_width - margin_x * 2)
+            if page_top_lines:
+                title_y = page_height - margin_top - top_height
+                pdf.setFillColor(colors.HexColor(str(top_style.get("background", "#f5dada"))))
+                pdf.rect(margin_x + 4, title_y, page_width - (margin_x + 4) * 2, top_height, stroke=0, fill=1)
+                pdf.setFillColor(colors.HexColor(str(top_style.get("color", "#c62828"))))
+                pdf.setFont(font_name, top_font_size)
+                line_y = title_y + top_height - top_leading
+                for line in page_top_lines:
+                    pdf.drawCentredString(page_width / 2, line_y, line)
+                    line_y -= top_leading
+
             for index, record in enumerate(page_records):
                 row, column = positions[index]
                 x = margin_x + column * card_width
-                y = page_height - margin_top - (row + 1) * card_height
+                y = grid_top - (row + 1) * card_height
                 pdf.setStrokeColor(colors.HexColor("#333333"))
                 pdf.setLineWidth(0.65)
                 pdf.rect(x, y, card_width, card_height, stroke=1, fill=0)
 
                 image_x = x + padding
                 image_y = y + card_height - photo_height - padding
-                photo_path = _find_photo_file(record, config, photo_map)
-                if photo_path is not None:
-                    _draw_photo(pdf, photo_path, image_x, image_y, safe_photo_width, photo_height)
-                else:
-                    pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
-                    pdf.rect(image_x, image_y, safe_photo_width, photo_height, stroke=1, fill=0)
+                if safe_photo_width > 0:
+                    photo_path = _find_photo_file(record, config, photo_map)
+                    if photo_path is not None:
+                        _draw_photo(pdf, photo_path, image_x, image_y, safe_photo_width, photo_height)
+                    else:
+                        pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
+                        pdf.rect(image_x, image_y, safe_photo_width, photo_height, stroke=1, fill=0)
 
-                text_x = image_x + safe_photo_width + 4
-                text_y = y + card_height - 8
+                text_x = x + padding if safe_photo_width <= 0 else image_x + safe_photo_width + 4
+                text_y = y + card_height - padding - 3
                 text_width = card_width - (text_x - x) - padding
                 bottom_limit = y + 4.5
                 pdf.setFillColor(colors.black)
@@ -545,12 +709,17 @@ def export_interview_signin_pdf(
                         pdf.drawString(text_x, text_y, line)
                     text_y -= leading
 
-            footer_y = 14
-            pdf.setFillColor(colors.HexColor("#f5dada"))
-            pdf.roundRect(margin_x + 4, footer_y, page_width - (margin_x + 4) * 2, footer_height, 5, stroke=0, fill=1)
-            pdf.setFillColor(colors.HexColor("#c62828"))
-            pdf.setFont(font_name, 12.5)
-            pdf.drawCentredString(page_width / 2, footer_y + 8, title)
+            if page_bottom_lines:
+                bottom_y = 14
+                pdf.setFillColor(colors.HexColor(str(bottom_style.get("background", "#ffffff"))))
+                pdf.rect(margin_x + 4, bottom_y, page_width - (margin_x + 4) * 2, bottom_height, stroke=0, fill=1)
+                pdf.setFillColor(colors.HexColor(str(bottom_style.get("color", "#111827"))))
+                pdf.setFont(font_name, max(4, bottom_font_size))
+                line_y = bottom_y + bottom_height - bottom_leading
+                for line in page_bottom_lines:
+                    pdf.drawCentredString(page_width / 2, line_y, line)
+                    line_y -= bottom_leading
+
             pdf.showPage()
     pdf.save()
     return [output_path]
@@ -577,7 +746,7 @@ def _filtered_sorted_records(
     *,
     sort_column: str = "",
 ) -> list[dict[str, str]]:
-    if config.room_column:
+    if config.room_column and room_value:
         room_records = [record for record in records if _coerce_text(record.get(config.room_column, "")) == room_value]
     else:
         room_records = list(records)
@@ -586,6 +755,20 @@ def _filtered_sorted_records(
     if sort_column:
         return sorted(room_records, key=lambda item: _natural_sort_key(item.get(sort_column, "")))
     return sorted(room_records, key=lambda item: _sort_key(item, config))
+
+
+def prepare_print_records(
+    records: list[dict[str, str]],
+    config: PrintDataConfig,
+    room_value: str,
+    *,
+    sort_column: str = "",
+) -> list[dict[str, str]]:
+    return _filtered_sorted_records(records, config, room_value, sort_column=sort_column)
+
+
+def named_record_groups(records: list[dict[str, str]], group_column: str) -> list[tuple[str, list[dict[str, str]]]]:
+    return _named_record_groups(records, group_column)
 
 
 def _natural_sort_key(value: object) -> tuple[object, ...]:
@@ -751,6 +934,102 @@ def _candidate_pdf_lines(
     return lines
 
 
+def _pdf_group_context(records: list[dict[str, str]], config: PrintDataConfig) -> dict[str, str]:
+    if not records:
+        return {}
+    first = records[0]
+    exam_numbers = [item.get(config.exam_no_column, "") for item in records if config.exam_no_column and item.get(config.exam_no_column, "")]
+    subjects = _unique_join(item.get(config.subject_column, "") for item in records if config.subject_column)
+    units = _unique_join(
+        _join_parts(item.get(config.unit_column, ""), item.get(config.job_column, ""), separator="")
+        for item in records
+    )
+    context = {key: _escape(value) for key, value in first.items()}
+    context.update(
+        {
+            "考场": _escape(first.get(config.room_column, "")),
+            "考点": _escape(first.get(config.site_column, "")),
+            "考试科目": _escape(subjects),
+            "起始考号": _escape(min(exam_numbers, default="")),
+            "结束考号": _escape(max(exam_numbers, default="")),
+            "单位岗位汇总": _escape(units),
+            "考生人数": _escape(len(records)),
+            "座号": _escape(first.get(config.seat_column, "")),
+            "考号": _escape(first.get(config.exam_no_column, "")),
+            "报考单位": _escape(_record_unit(first, config)),
+            "报考岗位": _escape(_record_job(first, config)),
+        }
+    )
+    return context
+
+
+def _pdf_fragment_lines(
+    fragment_html: str,
+    context: dict[str, str],
+    font_name: str,
+    font_size: float,
+    max_width: float,
+) -> list[str]:
+    fragment = _html_body_fragment(fragment_html)
+    rendered = render_html_template(fragment, context)
+    rendered = re.sub(r"(?i)<br\s*/?>", "\n", rendered)
+    rendered = re.sub(r"(?i)</(div|p|tr|li|td|h[1-6])>", "\n", rendered)
+    rendered = re.sub(r"<[^>]+>", "", rendered)
+    raw_lines = [html.unescape(line).strip() for line in rendered.splitlines()]
+    lines: list[str] = []
+    for raw_line in raw_lines:
+        if not raw_line:
+            continue
+        lines.extend(_wrap_pdf_text(raw_line, max_width, font_name, font_size))
+    return lines
+
+
+def _pdf_fragment_style(fragment_html: str, *, default_font_size: float) -> dict[str, object]:
+    style_match = re.search(r'(?is)style\s*=\s*["\']([^"\']+)["\']', fragment_html)
+    css = style_match.group(1) if style_match else ""
+    style: dict[str, object] = {"font_size": default_font_size}
+    for part in css.split(";"):
+        if ":" not in part:
+            continue
+        name, value = part.split(":", 1)
+        name = name.strip().lower()
+        value = value.strip()
+        if name == "color":
+            style["color"] = _normalize_pdf_color(value, "#111827")
+        elif name in {"background", "background-color"}:
+            style["background"] = _normalize_pdf_color(value, "#f5dada")
+        elif name == "font-size":
+            style["font_size"] = _css_point_size(value, default_font_size)
+    if "color" not in style:
+        style["color"] = "#111827"
+    return style
+
+
+def _css_point_size(value: str, default: float) -> float:
+    match = re.search(r"([0-9]+(?:\.[0-9]+)?)", value)
+    if not match:
+        return default
+    number = float(match.group(1))
+    return number
+
+
+def _normalize_pdf_color(value: str, default: str) -> str:
+    text = value.strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", text):
+        return text
+    if re.fullmatch(r"#[0-9a-fA-F]{3}", text):
+        return "#" + "".join(char * 2 for char in text[1:])
+    named = {
+        "black": "#111827",
+        "red": "#c62828",
+        "white": "#ffffff",
+        "gray": "#6b7280",
+        "grey": "#6b7280",
+        "blue": "#1d4ed8",
+    }
+    return named.get(text.lower(), default)
+
+
 def _record_unit(record: dict[str, str], config: PrintDataConfig) -> str:
     return _coerce_text(record.get("报考单位") or record.get(config.unit_column, "") or record.get("单位", ""))
 
@@ -759,7 +1038,7 @@ def _record_job(record: dict[str, str], config: PrintDataConfig) -> str:
     return _coerce_text(record.get("报考岗位") or record.get(config.job_column, "") or record.get("岗位", ""))
 
 
-def _match_photo(record: dict[str, str], config: PrintDataConfig) -> str:
+def _match_photo(record: dict[str, str], config: PrintDataConfig, *, image_mode: str = "data") -> str:
     if config.photo_dir is None or not config.photo_dir.exists() or not config.photo_match_column:
         return ""
     match_value = _normalize_match_text(record.get(config.photo_match_column, ""))
@@ -770,7 +1049,7 @@ def _match_photo(record: dict[str, str], config: PrintDataConfig) -> str:
             continue
         stem = _normalize_match_text(file_path.stem)
         if stem == match_value or stem.startswith(match_value) or match_value in stem:
-            return _to_image_data_uri(file_path)
+            return _to_file_url(file_path) if image_mode == "file" else _to_image_data_uri(file_path)
     return ""
 
 
