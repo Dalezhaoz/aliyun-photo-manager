@@ -6,6 +6,7 @@ from time import sleep
 from typing import Callable, Iterable, List, Optional
 
 from .config import OssConfig
+from .config import normalize_cloud_type
 
 
 IMAGE_EXTENSIONS = {
@@ -151,6 +152,7 @@ def list_bucket_infos(
     endpoint: str,
     cloud_type: str = "aliyun",
 ) -> List[BucketInfo]:
+    cloud_type = normalize_cloud_type(cloud_type)
     if cloud_type == "aliyun":
         try:
             import oss2

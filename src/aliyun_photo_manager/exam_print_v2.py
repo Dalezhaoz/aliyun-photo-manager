@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Iterable
 
 from .exam_printing import (
-    _draw_photo,
     _join_parts,
     _layout_positions,
     _natural_sort_key,
@@ -245,6 +244,24 @@ def resolve_fields(
 # ── Grid Position Calculator ─────────────────────────────────────────────────
 
 
+_CORNER_MAP = {
+    "左上": "top_left", "右上": "top_right",
+    "左下": "bottom_left", "右下": "bottom_right",
+}
+
+_DIRECTION_MAP = {
+    "按列": "column", "按行": "row",
+}
+
+
+def _normalize_corner(value: str) -> str:
+    return _CORNER_MAP.get(value, value)
+
+
+def _normalize_direction(value: str) -> str:
+    return _DIRECTION_MAP.get(value, value)
+
+
 def calculate_grid_positions(
     count: int,
     grid: GridSettings,
@@ -257,8 +274,8 @@ def calculate_grid_positions(
         count,
         grid.columns,
         grid.rows,
-        start_corner=grid.start_corner,
-        fill_direction=grid.fill_direction,
+        start_corner=_normalize_corner(grid.start_corner),
+        fill_direction=_normalize_direction(grid.fill_direction),
         snake=grid.snake,
     )
 
@@ -269,8 +286,9 @@ def _custom_heights_positions(
     grid: GridSettings,
 ) -> list[tuple[int, int]]:
     """自定义列高的位置计算。heights 是每列的座位数。"""
-    top_first = not grid.start_corner.startswith("bottom")
-    left_first = not grid.start_corner.endswith("right")
+    corner = _normalize_corner(grid.start_corner)
+    top_first = not corner.startswith("bottom")
+    left_first = not corner.endswith("right")
 
     col_indices = list(range(len(heights)))
     if not left_first:
@@ -295,6 +313,33 @@ def grid_dimensions(grid: GridSettings) -> tuple[int, int]:
     if heights:
         return len(heights), max(heights)
     return grid.columns, grid.rows
+
+
+def _draw_photo_fit(
+    pdf, photo_path: Path, x: float, y: float, max_w: float, max_h: float,
+) -> None:
+    """保持比例缩放照片，完整显示在指定区域内。"""
+    from PIL import Image, ImageOps
+    from reportlab.lib.utils import ImageReader
+
+    with Image.open(photo_path) as image:
+        image = ImageOps.exif_transpose(image)
+        img_w, img_h = image.size
+        ratio = min(max_w / img_w, max_h / img_h)
+        draw_w = img_w * ratio
+        draw_h = img_h * ratio
+        offset_x = x + (max_w - draw_w) / 2
+        offset_y = y + (max_h - draw_h) / 2
+        scale = max(1, int(ratio * 3))
+        image = image.convert("RGB").resize(
+            (max(1, int(draw_w * scale)), max(1, int(draw_h * scale))),
+            Image.Resampling.LANCZOS,
+        )
+        pdf.drawImage(
+            ImageReader(image), offset_x, offset_y,
+            width=draw_w, height=draw_h,
+            preserveAspectRatio=False, mask=None,
+        )
 
 
 # ── PDF Drawing Helpers ──────────────────────────────────────────────────────
@@ -357,6 +402,35 @@ def _draw_field_lines(
             y -= leading
 
 
+def _calc_header_h(
+    title: str, subtitle: str,
+    title_size: float = 16, subtitle_size: float = 11,
+) -> float:
+    """计算标题区域实际高度。"""
+    h = title_size + 6 if title else 6
+    if subtitle:
+        h += subtitle_size + 4
+    return h
+
+
+def _estimate_field_lines(
+    field_config: FieldConfig,
+    text_width: float,
+    font_name: str,
+    font_size: float,
+) -> int:
+    """估算每张卡片的文本行数（含自动换行）。"""
+    if field_config.mode == "template" and field_config.template_text.strip():
+        raw_lines = [ln for ln in field_config.template_text.split("\n") if ln.strip()]
+    else:
+        raw_lines = [f"{f}：示例文本内容值" for f in field_config.checkbox_fields]
+    total = 0
+    for line in raw_lines:
+        wrapped = _wrap_pdf_text(line, text_width, font_name, font_size)
+        total += max(1, len(wrapped))
+    return max(total, 1)
+
+
 # ── PDF Export Functions ─────────────────────────────────────────────────────
 
 
@@ -383,31 +457,42 @@ def export_signin_pdf(
     title_font_size = 16
     subtitle_font_size = 11
     content_width = page_w - margin * 2
+    font_size = 8
+    leading = font_size + 2
 
-    cols, max_rows = grid_dimensions(settings.grid)
+    cols, _max_rows = grid_dimensions(settings.grid)
     card_w = content_width / cols
-    card_h_base = (page_h - margin * 2 - 60) / max_rows
-    card_h = max(40, card_h_base)
-
     safe_photo_w = 0 if settings.photo_width <= 0 else min(settings.photo_width, card_w * 0.5)
-    photo_h = max(1, card_h - 12)
-    font_size = 7
-    leading = font_size + 1.5
+
+    header_h = _calc_header_h(settings.title, settings.subtitle, title_font_size, subtitle_font_size)
+    text_w = card_w - (safe_photo_w + 16 if safe_photo_w > 0 else 12)
+    est_lines = _estimate_field_lines(settings.field_config, text_w, font_name, font_size)
+    card_h = max(est_lines * leading + 24, 40)
+    available_h = page_h - margin * 2 - header_h - 12
+    effective_rows = max(1, min(_max_rows, int(available_h / card_h)))
+    card_h = available_h / effective_rows
+    photo_h = max(1, card_h - 12) if safe_photo_w > 0 else 0
 
     pdf = canvas.Canvas(str(output_path), pagesize=landscape(A4))
     pdf.setTitle(settings.title or "面试签到表")
 
-    per_page = cols * max_rows
+    per_page = cols * effective_rows
+    page_grid = GridSettings(
+        columns=cols, rows=effective_rows,
+        start_corner=settings.grid.start_corner,
+        fill_direction=settings.grid.fill_direction,
+        snake=settings.grid.snake,
+    )
     for page_start in range(0, len(sorted_records), per_page):
         page_records = sorted_records[page_start : page_start + per_page]
-        positions = calculate_grid_positions(len(page_records), settings.grid)
+        positions = calculate_grid_positions(len(page_records), page_grid)
 
         header_y = page_h - margin - 6
         _draw_title(pdf, settings.title, settings.title_align, margin, header_y, content_width, font_name, title_font_size)
         if settings.subtitle:
             _draw_title(pdf, settings.subtitle, settings.title_align, margin, header_y - title_font_size - 4, content_width, font_name, subtitle_font_size)
 
-        grid_top = page_h - margin - 50
+        grid_top = page_h - margin - header_h
         for idx, record in enumerate(page_records):
             if idx >= len(positions):
                 break
@@ -425,7 +510,7 @@ def export_signin_pdf(
                 photo_path = find_photo(record, mapping.photo_match_column, photo_map)
                 img_y = y + card_h - photo_h - 6
                 if photo_path:
-                    _draw_photo(pdf, photo_path, x + 6, img_y, safe_photo_w, photo_h)
+                    _draw_photo_fit(pdf, photo_path, x + 6, img_y, safe_photo_w, photo_h)
                 else:
                     pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
                     pdf.rect(x + 6, img_y, safe_photo_w, photo_h, stroke=1, fill=0)
@@ -462,16 +547,36 @@ def export_seat_pdf(
     title_font_size = 16
     subtitle_font_size = 11
     overview_font_size = 9
+    font_size = 8
+    leading = font_size + 2
 
-    cols, max_rows = grid_dimensions(settings.grid)
+    cols, _max_rows = grid_dimensions(settings.grid)
     card_w = content_width / cols
-    card_h_base = (page_h - margin * 2 - 90) / max_rows
-    card_h = max(40, card_h_base)
-
     safe_photo_w = 0 if settings.photo_width <= 0 else min(settings.photo_width, card_w * 0.5)
-    photo_h = max(1, card_h - 12)
-    font_size = 7
-    leading = font_size + 1.5
+
+    header_h = _calc_header_h(settings.title, settings.subtitle, title_font_size, subtitle_font_size)
+    if settings.show_room_overview:
+        header_h += overview_font_size + 10
+    text_w = card_w - (safe_photo_w + 16 if safe_photo_w > 0 else 12)
+    est_lines = _estimate_field_lines(settings.field_config, text_w, font_name, font_size)
+    sig_reserve = 30 if settings.show_proctor_signature else 0
+    available_h = page_h - margin * 2 - header_h - 12 - sig_reserve
+    use_custom = bool(parse_custom_heights(settings.grid.custom_heights))
+    if use_custom:
+        effective_rows = _max_rows
+        card_h = max(available_h / effective_rows, 40)
+        page_grid = settings.grid
+    else:
+        card_h = max(est_lines * leading + 24, 40)
+        effective_rows = max(1, min(_max_rows, int(available_h / card_h)))
+        card_h = available_h / effective_rows
+        page_grid = GridSettings(
+            columns=cols, rows=effective_rows,
+            start_corner=settings.grid.start_corner,
+            fill_direction=settings.grid.fill_direction,
+            snake=settings.grid.snake,
+        )
+    photo_h = max(1, card_h - 12) if safe_photo_w > 0 else 0
 
     pdf = canvas.Canvas(str(output_path), pagesize=landscape(A4))
     pdf.setTitle(settings.title or "笔试座次表")
@@ -479,7 +584,7 @@ def export_seat_pdf(
     for room_name, room_records in rooms:
         sorted_records = sort_records(room_records, mapping.sort_column)
         summary = compute_room_summary(sorted_records, mapping)
-        positions = calculate_grid_positions(len(sorted_records), settings.grid)
+        positions = calculate_grid_positions(len(sorted_records), page_grid)
 
         y_cursor = page_h - margin - 6
         _draw_title(pdf, settings.title, settings.title_align, margin, y_cursor, content_width, font_name, title_font_size)
@@ -530,7 +635,7 @@ def export_seat_pdf(
                 photo_path = find_photo(record, mapping.photo_match_column, photo_map)
                 img_y = y + 4
                 if photo_path:
-                    _draw_photo(pdf, photo_path, x + 6, img_y, safe_photo_w, photo_h)
+                    _draw_photo_fit(pdf, photo_path, x + 6, img_y, safe_photo_w, photo_h)
                 else:
                     pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
                     pdf.rect(x + 6, img_y, safe_photo_w, photo_h, stroke=1, fill=0)
@@ -541,7 +646,7 @@ def export_seat_pdf(
             _draw_field_lines(pdf, lines, text_x, y + card_h - 12, text_w, y + 4, font_name, font_size, leading)
 
         if settings.show_proctor_signature:
-            sig_y = grid_top - max_rows * card_h - 16
+            sig_y = grid_top - effective_rows * card_h - 16
             pdf.setFont(font_name, 10)
             pdf.setFillColor(colors.black)
             pdf.drawString(margin, sig_y, "监考人员签字：________________    ________________")
@@ -701,7 +806,7 @@ def _write_desk_pdf(
                 photo_path = find_photo(record, mapping.photo_match_column, photo_map)
                 img_y = y + card_h - photo_h - 10
                 if photo_path:
-                    _draw_photo(pdf, photo_path, x + 10, img_y, safe_photo_w, photo_h)
+                    _draw_photo_fit(pdf, photo_path, x + 10, img_y, safe_photo_w, photo_h)
                 else:
                     pdf.setStrokeColor(colors.HexColor("#aaaaaa"))
                     pdf.rect(x + 10, img_y, safe_photo_w, photo_h, stroke=1, fill=0)

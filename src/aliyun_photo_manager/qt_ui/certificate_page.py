@@ -511,7 +511,7 @@ class CertificatePage(BaseToolPage):
 
     def load_buckets(self) -> None:
         try:
-            cloud_type = self.cloud_type_combo.currentText().strip()
+            cloud_type = self.cloud_type_combo.currentData() or "aliyun"
             access_key_id = self.access_key_id_edit.text().strip()
             access_key_secret = self.access_key_secret_edit.text().strip()
             endpoint = self.endpoint_edit.text().strip()
@@ -888,7 +888,7 @@ class CertificatePage(BaseToolPage):
 
     def _save_cached_cloud_settings(self) -> None:
         settings = self._read_settings()
-        cloud_type = self.cloud_type_combo.currentText().strip() or "aliyun"
+        cloud_type = self.cloud_type_combo.currentData() or "aliyun"
         profiles = settings.setdefault("cloud_profiles", {})
         profile = profiles.setdefault(cloud_type, {})
         profile["access_key_id"] = self.access_key_id_edit.text().strip()
@@ -902,8 +902,14 @@ class CertificatePage(BaseToolPage):
 
     def _load_cached_cloud_settings(self) -> None:
         settings = self._read_settings()
-        cloud_type = settings.get("cloud_type", self.cloud_type_combo.currentText().strip() or "aliyun")
-        index = self.cloud_type_combo.findText(cloud_type)
+        from ..config import normalize_cloud_type
+
+        raw_cloud_type = settings.get("cloud_type", self.cloud_type_combo.currentData() or "aliyun")
+        try:
+            cloud_type = normalize_cloud_type(raw_cloud_type)
+        except ValueError:
+            cloud_type = "aliyun"
+        index = self.cloud_type_combo.findData(cloud_type)
         if index >= 0:
             self.cloud_type_combo.setCurrentIndex(index)
         self._apply_cached_cloud_profile(cloud_type)

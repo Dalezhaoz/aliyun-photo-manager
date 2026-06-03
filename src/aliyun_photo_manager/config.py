@@ -12,7 +12,7 @@ class OssConfig:
 
 
 def normalize_cloud_type(cloud_type: str) -> str:
-    normalized = cloud_type.strip().lower()
+    normalized = cloud_type.strip().lower().replace(" ", "")
     if normalized in {"aliyun", "oss", "阿里云", "阿里云oss", ""}:
         return "aliyun"
     if normalized in {"tencent", "cos", "tencent_cos", "腾讯云", "腾讯云cos", "tencent cloud"}:

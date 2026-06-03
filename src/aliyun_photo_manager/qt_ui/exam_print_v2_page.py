@@ -138,6 +138,7 @@ class ExamPrintV2Page(QWidget):
         self.log_fn = log_fn
         self.records: list[dict[str, str]] = []
         self.headers: list[str] = []
+        self._all_mapping_sets: list[dict[str, AppComboBox]] = []
         self._build_ui()
 
     # ── UI Construction ──────────────────────────────────────────────────────
@@ -179,9 +180,12 @@ class ExamPrintV2Page(QWidget):
         self.record_label.setStyleSheet("color: #666;")
         file_row.addWidget(self.record_label)
         layout.addLayout(file_row)
+        return card
 
-        # 列映射紧凑网格：5列 × 2行
-        self.mapping_combos: dict[str, AppComboBox] = {}
+    def _build_mapping_section(self) -> tuple[QWidget, dict[str, AppComboBox]]:
+        """创建一个列映射区域，返回 (widget, combos_dict)。每个标签独立一套。"""
+        combos: dict[str, AppComboBox] = {}
+        section = Section("列映射")
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(6)
@@ -205,12 +209,15 @@ class ExamPrintV2Page(QWidget):
             grid.addWidget(lbl, row, col)
             combo = AppComboBox()
             combo.setMaximumHeight(24)
-            self.mapping_combos[key] = combo
+            combos[key] = combo
             grid.addWidget(combo, row, col + 1)
         for c in range(5):
             grid.setColumnStretch(c * 2 + 1, 1)
-        layout.addLayout(grid)
-        return card
+        wrapper = QWidget()
+        wrapper.setLayout(grid)
+        section.add(wrapper)
+        self._all_mapping_sets.append(combos)
+        return section, combos
 
     # ── Signin Tab ───────────────────────────────────────────────────────────
 
@@ -225,6 +232,9 @@ class ExamPrintV2Page(QWidget):
         left_inner = QWidget()
         left_layout = QVBoxLayout(left_inner)
         left_layout.setSpacing(12)
+
+        mapping_widget, self.signin_mapping = self._build_mapping_section()
+        left_layout.addWidget(mapping_widget)
 
         title_section = Section("标题设置")
         self.signin_title = QLineEdit()
@@ -247,10 +257,10 @@ class ExamPrintV2Page(QWidget):
         self.signin_rows.setValue(6)
         grid_section.add(FormRow("行数", self.signin_rows))
         self.signin_corner = AppComboBox()
-        self.signin_corner.addItems(["top_left", "top_right", "bottom_left", "bottom_right"])
+        self.signin_corner.addItems(["左上", "右上", "左下", "右下"])
         grid_section.add(FormRow("起始角", self.signin_corner))
         self.signin_direction = AppComboBox()
-        self.signin_direction.addItems(["row", "column"])
+        self.signin_direction.addItems(["按列", "按行"])
         grid_section.add(FormRow("填充方向", self.signin_direction))
         self.signin_snake = QCheckBox("S 型绕行")
         grid_section.add(self.signin_snake)
@@ -295,6 +305,9 @@ class ExamPrintV2Page(QWidget):
         left_inner = QWidget()
         left_layout = QVBoxLayout(left_inner)
         left_layout.setSpacing(12)
+
+        mapping_widget, self.seat_mapping = self._build_mapping_section()
+        left_layout.addWidget(mapping_widget)
 
         title_section = Section("标题设置")
         self.seat_title = QLineEdit()
@@ -348,10 +361,10 @@ class ExamPrintV2Page(QWidget):
         grid_section.add(self.seat_custom_row)
 
         self.seat_corner = AppComboBox()
-        self.seat_corner.addItems(["top_left", "top_right", "bottom_left", "bottom_right"])
+        self.seat_corner.addItems(["左上", "右上", "左下", "右下"])
         grid_section.add(FormRow("起始角", self.seat_corner))
         self.seat_direction = AppComboBox()
-        self.seat_direction.addItems(["column", "row"])
+        self.seat_direction.addItems(["按列", "按行"])
         grid_section.add(FormRow("填充方向", self.seat_direction))
         self.seat_snake = QCheckBox("S 型绕行")
         self.seat_snake.setChecked(True)
@@ -402,6 +415,9 @@ class ExamPrintV2Page(QWidget):
         left_layout = QVBoxLayout(left)
         left_layout.setSpacing(12)
 
+        mapping_widget, self.door_mapping = self._build_mapping_section()
+        left_layout.addWidget(mapping_widget)
+
         section = Section("显示字段")
         self.door_checkboxes: list[QCheckBox] = []
         for field_name in _DOOR_FIELDS:
@@ -437,6 +453,9 @@ class ExamPrintV2Page(QWidget):
         left_inner = QWidget()
         left_layout = QVBoxLayout(left_inner)
         left_layout.setSpacing(12)
+
+        mapping_widget, self.desk_mapping = self._build_mapping_section()
+        left_layout.addWidget(mapping_widget)
 
         layout_section = Section("布局")
         self.desk_cols = QSpinBox()
@@ -506,20 +525,21 @@ class ExamPrintV2Page(QWidget):
         self.log_fn(f"已加载 Excel：{path.name}，共 {len(self.records)} 条。")
 
     def _populate_mapping_combos(self) -> None:
-        for key, combo in self.mapping_combos.items():
-            combo.clear()
-            combo.addItem("未设置", "")
-            for header in self.headers:
-                combo.addItem(header, header)
-        for key, candidates in _COLUMN_GUESS.items():
-            combo = self.mapping_combos.get(key)
-            if not combo:
-                continue
-            for candidate in candidates:
-                idx = combo.findData(candidate)
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
-                    break
+        for mapping_set in self._all_mapping_sets:
+            for key, combo in mapping_set.items():
+                combo.clear()
+                combo.addItem("未设置", "")
+                for header in self.headers:
+                    combo.addItem(header, header)
+            for key, candidates in _COLUMN_GUESS.items():
+                combo = mapping_set.get(key)
+                if not combo:
+                    continue
+                for candidate in candidates:
+                    idx = combo.findData(candidate)
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
+                        break
 
     def _update_summaries(self) -> None:
         n = len(self.records)
@@ -542,17 +562,17 @@ class ExamPrintV2Page(QWidget):
 
     # ── Config Builders ──────────────────────────────────────────────────────
 
-    def _get_mapping(self) -> ColumnMapping:
+    def _get_mapping(self, combos: dict[str, AppComboBox]) -> ColumnMapping:
         return ColumnMapping(
-            room_column=str(self.mapping_combos["room_column"].currentData() or ""),
-            seat_column=str(self.mapping_combos["seat_column"].currentData() or ""),
-            exam_no_column=str(self.mapping_combos["exam_no_column"].currentData() or ""),
-            site_column=str(self.mapping_combos["site_column"].currentData() or ""),
-            subject_column=str(self.mapping_combos["subject_column"].currentData() or ""),
-            unit_column=str(self.mapping_combos["unit_column"].currentData() or ""),
-            job_column=str(self.mapping_combos["job_column"].currentData() or ""),
-            photo_match_column=str(self.mapping_combos["photo_match_column"].currentData() or ""),
-            sort_column=str(self.mapping_combos["sort_column"].currentData() or ""),
+            room_column=str(combos["room_column"].currentData() or ""),
+            seat_column=str(combos["seat_column"].currentData() or ""),
+            exam_no_column=str(combos["exam_no_column"].currentData() or ""),
+            site_column=str(combos["site_column"].currentData() or ""),
+            subject_column=str(combos["subject_column"].currentData() or ""),
+            unit_column=str(combos["unit_column"].currentData() or ""),
+            job_column=str(combos["job_column"].currentData() or ""),
+            photo_match_column=str(combos["photo_match_column"].currentData() or ""),
+            sort_column=str(combos["sort_column"].currentData() or ""),
         )
 
     def _get_photo_dir(self) -> Path | None:
@@ -626,7 +646,7 @@ class ExamPrintV2Page(QWidget):
         if not path:
             return
         try:
-            result = export_signin_pdf(path, self.records, self._get_mapping(), self._get_signin_settings(), self._get_photo_dir())
+            result = export_signin_pdf(path, self.records, self._get_mapping(self.signin_mapping), self._get_signin_settings(), self._get_photo_dir())
             self.log_fn(f"已导出面试签到表：{result[0]}")
             QMessageBox.information(self, "导出成功", f"已导出到：{result[0]}")
         except Exception as exc:
@@ -640,7 +660,7 @@ class ExamPrintV2Page(QWidget):
         if not path:
             return
         try:
-            result = export_seat_pdf(path, self.records, self._get_mapping(), self._get_seat_settings(), self._get_photo_dir())
+            result = export_seat_pdf(path, self.records, self._get_mapping(self.seat_mapping), self._get_seat_settings(), self._get_photo_dir())
             self.log_fn(f"已导出笔试座次表：{result[0]}")
             QMessageBox.information(self, "导出成功", f"已导出到：{result[0]}")
         except Exception as exc:
@@ -654,7 +674,7 @@ class ExamPrintV2Page(QWidget):
         if not path:
             return
         try:
-            result = export_door_pdf(path, self.records, self._get_mapping(), self._get_door_settings())
+            result = export_door_pdf(path, self.records, self._get_mapping(self.door_mapping), self._get_door_settings())
             self.log_fn(f"已导出门贴：{result[0]}")
             QMessageBox.information(self, "导出成功", f"已导出到：{result[0]}")
         except Exception as exc:
@@ -668,7 +688,7 @@ class ExamPrintV2Page(QWidget):
         if not path:
             return
         try:
-            result = export_desk_pdf(path, self.records, self._get_mapping(), self._get_desk_settings(), self._get_photo_dir())
+            result = export_desk_pdf(path, self.records, self._get_mapping(self.desk_mapping), self._get_desk_settings(), self._get_photo_dir())
             if len(result) == 1:
                 message = f"已导出到：{result[0]}"
             else:
