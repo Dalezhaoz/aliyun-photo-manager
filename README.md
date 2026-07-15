@@ -439,3 +439,8 @@ python3 generate_app_icons.py
 
 - `assets/app_icon.icns`
 - `assets/app_icon.ico`
+
+## 独立精简版
+
+如果只需要在 Windows 上按 Excel / CSV 名单从阿里云 OSS 下载照片，可使用
+[`tools/oss_photo_downloader`](tools/oss_photo_downloader/README.md)。该版本与完整 PySide6 桌面工具的依赖和启动方式完全分离。
