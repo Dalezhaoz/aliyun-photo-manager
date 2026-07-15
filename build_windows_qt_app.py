@@ -53,19 +53,35 @@ def write_release_config(channel: str) -> Path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build Windows Qt desktop app.")
     parser.add_argument("--channel", choices=["stable", "beta"], default="stable")
+    parser.add_argument(
+        "--output-root",
+        default="",
+        help="Optional local directory for PyInstaller build and distribution output.",
+    )
     return parser.parse_args()
 
 
-def main(channel: str = "stable") -> None:
+def main(channel: str = "stable", output_root: str | Path = "") -> None:
     release_config = write_release_config(channel)
+    if output_root:
+        local_output_root = Path(output_root).expanduser().resolve()
+        dist_dir = local_output_root / "dist"
+        build_dir = local_output_root / "build"
+        spec_dir = local_output_root / "spec"
+    else:
+        dist_dir = DIST_DIR
+        build_dir = BUILD_DIR
+        spec_dir = PROJECT_ROOT
+    for output_dir in (dist_dir, build_dir, spec_dir):
+        output_dir.mkdir(parents=True, exist_ok=True)
     args = [
         str(ENTRY_FILE),
         "--name=aliyun_photo_manager_qt",
         "--windowed",
         "--noconfirm",
-        f"--distpath={DIST_DIR}",
-        f"--workpath={BUILD_DIR}",
-        f"--specpath={PROJECT_ROOT}",
+        f"--distpath={dist_dir}",
+        f"--workpath={build_dir}",
+        f"--specpath={spec_dir}",
         f"--paths={PROJECT_ROOT / 'src'}",
         "--hidden-import=aliyun_photo_manager",
         "--hidden-import=aliyun_photo_manager.qt_gui",
@@ -110,4 +126,4 @@ def main(channel: str = "stable") -> None:
 
 if __name__ == "__main__":
     args = parse_args()
-    main(channel=args.channel)
+    main(channel=args.channel, output_root=args.output_root)
