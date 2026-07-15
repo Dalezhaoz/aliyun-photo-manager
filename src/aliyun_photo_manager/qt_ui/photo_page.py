@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -171,6 +172,7 @@ class PhotoPage(BaseToolPage):
         self.browser_list = QListWidget()
         self.browser_list.setMinimumHeight(150)
         self.browser_list.itemClicked.connect(self.on_browser_item_clicked)
+        self.browser_list.itemDoubleClicked.connect(self.on_browser_item_double_clicked)
         self._add_row(cloud_form, 7, "", self.browser_list)
 
         self.browser_status_label = QLabel("请先选择 Bucket，再输入前缀后点击搜索。")
@@ -190,14 +192,19 @@ class PhotoPage(BaseToolPage):
         self.sorted_dir_edit = QLineEdit()
         self.sorted_dir_label = self._add_row(form, 3, "分类目录", self._with_dir_button(self.sorted_dir_edit))
 
+        self.download_workers_spin = QSpinBox()
+        self.download_workers_spin.setRange(1, 32)
+        self.download_workers_spin.setValue(12)
+        self.download_workers_label = self._add_row(form, 4, "下载并发", self.download_workers_spin)
+
         self.filter_download_checkbox = QCheckBox("云下载时按表过滤")
         self.filter_download_checkbox.setChecked(True)
         self.filter_download_checkbox.toggled.connect(self.update_filter_state)
-        form.addWidget(self.filter_download_checkbox, 4, 1)
+        form.addWidget(self.filter_download_checkbox, 5, 1)
 
         self.filter_template_edit = QLineEdit()
         filter_template_row = self._with_file_button(self.filter_template_edit, self.choose_filter_template)
-        self.filter_template_label = self._add_row(form, 5, "过滤表", filter_template_row)
+        self.filter_template_label = self._add_row(form, 6, "过滤表", filter_template_row)
 
         self.filter_column_combo = AppComboBox()
         self.filter_column_combo.setEditable(False)
@@ -209,7 +216,7 @@ class PhotoPage(BaseToolPage):
         filter_column_layout.setSpacing(10)
         filter_column_layout.addWidget(self.filter_column_combo, 1)
         filter_column_layout.addWidget(load_filter_headers_btn)
-        self.filter_column_label = self._add_row(form, 6, "前缀列", filter_column_row)
+        self.filter_column_label = self._add_row(form, 7, "前缀列", filter_column_row)
 
         body_layout.addLayout(form)
 
@@ -340,6 +347,9 @@ class PhotoPage(BaseToolPage):
         self.skip_existing_checkbox.setEnabled(cloud_mode)
         self.download_button.setVisible(cloud_mode)
         self.download_button.setEnabled(True)
+        self.download_workers_spin.setVisible(cloud_mode)
+        if self.download_workers_label is not None:
+            self.download_workers_label.setVisible(cloud_mode)
         if self.download_dir_label is not None:
             self.download_dir_label.setText("下载目录" if cloud_mode else "本地目录")
         if self.sorted_dir_label is not None:
@@ -407,6 +417,7 @@ class PhotoPage(BaseToolPage):
             filter_download=filter_download,
             filter_template_path=filter_template_path,
             filter_column=filter_column,
+            download_workers=self.download_workers_spin.value(),
         )
 
     def build_cloud_config(self) -> OssConfig:
@@ -747,7 +758,22 @@ class PhotoPage(BaseToolPage):
             return
         self.selected_prefix = str(entry.key)
         self.selected_path_label.setText(self.selected_prefix)
-        self.browser_status_label.setText(f"已选择下载路径：{self.selected_prefix}")
+        self.browser_status_label.setText(f"已选择下载路径：{self.selected_prefix}（双击进入子目录）")
+        self._save_cached_cloud_settings()
+
+    def on_browser_item_double_clicked(self, item: QListWidgetItem) -> None:
+        entry = item.data(Qt.UserRole)
+        if not entry or entry.entry_type != "folder":
+            return
+        self.selected_prefix = str(entry.key)
+        self.selected_path_label.setText(self.selected_prefix)
+        try:
+            config = self.build_cloud_config()
+        except Exception as exc:
+            self.browser_status_label.setText(f"参数错误：{exc}")
+            return
+        self.browser_status_label.setText(f"正在进入目录：{entry.display_name}")
+        self._load_browser_entries(config, self.selected_prefix, "当前目录：{prefix}")
         self._save_cached_cloud_settings()
 
     def go_to_parent_prefix(self) -> None:
@@ -760,20 +786,36 @@ class PhotoPage(BaseToolPage):
             parent = "/".join(current.split("/")[:-1]).strip("/")
             self.selected_prefix = parent + "/" if parent else ""
             self.selected_path_label.setText(self.selected_prefix or "未选择下载路径")
-            self.browser_status_label.setText(
-                f"已返回上一层：{self.selected_prefix or '/'}"
-            )
         self._save_cached_cloud_settings()
+        try:
+            config = self.build_cloud_config()
+        except Exception as exc:
+            self.browser_status_label.setText(f"参数错误：{exc}")
+            return
+        self.browser_status_label.setText(f"正在返回：{self.selected_prefix or '/'}")
+        self._load_browser_entries(config, self.selected_prefix, "当前目录：{prefix}")
 
     def _read_settings(self) -> dict:
         if not self.SETTINGS_FILE.exists():
             return {}
         try:
-            return json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8"))
+            settings = json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8"))
+            changed = False
+            for profile in settings.get("cloud_profiles", {}).values():
+                if isinstance(profile, dict):
+                    changed = profile.pop("access_key_id", None) is not None or changed
+                    changed = profile.pop("access_key_secret", None) is not None or changed
+            if changed:
+                self.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+            return settings
         except Exception:
             return {}
 
     def _write_settings(self, settings: dict) -> None:
+        for profile in settings.get("cloud_profiles", {}).values():
+            if isinstance(profile, dict):
+                profile.pop("access_key_id", None)
+                profile.pop("access_key_secret", None)
         self.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _bind_cloud_cache_events(self) -> None:
@@ -785,6 +827,7 @@ class PhotoPage(BaseToolPage):
         ):
             if hasattr(widget, "editingFinished"):
                 widget.editingFinished.connect(self._save_cached_cloud_settings)
+        self.download_workers_spin.valueChanged.connect(self._save_cached_cloud_settings)
         self.bucket_combo.currentTextChanged.connect(self._on_bucket_changed)
 
     def _on_bucket_changed(self, bucket_name: str) -> None:
@@ -821,12 +864,11 @@ class PhotoPage(BaseToolPage):
         cloud_type = self.cloud_type_combo.currentData() or "aliyun"
         profiles = settings.setdefault("cloud_profiles", {})
         profile = profiles.setdefault(cloud_type, {})
-        profile["access_key_id"] = self.access_key_id_edit.text().strip()
-        profile["access_key_secret"] = self.access_key_secret_edit.text().strip()
         profile["endpoint"] = self.endpoint_edit.text().strip()
         profile["bucket_name"] = self.bucket_combo.currentText().strip()
         profile["search_keyword"] = self.search_edit.text().strip()
         profile["prefix"] = self.selected_prefix
+        profile["download_workers"] = self.download_workers_spin.value()
         settings["cloud_type"] = cloud_type
         self._write_settings(settings)
 
@@ -858,8 +900,8 @@ class PhotoPage(BaseToolPage):
             self.cloud_type_combo.setCurrentIndex(index)
         settings = self._read_settings()
         profile = settings.get("cloud_profiles", {}).get(normalized_type, {})
-        self.access_key_id_edit.setText(profile.get("access_key_id", ""))
-        self.access_key_secret_edit.setText(profile.get("access_key_secret", ""))
+        self.access_key_id_edit.clear()
+        self.access_key_secret_edit.clear()
         self.endpoint_edit.setText(profile.get("endpoint", ""))
         bucket_name = profile.get("bucket_name", "")
         selected_prefix = profile.get("prefix", "")
@@ -867,6 +909,7 @@ class PhotoPage(BaseToolPage):
         if bucket_name:
             self.bucket_combo.addItem(bucket_name)
         self.search_edit.setText(profile.get("search_keyword", ""))
+        self.download_workers_spin.setValue(int(profile.get("download_workers", 12)))
         self._show_browser_placeholder("请输入前缀后点击搜索。")
         if selected_prefix:
             self.selected_prefix = selected_prefix
@@ -961,10 +1004,13 @@ class PhotoPage(BaseToolPage):
         self.progress_bar.setRange(0, maximum)
         self.progress_bar.setValue(min(current, maximum))
         filename = Path(current_file).name if current_file else ""
+        if stage == "listing":
+            self.progress_label.setText(f"正在扫描云端目录：已检查 {current} 个对象" + (f" {filename}" if filename else ""))
+            return
         if total:
             self.progress_label.setText(f"下载进度：{current}/{total} {filename}".strip())
         else:
-            self.progress_label.setText("正在统计下载文件...")
+            self.progress_label.setText(f"正在扫描并下载：已处理 {current} 个文件" + (f" {filename}" if filename else ""))
 
     def on_success(self, summary: WorkflowSummary) -> None:
         self._set_running(False)

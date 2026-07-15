@@ -119,6 +119,7 @@ def write_latest_metadata(version: str, manifest: dict, patch_manifest: dict | N
         "notes": "",
         "full_package": {
             "url": f"{base_url.rstrip('/')}/{version}/aliyun_photo_manager_qt_full_{version}.zip",
+            "sha256": sha256_file(RELEASES_DIR / version / f"aliyun_photo_manager_qt_full_{version}.zip"),
             "notes": "",
         },
         "patches": {},
@@ -127,6 +128,9 @@ def write_latest_metadata(version: str, manifest: dict, patch_manifest: dict | N
         previous = patch_manifest.get("from_version", "")
         latest_payload["patches"][previous] = {
             "url": f"{base_url.rstrip('/')}/{version}/aliyun_photo_manager_qt_patch_{previous}_to_{version}.zip",
+            "sha256": sha256_file(
+                RELEASES_DIR / version / f"aliyun_photo_manager_qt_patch_{previous}_to_{version}.zip"
+            ),
             "notes": "",
         }
     (RELEASES_DIR / "latest.json").write_text(

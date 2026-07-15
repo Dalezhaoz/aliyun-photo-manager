@@ -27,6 +27,7 @@ class RunOptions:
     filter_download: bool = False
     filter_template_path: Optional[Path] = None
     filter_column: str = ""
+    download_workers: int = 12
 
 
 @dataclass
@@ -74,24 +75,39 @@ def resolve_photo_directories(options: RunOptions) -> tuple[Path, Path]:
     )
 
 
-def _build_photo_key_filter(options: RunOptions) -> Optional[Callable[[str], bool]]:
+def _build_photo_key_filter(options: RunOptions) -> tuple[Optional[Callable[[str], bool]], tuple[str, ...]]:
     if not options.filter_download:
-        return None
+        return None, ()
     if options.filter_template_path is None or not options.filter_template_path.exists():
         raise ValueError("已启用按表过滤下载，请先选择有效的过滤表。")
     if not options.filter_column.strip():
         raise ValueError("已启用按表过滤下载，请先选择文件名前缀列。")
 
     allowed_prefixes = load_column_values(options.filter_template_path, options.filter_column)
-    normalized_prefixes = tuple(value.strip() for value in allowed_prefixes if value.strip())
+    normalized_prefixes = {value.strip() for value in allowed_prefixes if value.strip()}
     if not normalized_prefixes:
         raise ValueError("过滤表中的文件名前缀列没有可用数据。")
 
+    prefix_tree: dict[str, dict] = {}
+    for prefix_value in normalized_prefixes:
+        node = prefix_tree
+        for character in prefix_value:
+            node = node.setdefault(character, {})
+        node[""] = {}
+
     def photo_key_filter(object_key: str) -> bool:
         stem = Path(object_key).stem
-        return any(stem.startswith(prefix_value) for prefix_value in normalized_prefixes)
+        node = prefix_tree
+        for character in stem:
+            if "" in node:
+                return True
+            next_node = node.get(character)
+            if next_node is None:
+                return False
+            node = next_node
+        return "" in node
 
-    return photo_key_filter
+    return photo_key_filter, tuple(sorted(normalized_prefixes))
 
 
 def run_photo_download_and_template(
@@ -125,10 +141,13 @@ def run_photo_download_and_template(
     if not options.skip_download:
         if oss_config is None:
             raise ValueError("未提供 OSS 配置。")
-        photo_key_filter = _build_photo_key_filter(options)
+        photo_key_filter, object_prefixes = _build_photo_key_filter(options)
         if options.filter_download:
             prefixes = load_column_values(options.filter_template_path, options.filter_column)
-            log(f"本次仅下载过滤表中的照片，匹配列：{options.filter_column}，共 {len(prefixes)} 个前缀。")
+            log(
+                f"本次仅下载过滤表中的照片，匹配列：{options.filter_column}，共 {len(prefixes)} 个前缀。"
+                "将按这些前缀直接查询云端，不扫描所选目录全部对象。"
+            )
         log("开始下载 OSS 照片。")
         download_result = download_photos(
             config=oss_config,
@@ -140,6 +159,8 @@ def run_photo_download_and_template(
             progress_callback=progress_callback,
             cancel_event=cancel_event,
             key_filter=photo_key_filter,
+            object_prefixes=object_prefixes or None,
+            max_workers=options.download_workers,
         )
         if cancel_event is not None and cancel_event.is_set():
             log("下载已取消。")

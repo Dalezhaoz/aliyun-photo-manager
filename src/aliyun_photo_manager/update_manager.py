@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -30,6 +31,7 @@ class UpdatePackage:
     package_type: str
     url: str
     notes: str
+    sha256: str
 
 
 @dataclass(frozen=True)
@@ -120,12 +122,16 @@ def check_for_updates() -> UpdateCheckResult:
     package_url = str(package_data.get("url", "")).strip()
     if not package_url:
         raise UpdateError("更新包配置中缺少 url。")
+    package_sha256 = str(package_data.get("sha256", "")).strip().lower()
+    if len(package_sha256) != 64 or any(character not in "0123456789abcdef" for character in package_sha256):
+        raise UpdateError("更新包配置中缺少有效的 sha256，已拒绝不可验证的更新。")
     notes = str(package_data.get("notes", "")).strip() or str(payload.get("notes", "")).strip()
     package = UpdatePackage(
         version=latest_version,
         package_type=package_type,
         url=package_url,
         notes=notes,
+        sha256=package_sha256,
     )
     return UpdateCheckResult(
         current_version=current_version,
@@ -142,6 +148,7 @@ def download_update_package(
     temp_dir = Path(tempfile.mkdtemp(prefix="aliyun_photo_manager_update_"))
     target_path = temp_dir / f"{package.package_type}_{package.version}.zip"
     try:
+        digest = hashlib.sha256()
         with urlopen(package.url, timeout=120) as response:
             total = int(response.headers.get("Content-Length", 0))
             downloaded = 0
@@ -151,12 +158,20 @@ def download_update_package(
                     if not chunk:
                         break
                     out_file.write(chunk)
+                    digest.update(chunk)
                     downloaded += len(chunk)
                     if progress_callback and total > 0:
                         progress_callback(downloaded, total)
+        actual_sha256 = digest.hexdigest()
+        if actual_sha256 != package.sha256:
+            raise UpdateError(
+                f"更新包完整性校验失败：期望 {package.sha256}，实际 {actual_sha256}。"
+            )
     except Exception as exc:
         if target_path.exists():
             target_path.unlink(missing_ok=True)
+        if isinstance(exc, UpdateError):
+            raise
         raise UpdateError(f"下载更新包失败：{exc}") from exc
     return target_path
 

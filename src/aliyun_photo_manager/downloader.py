@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import Event, local
-from time import sleep
 from typing import Callable, Iterable, List, Optional
 
 from .config import OssConfig
@@ -26,8 +27,6 @@ DEFAULT_MAX_WORKERS = {
     "aliyun": 4,
     "tencent": 3,
 }
-SUBMIT_DELAY_SECONDS = 0.03
-
 _CLIENT_LOCAL = local()
 
 
@@ -72,7 +71,16 @@ def build_local_relative_path(object_key: str, prefix: str) -> Path:
     relative_key = relative_key.lstrip("/")
     if not relative_key:
         relative_key = Path(object_key).name
-    return Path(relative_key)
+    # Object names are remote input. Never allow one to escape the selected
+    # download directory, especially when the app runs on Windows.
+    if "\\" in relative_key or "\x00" in relative_key:
+        raise ValueError(f"云端对象路径不安全：{object_key}")
+    relative_path = PurePosixPath(relative_key)
+    if relative_path.is_absolute() or any(part in {"", ".", ".."} for part in relative_path.parts):
+        raise ValueError(f"云端对象路径不安全：{object_key}")
+    if any(":" in part for part in relative_path.parts):
+        raise ValueError(f"云端对象路径不安全：{object_key}")
+    return Path(*relative_path.parts)
 
 
 def _detect_provider(config: OssConfig) -> str:
@@ -397,9 +405,9 @@ def search_folder_entries(config: OssConfig, keyword: str) -> List[BrowserEntry]
     return [entries[key] for key in sorted(entries)]
 
 
-def _iter_object_keys(config: OssConfig, prefix: str) -> Iterable[str]:
+def _iter_object_keys(config: OssConfig, prefix: str, *, directory_prefix: bool = True) -> Iterable[str]:
     provider = _detect_provider(config)
-    normalized_prefix = normalize_prefix(prefix)
+    normalized_prefix = normalize_prefix(prefix) if directory_prefix else prefix.strip()
 
     if provider == "aliyun":
         try:
@@ -460,6 +468,8 @@ def download_photos(
     progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     cancel_event: Optional[Event] = None,
     key_filter: Optional[Callable[[str], bool]] = None,
+    object_prefixes: Optional[Iterable[str]] = None,
+    max_workers: int | None = None,
 ) -> DownloadResult:
     # 照片下载只是通用下载器的一个特化入口：额外按图片后缀过滤。
     return download_objects(
@@ -473,6 +483,8 @@ def download_photos(
         cancel_event=cancel_event,
         file_filter=is_photo_key,
         key_filter=key_filter,
+        object_prefixes=object_prefixes,
+        max_workers=max_workers,
         stage="download",
     )
 
@@ -495,12 +507,15 @@ def _download_tencent_object(config: OssConfig, object_key: str, local_path: Pat
     local_path.write_bytes(body.get_raw_stream().read())
 
 
-def _resolve_worker_count(config: OssConfig, total: int) -> int:
+def _resolve_worker_count(config: OssConfig, total: int | None, requested_workers: int | None = None) -> int:
     provider = _detect_provider(config)
     default = DEFAULT_MAX_WORKERS.get(provider, 3)
+    worker_limit = requested_workers if requested_workers is not None and requested_workers > 0 else default
+    if total is None:
+        return max(1, worker_limit)
     if total <= 1:
         return 1
-    return max(1, min(default, total))
+    return max(1, min(worker_limit, total))
 
 
 def download_objects(
@@ -514,12 +529,17 @@ def download_objects(
     cancel_event: Optional[Event] = None,
     file_filter: Optional[Callable[[str], bool]] = None,
     key_filter: Optional[Callable[[str], bool]] = None,
+    object_prefixes: Optional[Iterable[str]] = None,
+    max_workers: int | None = None,
     stage: str = "download",
 ) -> DownloadResult:
     download_dir.mkdir(parents=True, exist_ok=True)
-    object_keys: List[str] = []
     skipped_existing_count = 0
     downloaded_count = 0
+    total_found = 0
+    processed_count = 0
+    scanned_count = 0
+    scan_completed = False
 
     def log(message: str) -> None:
         if logger is not None:
@@ -527,109 +547,118 @@ def download_objects(
         else:
             print(message)
 
-    for key in _iter_object_keys(config, prefix):
-        if cancel_event is not None and cancel_event.is_set():
-            break
-        # 证件资料“按名单下载”和照片“按文件名前缀下载”都复用这层过滤。
-        if key_filter is not None and not key_filter(key):
-            continue
-        if file_filter is not None and not file_filter(key):
-            continue
-        object_keys.append(key)
-
-    total = len(object_keys)
-    if progress_callback is not None:
-        progress_callback(stage, 0, total, "")
-    log(f"共找到 {total} 个可下载文件。")
-    if total == 0:
-        return DownloadResult(
-            total_found=0,
-            downloaded_count=0,
-            skipped_existing_count=0,
-        )
-
-    if dry_run:
-        for index, object_key in enumerate(object_keys, start=1):
-            if index == 1 or index % 100 == 0 or index == total:
-                log(f"下载进度 {index}/{total}：{Path(object_key).name}")
-            downloaded_count += 1
-            if progress_callback is not None:
-                progress_callback(stage, index, total, object_key)
-        return DownloadResult(
-            total_found=total,
-            downloaded_count=downloaded_count,
-            skipped_existing_count=0,
-        )
-
-    pending_items: List[tuple[str, Path]] = []
-    processed_count = 0
-    for object_key in object_keys:
-        relative_path = build_local_relative_path(object_key, prefix)
-        local_path = download_dir / relative_path
-        if skip_existing and local_path.exists():
-            skipped_existing_count += 1
-            processed_count += 1
-            if processed_count == 1 or processed_count % 100 == 0 or processed_count == total:
-                log(f"下载进度 {processed_count}/{total}，跳过已存在文件。")
-            if progress_callback is not None:
-                progress_callback(stage, processed_count, total, object_key)
-            continue
-        pending_items.append((object_key, local_path))
-
-    worker_count = _resolve_worker_count(config, len(pending_items))
+    worker_count = _resolve_worker_count(config, None, max_workers)
 
     def worker(object_key: str, local_path: Path) -> str:
         if cancel_event is not None and cancel_event.is_set():
             return object_key
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        if _detect_provider(config) == "aliyun":
-            _download_aliyun_object(config, object_key, local_path)
-        else:
-            _download_tencent_object(config, object_key, local_path)
+        partial_path = local_path.with_name(f"{local_path.name}.part")
+        partial_path.unlink(missing_ok=True)
+        try:
+            if _detect_provider(config) == "aliyun":
+                _download_aliyun_object(config, object_key, partial_path)
+            else:
+                _download_tencent_object(config, object_key, partial_path)
+            partial_path.replace(local_path)
+        except Exception:
+            partial_path.unlink(missing_ok=True)
+            raise
         return object_key
 
-    in_flight = {}
-    next_index = 0
-    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="bucket-download") as executor:
-        while next_index < len(pending_items) and len(in_flight) < worker_count:
-            object_key, local_path = pending_items[next_index]
-            future = executor.submit(worker, object_key, local_path)
-            in_flight[future] = object_key
-            next_index += 1
-            sleep(SUBMIT_DELAY_SECONDS)
+    in_flight: dict = {}
 
-        while in_flight:
-            done, _ = wait(in_flight.keys(), return_when=FIRST_COMPLETED)
-            for future in done:
-                object_key = in_flight.pop(future)
-                future.result()
+    def report_scan(object_key: str) -> None:
+        if progress_callback is not None:
+            progress_callback("listing", scanned_count, 0, object_key)
+
+    def report_processed(object_key: str) -> None:
+        if progress_callback is not None:
+            progress_callback(stage, processed_count, total_found if scan_completed else 0, object_key)
+
+    def process_completed() -> None:
+        nonlocal downloaded_count, processed_count
+        if not in_flight:
+            return
+        done, _ = wait(in_flight.keys(), return_when=FIRST_COMPLETED)
+        for future in done:
+            object_key = in_flight.pop(future)
+            future.result()
+            downloaded_count += 1
+            processed_count += 1
+            if processed_count == 1 or processed_count % 100 == 0:
+                log(f"下载进度：已处理 {processed_count} 个文件。")
+            report_processed(object_key)
+
+    def iter_selected_objects() -> Iterable[str]:
+        if object_prefixes is None:
+            yield from _iter_object_keys(config, prefix)
+            return
+
+        base_prefix = normalize_prefix(prefix)
+        seen_keys: set[str] = set()
+        for object_prefix in object_prefixes:
+            cleaned_object_prefix = object_prefix.strip().lstrip("/")
+            if not cleaned_object_prefix:
+                continue
+            # OSS/COS 的 Prefix 不需要以 / 结束；这里直接按文件名前缀检索。
+            lookup_prefix = f"{base_prefix}{cleaned_object_prefix}"
+            for object_key in _iter_object_keys(config, lookup_prefix, directory_prefix=False):
+                if object_key in seen_keys:
+                    continue
+                seen_keys.add(object_key)
+                yield object_key
+
+    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="bucket-download") as executor:
+        for object_key in iter_selected_objects():
+            if cancel_event is not None and cancel_event.is_set():
+                break
+            scanned_count += 1
+            if scanned_count == 1 or scanned_count % 500 == 0:
+                report_scan(object_key)
+                log(f"正在扫描云端目录：已检查 {scanned_count} 个对象，匹配到 {total_found} 个文件。")
+            # 证件资料“按名单下载”和照片“按文件名前缀下载”都复用这层过滤。
+            if key_filter is not None and not key_filter(object_key):
+                continue
+            if file_filter is not None and not file_filter(object_key):
+                continue
+
+            total_found += 1
+            if dry_run:
                 downloaded_count += 1
                 processed_count += 1
-                if processed_count == 1 or processed_count % 100 == 0 or processed_count == total:
-                    log(f"下载进度 {processed_count}/{total}：{Path(object_key).name}")
-                if progress_callback is not None:
-                    progress_callback(stage, processed_count, total, object_key)
+                report_processed(object_key)
+                continue
 
-                if cancel_event is not None and cancel_event.is_set():
-                    for queued in in_flight:
-                        queued.cancel()
-                    in_flight.clear()
-                    log(f"下载已取消，已处理 {processed_count}/{total} 个文件。")
-                    if progress_callback is not None:
-                        progress_callback(stage, processed_count, total, "")
-                    break
+            relative_path = build_local_relative_path(object_key, prefix)
+            local_path = download_dir / relative_path
+            if skip_existing and local_path.exists():
+                skipped_existing_count += 1
+                processed_count += 1
+                report_processed(object_key)
+                continue
 
-                if next_index < len(pending_items):
-                    next_object_key, next_local_path = pending_items[next_index]
-                    queued = executor.submit(worker, next_object_key, next_local_path)
-                    in_flight[queued] = next_object_key
-                    next_index += 1
-                    sleep(SUBMIT_DELAY_SECONDS)
+            while len(in_flight) >= worker_count:
+                process_completed()
+            future = executor.submit(worker, object_key, local_path)
+            in_flight[future] = object_key
+
+        scan_completed = True
+        log(f"云端扫描完成：共找到 {total_found} 个可下载文件。")
+        if progress_callback is not None:
+            progress_callback(stage, processed_count, total_found, "")
+
+        while in_flight:
+            process_completed()
             if cancel_event is not None and cancel_event.is_set():
+                for queued in in_flight:
+                    queued.cancel()
+                in_flight.clear()
+                log(f"下载已取消，已处理 {processed_count}/{total_found} 个文件。")
                 break
 
     return DownloadResult(
-        total_found=total,
+        total_found=total_found,
         downloaded_count=downloaded_count,
         skipped_existing_count=skipped_existing_count,
     )

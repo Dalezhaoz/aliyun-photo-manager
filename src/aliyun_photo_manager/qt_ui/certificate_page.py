@@ -838,11 +838,23 @@ class CertificatePage(BaseToolPage):
         if not self.SETTINGS_FILE.exists():
             return {}
         try:
-            return json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8"))
+            settings = json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8"))
+            changed = False
+            for profile in settings.get("cloud_profiles", {}).values():
+                if isinstance(profile, dict):
+                    changed = profile.pop("access_key_id", None) is not None or changed
+                    changed = profile.pop("access_key_secret", None) is not None or changed
+            if changed:
+                self.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+            return settings
         except Exception:
             return {}
 
     def _write_settings(self, settings: dict) -> None:
+        for profile in settings.get("cloud_profiles", {}).values():
+            if isinstance(profile, dict):
+                profile.pop("access_key_id", None)
+                profile.pop("access_key_secret", None)
         self.SETTINGS_FILE.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _bind_cloud_cache_events(self) -> None:
@@ -891,8 +903,6 @@ class CertificatePage(BaseToolPage):
         cloud_type = self.cloud_type_combo.currentData() or "aliyun"
         profiles = settings.setdefault("cloud_profiles", {})
         profile = profiles.setdefault(cloud_type, {})
-        profile["access_key_id"] = self.access_key_id_edit.text().strip()
-        profile["access_key_secret"] = self.access_key_secret_edit.text().strip()
         profile["endpoint"] = self.endpoint_edit.text().strip()
         profile["certificate_bucket_name"] = self.bucket_combo.currentText().strip()
         profile["certificate_search_keyword"] = self.search_edit.text().strip()
@@ -928,8 +938,8 @@ class CertificatePage(BaseToolPage):
             self.cloud_type_combo.setCurrentIndex(index)
         settings = self._read_settings()
         profile = settings.get("cloud_profiles", {}).get(normalized_type, {})
-        self.access_key_id_edit.setText(profile.get("access_key_id", ""))
-        self.access_key_secret_edit.setText(profile.get("access_key_secret", ""))
+        self.access_key_id_edit.clear()
+        self.access_key_secret_edit.clear()
         self.endpoint_edit.setText(profile.get("endpoint", ""))
         bucket_name = profile.get("certificate_bucket_name", profile.get("bucket_name", ""))
         selected_prefix = profile.get("certificate_prefix", profile.get("prefix", ""))
